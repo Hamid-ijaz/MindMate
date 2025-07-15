@@ -9,7 +9,7 @@ import { useAuth } from './auth-context';
 
 interface TaskContextType {
   tasks: Task[];
-  addTask: (task: Omit<Task, 'id' | 'createdAt' | 'rejectionCount' | 'isMuted'>) => void;
+  addTask: (task: Omit<Task, 'id' | 'createdAt' | 'rejectionCount' | 'isMuted' | 'completedAt' | 'lastRejectedAt'>) => void;
   updateTask: (id: string, updates: Partial<Task>) => void;
   deleteTask: (id: string) => void;
   getSuggestedTask: (energy: EnergyLevel) => Task | null;
@@ -42,8 +42,12 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
 
   useEffect(() => {
     if (!authLoading) {
-      const state = getInitialState(user?.email || null);
-      setTasks(state.tasks);
+      if (user?.email) {
+        const state = getInitialState(user.email);
+        setTasks(state.tasks);
+      } else {
+        setTasks([]); // Clear tasks if user logs out
+      }
       setIsLoading(false);
     }
   }, [user, authLoading]);
@@ -60,7 +64,7 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [tasks, isLoading, user]);
 
-  const addTask = useCallback((taskData: Omit<Task, 'id' | 'createdAt' | 'rejectionCount' | 'isMuted'>) => {
+  const addTask = useCallback((taskData: Omit<Task, 'id' | 'createdAt' | 'rejectionCount' | 'isMuted' | 'completedAt' | 'lastRejectedAt'>) => {
     const newTask: Task = {
       ...taskData,
       id: new Date().toISOString() + Math.random(),
@@ -72,7 +76,7 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   const updateTask = useCallback((id: string, updates: Partial<Task>) => {
-    setTasks(prev => prev.map(t => t.id === id ? { ...t, ...updates } : t));
+    setTasks(prev => prev.map(t => (t.id === id ? { ...t, ...updates, isMuted: updates.isMuted ?? t.isMuted } : t)));
   }, []);
 
   const deleteTask = useCallback((id: string) => {
@@ -111,31 +115,51 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
     if (availableTasks.length === 0) return null;
 
     const energyMatch = (taskEnergy: EnergyLevel, userEnergy: EnergyLevel) => {
-      if (userEnergy === 'High') return true;
-      if (userEnergy === 'Medium') return taskEnergy !== 'High';
-      if (userEnergy === 'Low') return taskEnergy === 'Low';
-      return false;
+      const energyMap = { Low: 1, Medium: 2, High: 3 };
+      // Suggest tasks with equal or lower energy requirements
+      return energyMap[taskEnergy] <= energyMap[userEnergy];
     };
 
     const timeMatch = (taskTime: TimeOfDay, currentTime: TimeOfDay) => {
-      return taskTime === currentTime;
+      // Prioritize tasks for the current time of day
+      if (taskTime === currentTime) return true;
+      // Also allow "any time" tasks (e.g. if we add that category later)
+      return false;
     };
 
     const scoredTasks = availableTasks.map(task => {
       let score = 100;
-      if (energyMatch(task.energyLevel, energy)) score += 50;
+      if (energyMatch(task.energyLevel, energy)) {
+        score += 50;
+        // give a bonus for exact energy match
+        if (task.energyLevel === energy) score += 10;
+      } else {
+        score -= 200; // Heavily penalize energy mismatch
+      }
+      
       if (timeMatch(task.timeOfDay, timeOfDay)) score += 30;
-      score -= (task.rejectionCount || 0) * 20; // Penalize rejections
-      return { task, score };
-    }).sort((a, b) => b.score - a.score);
+      
+      // Penalize rejections more heavily
+      score -= (task.rejectionCount || 0) * 25;
+      
+      // Bonus for older, un-actioned tasks to prevent them from getting lost
+      const ageInDays = (now - task.createdAt) / (1000 * 60 * 60 * 24);
+      score += Math.min(ageInDays * 2, 20); // Add up to 20 points for age
 
-    // Get top tasks with the same highest score
-    const topScore = scoredTasks[0]?.score;
-    if (topScore === undefined) return null;
+      return { task, score };
+    })
+    .filter(item => item.score > 0) // Filter out tasks that are not a good fit
+    .sort((a, b) => b.score - a.score);
+
+    if (scoredTasks.length === 0) return null;
+
+    // Get top tasks with scores in a close range to the best score
+    const topScore = scoredTasks[0].score;
+    const topTasks = scoredTasks
+        .filter(item => item.score >= topScore * 0.8) // e.g., within 80% of top score
+        .map(item => item.task);
     
-    const topTasks = scoredTasks.filter(item => item.score === topScore).map(item => item.task);
-    
-    // Pick a random one from the best options
+    // Pick a random one from the best options to add variety
     return topTasks[Math.floor(Math.random() * topTasks.length)];
   }, [tasks]);
 

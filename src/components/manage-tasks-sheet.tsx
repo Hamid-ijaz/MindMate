@@ -16,6 +16,8 @@ import { useTasks } from "@/contexts/task-context";
 import { ScrollArea } from "./ui/scroll-area";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "./ui/card";
 import { Badge } from "./ui/badge";
+import type { Task } from "@/lib/types";
+
 
 export function ManageTasksSheet() {
   const { tasks, deleteTask } = useTasks();
@@ -60,7 +62,7 @@ export function ManageTasksSheet() {
                 {uncompletedTasks.length === 0 ? (
                   <p className="text-center text-muted-foreground pt-8">No tasks yet. Add one!</p>
                 ) : (
-                  uncompletedTasks.map((task) => (
+                  uncompletedTasks.map((task: Task) => (
                     editingTask === task.id ? (
                        <Card key={task.id} className="bg-secondary">
                         <CardContent className="p-4">

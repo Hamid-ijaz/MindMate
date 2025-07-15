@@ -8,6 +8,9 @@ export const quotes = [
   "You're on a roll!",
   "Making it happen!",
   "Fantastic effort!",
+  "One task closer to your goals.",
+  "You are unstoppable!",
+  "Great job crossing that off the list."
 ];
 
 export function getRandomQuote(): string {

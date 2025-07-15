@@ -1,17 +1,17 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { useTasks } from "@/contexts/task-context";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { EnergyLevel, Task } from "@/lib/types";
-import { AlertCircle, Check, Sparkles, ThumbsDown, X } from "lucide-react";
+import { AlertCircle, Check, Sparkles, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { getRandomQuote } from "@/lib/motivational-quotes";
 import { MAX_REJECTIONS_BEFORE_PROMPT } from "@/lib/constants";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "./ui/alert-dialog";
+import { AlertDialog, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "./ui/alert-dialog";
 import { ManageTasksSheet } from "./manage-tasks-sheet";
 
 export function TaskSuggestion() {
@@ -32,8 +32,11 @@ export function TaskSuggestion() {
   };
 
   useEffect(() => {
-    getNextTask(currentEnergy);
-  }, [tasks, currentEnergy]);
+    // Check if tasks are loaded before getting a suggestion
+    if (!isLoading) {
+      getNextTask(currentEnergy);
+    }
+  }, [tasks, currentEnergy, isLoading]);
 
   const handleAccept = () => {
     if (!suggestedTask) return;
@@ -47,16 +50,17 @@ export function TaskSuggestion() {
     setTimeout(() => {
       setShowAffirmation(false);
       getNextTask(currentEnergy);
-    }, 1500);
+    }, 2000);
   };
 
   const handleReject = () => {
     if (!suggestedTask) return;
-    rejectTask(suggestedTask.id);
     const nextRejectionCount = (suggestedTask.rejectionCount || 0) + 1;
+    // We call rejectTask *after* checking the count, so the task data is fresh
     if (nextRejectionCount >= MAX_REJECTIONS_BEFORE_PROMPT) {
       setShowRejectionPrompt(true);
     } else {
+      rejectTask(suggestedTask.id);
       getNextTask(currentEnergy);
     }
   };
@@ -66,22 +70,16 @@ export function TaskSuggestion() {
     muteTask(suggestedTask.id);
     setShowRejectionPrompt(false);
     toast({
-        title: "Task Snoozed",
-        description: "We won't suggest this task again unless you edit it.",
+        title: "Task Muted",
+        description: "We won't suggest this task again for a while.",
     });
     getNextTask(currentEnergy);
   };
   
-  const handleEditInstead = () => {
+  const handleSkipFromDialog = () => {
      if (!suggestedTask) return;
-     rejectTask(suggestedTask.id);
+     rejectTask(suggestedTask.id); // Still record the rejection
      setShowRejectionPrompt(false);
-     // The sheet needs to be triggered externally. This is a limitation.
-     // For now, we will just move to the next task.
-     toast({
-        title: "Edit Task",
-        description: "Please open 'Add / Manage Tasks' to edit the task.",
-     });
      getNextTask(currentEnergy);
   }
 
@@ -170,11 +168,11 @@ export function TaskSuggestion() {
             <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2"><AlertCircle className="text-accent" />Is this task working?</AlertDialogTitle>
             <AlertDialogDescription>
-                You've skipped this task a few times. Sometimes a task needs to be smaller, clearer, or just saved for later. What would you like to do?
+                You've skipped this task a few times. Maybe it needs to be smaller, clearer, or just saved for later. What would you like to do?
             </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                <Button variant="secondary" onClick={handleEditInstead}>Maybe later, just skip</Button>
+                <Button variant="secondary" onClick={handleSkipFromDialog}>Just Skip for Now</Button>
                 <Button variant="destructive" onClick={handleMute}>Don't Ask Again</Button>
             </AlertDialogFooter>
         </AlertDialogContent>
