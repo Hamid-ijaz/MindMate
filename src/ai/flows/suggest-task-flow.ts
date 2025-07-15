@@ -36,7 +36,7 @@ User's Current Energy Level: {{{energyLevel}}}
 
 Here is the list of available tasks:
 {{#each tasks}}
-- Task: "{{this.title}}" (ID: {{this.id}}, Energy: {{this.energyLevel}}, Duration: {{this.duration}} mins, Rejections: {{this.rejectionCount}})
+- Task: "{{this.title}}" (ID: {{this.id}}, Energy: {{this.energyLevel}}, Duration: {{this.duration}} mins, Rejections: {{this.rejectionCount}}, Category: {{this.category}}, Time of Day: {{this.timeOfDay}})
 {{/each}}
 
 Analyze the list and select the single best task for the user.
@@ -49,7 +49,7 @@ Your selection criteria:
 Your response MUST be a valid JSON object adhering to the output schema.
 
 -   **suggestionText**: Write a short, encouraging, and slightly varied phrase to ask the user if they want to do the suggested task. Examples: "Ready for this one?", "How about we tackle this next?", "Here's a thought... want to do this?".
--   **suggestedTask**: The full JSON object of the single task you recommend. If you determine no task is a good fit, return null for this field.
+-   **suggestedTask**: The full JSON object of the single task you recommend. CRITICAL: This object must be returned with all of its original fields from the input list (id, title, description, category, energyLevel, duration, timeOfDay, rejectionCount). If you determine no task is a good fit, return null for this field.
 -   **otherTasks**: An array of all the tasks from the input list that you did *not* select as the suggestedTask.
 `,
 });
