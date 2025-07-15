@@ -24,6 +24,7 @@ export default function LoginPage() {
       const success = login(email, password);
       if (success) {
         router.push("/");
+        router.refresh(); // This forces a refresh to re-evaluate middleware and server components
       } else {
         toast({
           title: "Login Failed",

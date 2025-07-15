@@ -23,6 +23,7 @@ export default function SignupPage() {
     const success = signup(email, password);
     if (success) {
       router.push("/");
+      router.refresh();
     } else {
       toast({
         title: "Signup Failed",
