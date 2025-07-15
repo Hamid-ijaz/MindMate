@@ -16,6 +16,7 @@ export default function SignupPage() {
   const [password, setPassword] = useState("");
   const { signup } = useAuth();
   const { toast } = useToast();
+  const router = useRouter();
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();

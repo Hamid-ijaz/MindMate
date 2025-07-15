@@ -9,33 +9,27 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import Link from "next/link";
 import { useToast } from "@/hooks/use-toast";
+import { useRouter } from "next/navigation";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const { login } = useAuth();
   const { toast } = useToast();
+  const router = useRouter();
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    try {
-      const success = login(email, password);
-      if (success) {
-        // Force a hard redirect to ensure middleware is re-evaluated correctly
-        window.location.href = '/';
-      } else {
-        toast({
-          title: "Login Failed",
-          description: "Invalid email or password.",
-          variant: "destructive",
-        });
-      }
-    } catch (error) {
-       toast({
-          title: "Login Error",
-          description: "An unexpected error occurred. Please try again.",
-          variant: "destructive",
-        });
+    const success = login(email, password);
+    if (success) {
+      // Force a hard redirect to ensure middleware is re-evaluated correctly
+      window.location.href = '/';
+    } else {
+      toast({
+        title: "Login Failed",
+        description: "Invalid email or password.",
+        variant: "destructive",
+      });
     }
   };
 
