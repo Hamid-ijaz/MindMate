@@ -15,15 +15,14 @@ export default function SignupPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const { signup } = useAuth();
-  const router = useRouter();
   const { toast } = useToast();
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const success = signup(email, password);
     if (success) {
-      router.push("/");
-      router.refresh();
+      // Force a hard redirect to ensure middleware is re-evaluated correctly
+      window.location.href = '/';
     } else {
       toast({
         title: "Signup Failed",

@@ -2,7 +2,6 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/auth-context";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -15,7 +14,6 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const { login } = useAuth();
-  const router = useRouter();
   const { toast } = useToast();
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -23,8 +21,8 @@ export default function LoginPage() {
     try {
       const success = login(email, password);
       if (success) {
-        router.push("/");
-        router.refresh(); // This forces a refresh to re-evaluate middleware and server components
+        // Force a hard redirect to ensure middleware is re-evaluated correctly
+        window.location.href = '/';
       } else {
         toast({
           title: "Login Failed",
