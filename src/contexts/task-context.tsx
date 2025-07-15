@@ -2,9 +2,8 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
-import type { Task, EnergyLevel, TimeOfDay } from '@/lib/types';
-import { REJECTION_HOURS, LOCAL_STORAGE_KEY } from '@/lib/constants';
-import { getCurrentTimeOfDay } from '@/lib/utils';
+import type { Task } from '@/lib/types';
+import { LOCAL_STORAGE_KEY } from '@/lib/constants';
 import { useAuth } from './auth-context';
 
 interface TaskContextType {
@@ -12,7 +11,6 @@ interface TaskContextType {
   addTask: (task: Omit<Task, 'id' | 'createdAt' | 'rejectionCount' | 'isMuted' | 'completedAt' | 'lastRejectedAt'>) => void;
   updateTask: (id: string, updates: Partial<Task>) => void;
   deleteTask: (id: string) => void;
-  getSuggestedTask: (energy: EnergyLevel) => Task | null;
   acceptTask: (id: string) => void;
   rejectTask: (id: string) => void;
   muteTask: (id: string) => void;
@@ -100,71 +98,9 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
   const muteTask = useCallback((id: string) => {
     updateTask(id, { isMuted: true });
   }, [updateTask]);
-
-  const getSuggestedTask = useCallback((energy: EnergyLevel): Task | null => {
-    const now = Date.now();
-    const timeOfDay = getCurrentTimeOfDay();
-    const rejectionLimit = now - REJECTION_HOURS * 60 * 60 * 1000;
-
-    const availableTasks = tasks.filter(task =>
-      !task.completedAt &&
-      !task.isMuted &&
-      (!task.lastRejectedAt || task.lastRejectedAt < rejectionLimit)
-    );
-
-    if (availableTasks.length === 0) return null;
-
-    const energyMatch = (taskEnergy: EnergyLevel, userEnergy: EnergyLevel) => {
-      const energyMap = { Low: 1, Medium: 2, High: 3 };
-      // Suggest tasks with equal or lower energy requirements
-      return energyMap[taskEnergy] <= energyMap[userEnergy];
-    };
-
-    const timeMatch = (taskTime: TimeOfDay, currentTime: TimeOfDay) => {
-      // Prioritize tasks for the current time of day
-      if (taskTime === currentTime) return true;
-      // Also allow "any time" tasks (e.g. if we add that category later)
-      return false;
-    };
-
-    const scoredTasks = availableTasks.map(task => {
-      let score = 100;
-      if (energyMatch(task.energyLevel, energy)) {
-        score += 50;
-        // give a bonus for exact energy match
-        if (task.energyLevel === energy) score += 10;
-      } else {
-        score -= 200; // Heavily penalize energy mismatch
-      }
-      
-      if (timeMatch(task.timeOfDay, timeOfDay)) score += 30;
-      
-      // Penalize rejections more heavily
-      score -= (task.rejectionCount || 0) * 25;
-      
-      // Bonus for older, un-actioned tasks to prevent them from getting lost
-      const ageInDays = (now - task.createdAt) / (1000 * 60 * 60 * 24);
-      score += Math.min(ageInDays * 2, 20); // Add up to 20 points for age
-
-      return { task, score };
-    })
-    .filter(item => item.score > 0) // Filter out tasks that are not a good fit
-    .sort((a, b) => b.score - a.score);
-
-    if (scoredTasks.length === 0) return null;
-
-    // Get top tasks with scores in a close range to the best score
-    const topScore = scoredTasks[0].score;
-    const topTasks = scoredTasks
-        .filter(item => item.score >= topScore * 0.8) // e.g., within 80% of top score
-        .map(item => item.task);
-    
-    // Pick a random one from the best options to add variety
-    return topTasks[Math.floor(Math.random() * topTasks.length)];
-  }, [tasks]);
-
+  
   return (
-    <TaskContext.Provider value={{ tasks, addTask, updateTask, deleteTask, getSuggestedTask, acceptTask, rejectTask, muteTask, isLoading: isLoading || authLoading }}>
+    <TaskContext.Provider value={{ tasks, addTask, updateTask, deleteTask, acceptTask, rejectTask, muteTask, isLoading: isLoading || authLoading }}>
       {children}
     </TaskContext.Provider>
   );

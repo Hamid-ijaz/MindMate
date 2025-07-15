@@ -1,43 +1,55 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useTransition } from "react";
 import { useTasks } from "@/contexts/task-context";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { EnergyLevel, Task } from "@/lib/types";
-import { AlertCircle, Check, Sparkles, X } from "lucide-react";
+import type { EnergyLevel, Task } from "@/lib/types";
+import { AlertCircle, Check, Sparkles, X, Loader2, ChevronDown } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { getRandomQuote } from "@/lib/motivational-quotes";
 import { MAX_REJECTIONS_BEFORE_PROMPT } from "@/lib/constants";
 import { AlertDialog, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "./ui/alert-dialog";
 import { ManageTasksSheet } from "./manage-tasks-sheet";
+import { suggestTask, SuggestTaskOutput } from "@/ai/flows/suggest-task-flow";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "./ui/accordion";
+import { ScrollArea } from "./ui/scroll-area";
+import { Skeleton } from "./ui/skeleton";
+
 
 export function TaskSuggestion() {
-  const { tasks, getSuggestedTask, acceptTask, rejectTask, muteTask, isLoading } = useTasks();
+  const { tasks, acceptTask, rejectTask, muteTask, isLoading: tasksLoading } = useTasks();
   const [currentEnergy, setCurrentEnergy] = useState<EnergyLevel | null>(null);
-  const [suggestedTask, setSuggestedTask] = useState<Task | null>(null);
+  const [aiSuggestion, setAiSuggestion] = useState<SuggestTaskOutput | null>(null);
   const [showAffirmation, setShowAffirmation] = useState(false);
   const [showRejectionPrompt, setShowRejectionPrompt] = useState(false);
+  const [isPending, startTransition] = useTransition();
+
   const { toast } = useToast();
+  
+  const suggestedTask = aiSuggestion?.suggestedTask;
+  const otherTasks = aiSuggestion?.otherTasks || [];
 
   const getNextTask = (energy: EnergyLevel | null) => {
     if (energy) {
-      const nextTask = getSuggestedTask(energy);
-      setSuggestedTask(nextTask);
+      startTransition(async () => {
+        const uncompletedTasks = tasks.filter(t => !t.completedAt);
+        const suggestion = await suggestTask({ tasks: uncompletedTasks, energyLevel: energy });
+        setAiSuggestion(suggestion);
+      });
     } else {
-      setSuggestedTask(null);
+      setAiSuggestion(null);
     }
   };
 
   useEffect(() => {
-    // Check if tasks are loaded before getting a suggestion
-    if (!isLoading) {
+    if (!tasksLoading) {
       getNextTask(currentEnergy);
     }
-  }, [tasks, currentEnergy, isLoading]);
-
+  }, [tasks, currentEnergy, tasksLoading]);
+  
   const handleAccept = () => {
     if (!suggestedTask) return;
     acceptTask(suggestedTask.id);
@@ -56,7 +68,6 @@ export function TaskSuggestion() {
   const handleReject = () => {
     if (!suggestedTask) return;
     const nextRejectionCount = (suggestedTask.rejectionCount || 0) + 1;
-    // We call rejectTask *after* checking the count, so the task data is fresh
     if (nextRejectionCount >= MAX_REJECTIONS_BEFORE_PROMPT) {
       setShowRejectionPrompt(true);
     } else {
@@ -78,12 +89,12 @@ export function TaskSuggestion() {
   
   const handleSkipFromDialog = () => {
      if (!suggestedTask) return;
-     rejectTask(suggestedTask.id); // Still record the rejection
+     rejectTask(suggestedTask.id);
      setShowRejectionPrompt(false);
      getNextTask(currentEnergy);
   }
 
-  if (isLoading) {
+  if (tasksLoading) {
     return <Card className="w-full max-w-lg mx-auto animate-pulse"><div className="h-80" /></Card>;
   }
   
@@ -109,6 +120,18 @@ export function TaskSuggestion() {
       </Card>
     );
   }
+
+  if (isPending) {
+    return (
+        <Card className="w-full max-w-lg mx-auto">
+            <CardContent className="p-6 text-center flex flex-col items-center justify-center h-80">
+                <Loader2 className="w-16 h-16 text-primary animate-spin" />
+                <p className="mt-4 text-xl font-semibold">Thinking...</p>
+                <p className="text-muted-foreground mt-2">Our AI is picking the perfect task for you.</p>
+            </CardContent>
+        </Card>
+    );
+  }
   
   if (showAffirmation) {
     return (
@@ -123,24 +146,28 @@ export function TaskSuggestion() {
 
   if (!suggestedTask) {
     return (
-      <Card className="w-full max-w-lg mx-auto">
-         <CardContent className="p-6 text-center flex flex-col items-center justify-center h-80">
-            <Check className="w-16 h-16 text-green-500" />
-            <p className="mt-4 text-xl font-semibold">All clear!</p>
-            <p className="text-muted-foreground mt-2">There are no tasks matching your current state. Enjoy your break or add a new task.</p>
-            <div className="mt-6">
-                <ManageTasksSheet />
-            </div>
-        </CardContent>
-      </Card>
+        <div className="w-full max-w-lg mx-auto">
+          <Card >
+             <CardContent className="p-6 text-center flex flex-col items-center justify-center h-80">
+                <Check className="w-16 h-16 text-green-500" />
+                <p className="mt-4 text-xl font-semibold">{aiSuggestion?.suggestionText || "All clear!"}</p>
+                <p className="text-muted-foreground mt-2">There are no tasks matching your current state. Enjoy your break or add a new task.</p>
+                <div className="mt-6">
+                    <ManageTasksSheet />
+                </div>
+            </CardContent>
+          </Card>
+           {otherTasks && otherTasks.length > 0 && <OtherTasksList tasks={otherTasks} />}
+        </div>
     )
   }
 
   return (
-    <>
-    <Card className="w-full max-w-lg mx-auto shadow-lg">
+    <div className="w-full max-w-lg mx-auto">
+    <Card className="shadow-lg">
       <CardHeader>
-        <CardTitle className="text-2xl">{suggestedTask.title}</CardTitle>
+        <CardDescription className="text-lg text-center font-medium text-primary pb-2">{aiSuggestion?.suggestionText}</CardDescription>
+        <CardTitle className="text-2xl pt-2">{suggestedTask.title}</CardTitle>
         {suggestedTask.description && <CardDescription className="pt-2">{suggestedTask.description}</CardDescription>}
       </CardHeader>
       <CardContent className="flex flex-wrap gap-2">
@@ -163,6 +190,8 @@ export function TaskSuggestion() {
         <Button variant="link" className="text-muted-foreground" onClick={() => setCurrentEnergy(null)}>Change energy level</Button>
     </div>
 
+    {otherTasks && otherTasks.length > 0 && <OtherTasksList tasks={otherTasks} />}
+    
     <AlertDialog open={showRejectionPrompt} onOpenChange={setShowRejectionPrompt}>
         <AlertDialogContent>
             <AlertDialogHeader>
@@ -177,6 +206,41 @@ export function TaskSuggestion() {
             </AlertDialogFooter>
         </AlertDialogContent>
     </AlertDialog>
-    </>
+    </div>
   );
+}
+
+
+function OtherTasksList({ tasks }: { tasks: Task[] }) {
+    if (!tasks || tasks.length === 0) return null;
+
+    return (
+        <Accordion type="single" collapsible className="w-full mt-6">
+            <AccordionItem value="other-tasks">
+                <AccordionTrigger>
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                       See other tasks ({tasks.length})
+                    </div>
+                </AccordionTrigger>
+                <AccordionContent>
+                    <ScrollArea className="h-64 pr-4">
+                        <div className="space-y-3">
+                            {tasks.map(task => (
+                                <Card key={task.id} className="bg-secondary/50">
+                                    <CardContent className="p-3">
+                                        <p className="font-semibold">{task.title}</p>
+                                        <div className="flex flex-wrap gap-2 mt-2">
+                                            <Badge variant="secondary">{task.category}</Badge>
+                                            <Badge variant="secondary">{task.energyLevel}</Badge>
+                                            <Badge variant="secondary">{task.duration}m</Badge>
+                                        </div>
+                                    </CardContent>
+                                </Card>
+                            ))}
+                        </div>
+                    </ScrollArea>
+                </AccordionContent>
+            </AccordionItem>
+        </Accordion>
+    )
 }
