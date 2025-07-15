@@ -1,3 +1,4 @@
+
 export type TaskCategory = 'Work' | 'Chores' | 'Writing' | 'Personal' | 'Study';
 export const taskCategories: TaskCategory[] = ['Work', 'Chores', 'Writing', 'Personal', 'Study'];
 
@@ -23,4 +24,9 @@ export interface Task {
   lastRejectedAt?: number;
   isMuted: boolean;
   completedAt?: number;
+}
+
+export interface User {
+  email: string;
+  password?: string; // In a real app, this would be a hash
 }

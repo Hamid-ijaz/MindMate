@@ -1,9 +1,11 @@
+
 "use client";
 
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import type { Task, EnergyLevel, TimeOfDay } from '@/lib/types';
 import { REJECTION_HOURS, LOCAL_STORAGE_KEY } from '@/lib/constants';
 import { getCurrentTimeOfDay } from '@/lib/utils';
+import { useAuth } from './auth-context';
 
 interface TaskContextType {
   tasks: Task[];
@@ -19,12 +21,13 @@ interface TaskContextType {
 
 const TaskContext = createContext<TaskContextType | undefined>(undefined);
 
-const getInitialState = (): { tasks: Task[] } => {
-  if (typeof window === 'undefined') {
+const getInitialState = (userEmail: string | null): { tasks: Task[] } => {
+  if (typeof window === 'undefined' || !userEmail) {
     return { tasks: [] };
   }
   try {
-    const item = window.localStorage.getItem(LOCAL_STORAGE_KEY);
+    const key = `${LOCAL_STORAGE_KEY}-${userEmail}`;
+    const item = window.localStorage.getItem(key);
     return item ? JSON.parse(item) : { tasks: [] };
   } catch (error) {
     console.error('Error reading from localStorage', error);
@@ -33,25 +36,29 @@ const getInitialState = (): { tasks: Task[] } => {
 };
 
 export const TaskProvider = ({ children }: { children: ReactNode }) => {
+  const { user, loading: authLoading } = useAuth();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const state = getInitialState();
-    setTasks(state.tasks);
-    setIsLoading(false);
-  }, []);
-
+    if (!authLoading) {
+      const state = getInitialState(user?.email || null);
+      setTasks(state.tasks);
+      setIsLoading(false);
+    }
+  }, [user, authLoading]);
+  
   useEffect(() => {
-    if (!isLoading) {
+    if (!isLoading && user) {
       try {
+        const key = `${LOCAL_STORAGE_KEY}-${user.email}`;
         const state = { tasks };
-        window.localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(state));
+        window.localStorage.setItem(key, JSON.stringify(state));
       } catch (error) {
         console.error('Error writing to localStorage', error);
       }
     }
-  }, [tasks, isLoading]);
+  }, [tasks, isLoading, user]);
 
   const addTask = useCallback((taskData: Omit<Task, 'id' | 'createdAt' | 'rejectionCount' | 'isMuted'>) => {
     const newTask: Task = {
@@ -133,7 +140,7 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
   }, [tasks]);
 
   return (
-    <TaskContext.Provider value={{ tasks, addTask, updateTask, deleteTask, getSuggestedTask, acceptTask, rejectTask, muteTask, isLoading }}>
+    <TaskContext.Provider value={{ tasks, addTask, updateTask, deleteTask, getSuggestedTask, acceptTask, rejectTask, muteTask, isLoading: isLoading || authLoading }}>
       {children}
     </TaskContext.Provider>
   );

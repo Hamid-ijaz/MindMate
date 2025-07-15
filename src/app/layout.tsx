@@ -1,5 +1,7 @@
+
 import type { Metadata } from 'next';
 import './globals.css';
+import { AuthProvider } from '@/contexts/auth-context';
 import { TaskProvider } from '@/contexts/task-context';
 import { Header } from '@/components/header';
 import { Toaster } from '@/components/ui/toaster';
@@ -22,13 +24,15 @@ export default function RootLayout({
         <link href="https://fonts.googleapis.com/css2?family=Inter&display=swap" rel="stylesheet" />
       </head>
       <body className="font-body antialiased">
-        <TaskProvider>
-          <div className="relative flex min-h-screen flex-col">
-            <Header />
-            <main className="flex-1">{children}</main>
-          </div>
-          <Toaster />
-        </TaskProvider>
+        <AuthProvider>
+          <TaskProvider>
+            <div className="relative flex min-h-screen flex-col">
+              <Header />
+              <main className="flex-1">{children}</main>
+            </div>
+            <Toaster />
+          </TaskProvider>
+        </AuthProvider>
       </body>
     </html>
   );
