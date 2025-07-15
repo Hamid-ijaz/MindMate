@@ -19,7 +19,7 @@ export function Header() {
     router.push('/login');
   };
 
-  const showAuthElements = !['/login', '/signup'].includes(pathname);
+  const isAuthPage = pathname === '/login' || pathname === '/signup';
 
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -29,23 +29,24 @@ export function Header() {
             <Logo />
           </Link>
         </div>
-        {showAuthElements && (
-          <div className="flex items-center gap-4">
-            {loading ? (
-                <Skeleton className="h-8 w-24" />
-            ) : isAuthenticated ? (
-              <>
-                <span className="text-sm text-muted-foreground hidden sm:inline">Welcome, {user?.email}</span>
-                <ManageTasksSheet />
-                <Button variant="ghost" size="sm" onClick={handleLogout}>Logout</Button>
-              </>
-            ) : (
+        
+        <div className="flex items-center gap-4">
+          {loading ? (
+              <Skeleton className="h-8 w-24" />
+          ) : isAuthenticated ? (
+            <>
+              <span className="text-sm text-muted-foreground hidden sm:inline">Welcome, {user?.email}</span>
+              <ManageTasksSheet />
+              <Button variant="ghost" size="sm" onClick={handleLogout}>Logout</Button>
+            </>
+          ) : (
+             !isAuthPage && (
                 <Button asChild>
                     <Link href="/login">Login</Link>
                 </Button>
-            )}
-          </div>
-        )}
+            )
+          )}
+        </div>
       </div>
     </header>
   );
