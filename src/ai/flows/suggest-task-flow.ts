@@ -3,39 +3,16 @@
  * @fileOverview A task suggestion AI agent.
  *
  * - suggestTask - A function that handles the task suggestion process.
- * - SuggestTaskInput - The input type for the suggestTask function.
- * - SuggestTaskOutput - The return type for the suggestTask function.
  */
 
 import { ai } from '@/ai/genkit';
-import { z } from 'zod';
-import type { Task } from '@/lib/types';
-import { energyLevels, taskCategories, taskDurations, timesOfDay } from '@/lib/types';
+import {
+  SuggestTaskInput,
+  SuggestTaskInputSchema,
+  SuggestTaskOutput,
+  SuggestTaskOutputSchema
+} from '@/lib/types';
 
-// Zod schema for a single task, to be used in the list
-const TaskSchema = z.object({
-  id: z.string(),
-  title: z.string(),
-  description: z.string().optional(),
-  category: z.enum(taskCategories),
-  energyLevel: z.enum(energyLevels),
-  duration: z.coerce.number().refine((val) => taskDurations.includes(val as (typeof taskDurations)[number])),
-  timeOfDay: z.enum(timesOfDay),
-  rejectionCount: z.number(),
-});
-
-export const SuggestTaskInputSchema = z.object({
-  tasks: z.array(TaskSchema).describe("The list of all available, uncompleted tasks for the user."),
-  energyLevel: z.enum(energyLevels).describe("The user's current self-reported energy level."),
-});
-export type SuggestTaskInput = z.infer<typeof SuggestTaskInputSchema>;
-
-export const SuggestTaskOutputSchema = z.object({
-    suggestionText: z.string().describe("A short, friendly, and encouraging phrase to present the suggested task. Vary the phrasing."),
-    suggestedTask: TaskSchema.nullable().describe("The single best task for the user to do right now. If no tasks are suitable, this can be null."),
-    otherTasks: z.array(TaskSchema).describe("All other tasks that were not suggested, which the user can view.")
-});
-export type SuggestTaskOutput = z.infer<typeof SuggestTaskOutputSchema>;
 
 export async function suggestTask(input: SuggestTaskInput): Promise<SuggestTaskOutput> {
   // If there are no tasks, return an empty state without calling the AI

@@ -6,14 +6,14 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import type { EnergyLevel, Task } from "@/lib/types";
+import type { EnergyLevel, Task, SuggestTaskOutput } from "@/lib/types";
 import { AlertCircle, Check, Sparkles, X, Loader2, ChevronDown } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { getRandomQuote } from "@/lib/motivational-quotes";
 import { MAX_REJECTIONS_BEFORE_PROMPT } from "@/lib/constants";
 import { AlertDialog, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "./ui/alert-dialog";
 import { ManageTasksSheet } from "./manage-tasks-sheet";
-import { suggestTask, SuggestTaskOutput } from "@/ai/flows/suggest-task-flow";
+import { suggestTask } from "@/ai/flows/suggest-task-flow";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "./ui/accordion";
 import { ScrollArea } from "./ui/scroll-area";
 import { Skeleton } from "./ui/skeleton";
