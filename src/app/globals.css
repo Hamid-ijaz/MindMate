@@ -99,6 +99,9 @@
   .dark .rdp-caption_dropdowns {
     @apply bg-popover text-popover-foreground;
   }
+  .dark .rdp-caption_dropdowns select {
+    @apply bg-popover text-popover-foreground border-border rounded-sm;
+  }
   .dark .rdp-caption_dropdowns .rdp-vhidden {
     @apply hidden;
   }
