@@ -8,6 +8,7 @@ import { ManageTasksSheet } from './manage-tasks-sheet';
 import { useAuth } from '@/contexts/auth-context';
 import { Button } from './ui/button';
 import { Skeleton } from './ui/skeleton';
+import { MessageSquare } from 'lucide-react';
 
 export function Header() {
   const pathname = usePathname();
@@ -16,7 +17,7 @@ export function Header() {
 
   const handleLogout = () => {
     logout();
-    router.push('/login');
+    window.location.href = '/login';
   };
 
   const isAuthPage = pathname === '/login' || pathname === '/signup';
@@ -36,6 +37,12 @@ export function Header() {
           ) : isAuthenticated ? (
             <>
               <span className="text-sm text-muted-foreground hidden sm:inline">Welcome, {user?.email}</span>
+               <Button variant="outline" size="sm" asChild>
+                <Link href="/chat">
+                  <MessageSquare className="mr-2 h-4 w-4" />
+                  Check-in
+                </Link>
+              </Button>
               <ManageTasksSheet />
               <Button variant="ghost" size="sm" onClick={handleLogout}>Logout</Button>
             </>

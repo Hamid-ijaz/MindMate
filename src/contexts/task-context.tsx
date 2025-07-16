@@ -2,40 +2,44 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
-import type { Task } from '@/lib/types';
+import type { Task, Accomplishment } from '@/lib/types';
 import { LOCAL_STORAGE_KEY } from '@/lib/constants';
 import { useAuth } from './auth-context';
 
 interface TaskContextType {
   tasks: Task[];
+  accomplishments: Accomplishment[];
   addTask: (task: Omit<Task, 'id' | 'createdAt' | 'rejectionCount' | 'isMuted' | 'completedAt' | 'lastRejectedAt'>) => void;
   updateTask: (id: string, updates: Partial<Task>) => void;
   deleteTask: (id: string) => void;
   acceptTask: (id: string) => void;
   rejectTask: (id: string) => void;
   muteTask: (id: string) => void;
+  addAccomplishment: (content: string) => void;
   isLoading: boolean;
 }
 
 const TaskContext = createContext<TaskContextType | undefined>(undefined);
 
-const getInitialState = (userEmail: string | null): { tasks: Task[] } => {
+const getInitialState = (userEmail: string | null): { tasks: Task[], accomplishments: Accomplishment[] } => {
   if (typeof window === 'undefined' || !userEmail) {
-    return { tasks: [] };
+    return { tasks: [], accomplishments: [] };
   }
   try {
     const key = `${LOCAL_STORAGE_KEY}-${userEmail}`;
     const item = window.localStorage.getItem(key);
-    return item ? JSON.parse(item) : { tasks: [] };
+    const parsed = item ? JSON.parse(item) : {};
+    return { tasks: parsed.tasks || [], accomplishments: parsed.accomplishments || [] };
   } catch (error) {
     console.error('Error reading from localStorage', error);
-    return { tasks: [] };
+    return { tasks: [], accomplishments: [] };
   }
 };
 
 export const TaskProvider = ({ children }: { children: ReactNode }) => {
   const { user, loading: authLoading } = useAuth();
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [accomplishments, setAccomplishments] = useState<Accomplishment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -43,8 +47,10 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
       if (user?.email) {
         const state = getInitialState(user.email);
         setTasks(state.tasks);
+        setAccomplishments(state.accomplishments);
       } else {
-        setTasks([]); // Clear tasks if user logs out
+        setTasks([]); 
+        setAccomplishments([]);
       }
       setIsLoading(false);
     }
@@ -54,13 +60,13 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
     if (!isLoading && user) {
       try {
         const key = `${LOCAL_STORAGE_KEY}-${user.email}`;
-        const state = { tasks };
+        const state = { tasks, accomplishments };
         window.localStorage.setItem(key, JSON.stringify(state));
       } catch (error) {
         console.error('Error writing to localStorage', error);
       }
     }
-  }, [tasks, isLoading, user]);
+  }, [tasks, accomplishments, isLoading, user]);
 
   const addTask = useCallback((taskData: Omit<Task, 'id' | 'createdAt' | 'rejectionCount' | 'isMuted' | 'completedAt' | 'lastRejectedAt'>) => {
     const newTask: Task = {
@@ -98,9 +104,18 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
   const muteTask = useCallback((id: string) => {
     updateTask(id, { isMuted: true });
   }, [updateTask]);
+
+  const addAccomplishment = useCallback((content: string) => {
+    const newAccomplishment: Accomplishment = {
+      id: new Date().toISOString() + Math.random(),
+      date: new Date().toISOString().split('T')[0], // YYYY-MM-DD
+      content,
+    };
+    setAccomplishments(prev => [...prev, newAccomplishment]);
+  }, []);
   
   return (
-    <TaskContext.Provider value={{ tasks, addTask, updateTask, deleteTask, acceptTask, rejectTask, muteTask, isLoading: isLoading || authLoading }}>
+    <TaskContext.Provider value={{ tasks, accomplishments, addAccomplishment, addTask, updateTask, deleteTask, acceptTask, rejectTask, muteTask, isLoading: isLoading || authLoading }}>
       {children}
     </TaskContext.Provider>
   );

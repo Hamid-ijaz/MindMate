@@ -1,3 +1,4 @@
+
 import { z } from "zod";
 
 export type TaskCategory = 'Work' | 'Chores' | 'Writing' | 'Personal' | 'Study';
@@ -30,4 +31,10 @@ export interface Task {
 export interface User {
   email: string;
   password?: string; // In a real app, this would be a hash
+}
+
+export interface Accomplishment {
+    id: string;
+    date: string; // YYYY-MM-DD
+    content: string;
 }
