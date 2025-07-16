@@ -40,19 +40,19 @@ export function TaskItem({ task, extraActions, isSubtask = false }: TaskItemProp
 
   return (
     <Card className={isSubtask ? "border-l-4 border-primary/20" : ""}>
-      <CardHeader>
-        <CardTitle className="text-lg">{task.title}</CardTitle>
-        {task.description && <CardDescription>{task.description}</CardDescription>}
-      </CardHeader>
-      <CardContent className="flex flex-wrap gap-2">
+      <div className={isSubtask ? "p-3" : "p-6"}>
+        <CardTitle className={isSubtask ? "font-semibold text-base" : "text-lg"}>{task.title}</CardTitle>
+        {task.description && <CardDescription className="pt-1">{task.description}</CardDescription>}
+      </div>
+      <CardContent className={`flex flex-wrap gap-2 ${isSubtask ? 'px-3 pt-0 pb-2' : 'p-6 pt-0'}`}>
         <Badge variant="secondary">{task.category}</Badge>
         <Badge variant="secondary">{task.energyLevel} Energy</Badge>
         <Badge variant="secondary">{task.duration} min</Badge>
         <Badge variant="secondary">{task.timeOfDay}</Badge>
       </CardContent>
-      <CardFooter className="flex justify-end gap-2">
+      <CardFooter className={`flex justify-end gap-2 ${isSubtask ? 'px-3 pb-3 pt-0' : 'p-6 pt-0'}`}>
         {extraActions}
-         {!isSubtask && (
+         {!isSubtask && subtasks.length > 0 && (
           <Button variant="ghost" size="sm" onClick={() => setShowSubtasks(!showSubtasks)}>
             {showSubtasks ? <ChevronUp className="h-4 w-4 mr-2" /> : <ChevronDown className="h-4 w-4 mr-2" />}
             Subtasks ({subtasks.length})

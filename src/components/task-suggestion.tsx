@@ -22,6 +22,7 @@ import { TaskItem } from "./task-item";
 import { Checkbox } from "./ui/checkbox";
 import { Label } from "./ui/label";
 import { PlusCircle } from "lucide-react";
+import { SubtaskList } from "./subtask-list";
 
 const getDefaultEnergyLevel = (): EnergyLevel => {
     const timeOfDay = getCurrentTimeOfDay();
@@ -223,6 +224,7 @@ export function TaskSuggestion() {
   
   const uncompletedTasks = tasks.filter(t => !t.completedAt && !t.isMuted && !t.parentId);
   const otherVisibleTasks = otherTasks.filter(t => !t.completedAt && !t.isMuted && t.id !== suggestedTask?.id && !t.parentId);
+  const subtasksOfSuggested = suggestedTask ? tasks.filter(t => t.parentId === suggestedTask.id) : [];
 
   if (!suggestedTask && uncompletedTasks.length === 0) {
     return (
@@ -322,6 +324,22 @@ export function TaskSuggestion() {
           <Check className="mr-2 h-5 w-5" /> Let's Do It
         </Button>
       </CardFooter>
+      {subtasksOfSuggested.length > 0 && (
+          <CardContent>
+            <Accordion type="single" collapsible className="w-full">
+              <AccordionItem value="subtasks">
+                <AccordionTrigger>
+                  <div className="flex items-center gap-2 text-sm">
+                    View Sub-tasks ({subtasksOfSuggested.length})
+                  </div>
+                </AccordionTrigger>
+                <AccordionContent>
+                  <SubtaskList parentTask={suggestedTask} subtasks={subtasksOfSuggested} />
+                </AccordionContent>
+              </AccordionItem>
+            </Accordion>
+          </CardContent>
+      )}
     </Card>
 
     {otherVisibleTasks && otherVisibleTasks.length > 0 && <OtherTasksList tasks={otherVisibleTasks} />}
