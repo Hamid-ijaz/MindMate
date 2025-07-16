@@ -35,6 +35,10 @@ import {
   TaskDuration,
   TimeOfDay,
 } from "@/lib/types";
+import { useState, useTransition } from "react";
+import { summarizeUrl } from "@/ai/flows/summarize-url-flow";
+import { Loader2 } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
 const formSchema = z.object({
   title: z.string().min(3, "Title must be at least 3 characters long."),
@@ -54,8 +58,15 @@ interface TaskFormProps {
   defaultValues?: Partial<TaskFormValues>;
 }
 
+const urlRegex = new RegExp(
+  /^(https?:\/\/)?((([a-z\d]([a-z\d-]*[a-z\d])*)\.)+[a-z]{2,}|((\d{1,3}\.){3}\d{1,3}))(:\d+)?(\/[-a-z\d%_.~+]*)*(\?[;&a-z\d%_.~+=-]*)?(#[-a-z\d_]*)?$/i
+);
+
+
 export function TaskForm({ task, onFinished, parentId, defaultValues: propDefaults }: TaskFormProps) {
   const { addTask, updateTask } = useTasks();
+  const [isSummarizing, startTransition] = useTransition();
+  const { toast } = useToast();
 
   const defaultValues: Partial<TaskFormValues> = task ? {
     ...task,
@@ -74,6 +85,31 @@ export function TaskForm({ task, onFinished, parentId, defaultValues: propDefaul
     resolver: zodResolver(formSchema),
     defaultValues,
   });
+
+  const handleTitleBlur = (e: React.FocusEvent<HTMLInputElement>) => {
+    const title = e.target.value;
+    if (urlRegex.test(title)) {
+      startTransition(async () => {
+        try {
+          const result = await summarizeUrl({ url: title });
+          if (result.summary) {
+            form.setValue("description", result.summary);
+             toast({
+              title: "Description Updated!",
+              description: "AI has summarized the URL for you.",
+            });
+          }
+        } catch (error) {
+          console.error("Failed to summarize URL:", error);
+          toast({
+            title: "AI Error",
+            description: "Could not summarize the URL. Please try again.",
+            variant: "destructive",
+          });
+        }
+      });
+    }
+  };
 
   const onSubmit = (data: TaskFormValues) => {
     if (task) {
@@ -97,7 +133,7 @@ export function TaskForm({ task, onFinished, parentId, defaultValues: propDefaul
             <FormItem>
               <FormLabel>Task Title</FormLabel>
               <FormControl>
-                <Input placeholder="e.g., Draft the project proposal" {...field} />
+                <Input placeholder="e.g., Draft the project proposal" {...field} onBlur={handleTitleBlur} />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -109,9 +145,16 @@ export function TaskForm({ task, onFinished, parentId, defaultValues: propDefaul
           render={({ field }) => (
             <FormItem>
               <FormLabel>Description (Optional)</FormLabel>
-              <FormControl>
-                <Textarea placeholder="Add any details or notes here" {...field} />
-              </FormControl>
+               <div className="relative">
+                <FormControl>
+                  <Textarea placeholder="Add any details or notes here" {...field} />
+                </FormControl>
+                {isSummarizing && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-background/80 backdrop-blur-sm rounded-md">
+                        <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                    </div>
+                )}
+               </div>
               <FormMessage />
             </FormItem>
           )}
