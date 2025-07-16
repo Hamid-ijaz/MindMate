@@ -27,6 +27,7 @@ export function TaskItem({ task, extraActions, isSubtask = false }: TaskItemProp
   };
 
   const subtasks = tasks.filter(t => t.parentId === task.id);
+  const pendingSubtasks = subtasks.filter(t => !t.completedAt);
 
   if (isEditing) {
     return (
@@ -55,7 +56,7 @@ export function TaskItem({ task, extraActions, isSubtask = false }: TaskItemProp
          {!isSubtask && subtasks.length > 0 && (
           <Button variant="ghost" size="sm" onClick={() => setShowSubtasks(!showSubtasks)}>
             {showSubtasks ? <ChevronUp className="h-4 w-4 mr-2" /> : <ChevronDown className="h-4 w-4 mr-2" />}
-            Subtasks ({subtasks.length})
+            Subtasks ({pendingSubtasks.length})
           </Button>
         )}
         <Button variant="outline" size="sm" onClick={() => acceptTask(task.id)}>

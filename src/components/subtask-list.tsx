@@ -23,9 +23,11 @@ export function SubtaskList({ parentTask, subtasks }: SubtaskListProps) {
     setIsAdding(false);
   };
   
+  const pendingSubtasks = subtasks.filter(st => !st.completedAt);
+
   return (
     <div className="pl-4 border-l-2 border-muted-foreground/20 space-y-3">
-        {subtasks.map(subtask => (
+        {pendingSubtasks.map(subtask => (
             <TaskItem key={subtask.id} task={subtask} isSubtask />
         ))}
 

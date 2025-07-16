@@ -55,8 +55,6 @@ export function TaskSuggestion() {
 
   const { toast } = useToast();
 
-  const { suggestedTask, otherTasks } = suggestion;
-  
   const getNextTask = (energy: EnergyLevel | null) => {
     if (!energy) {
       setSuggestion({ suggestedTask: null, otherTasks: [] });
@@ -108,8 +106,8 @@ export function TaskSuggestion() {
   }, [tasks, currentEnergy, tasksLoading]);
   
   const handleAccept = () => {
-    if (!suggestedTask) return;
-    acceptTask(suggestedTask.id);
+    if (!suggestion.suggestedTask) return;
+    acceptTask(suggestion.suggestedTask.id);
     setShowAffirmation(true);
     setTimeout(() => {
       setShowAffirmation(false);
@@ -117,18 +115,18 @@ export function TaskSuggestion() {
   };
 
   const handleReject = () => {
-    if (!suggestedTask) return;
-    const nextRejectionCount = (suggestedTask.rejectionCount || 0) + 1;
+    if (!suggestion.suggestedTask) return;
+    const nextRejectionCount = (suggestion.suggestedTask.rejectionCount || 0) + 1;
     if (nextRejectionCount >= MAX_REJECTIONS_BEFORE_PROMPT) {
       setShowRejectionPrompt(true);
     } else {
-      rejectTask(suggestedTask.id);
+      rejectTask(suggestion.suggestedTask.id);
     }
   };
   
   const handleMute = () => {
-    if (!suggestedTask) return;
-    muteTask(suggestedTask.id);
+    if (!suggestion.suggestedTask) return;
+    muteTask(suggestion.suggestedTask.id);
     setShowRejectionPrompt(false);
     toast({
         title: "Task Muted",
@@ -137,18 +135,18 @@ export function TaskSuggestion() {
   };
   
   const handleSkipFromDialog = () => {
-     if (!suggestedTask) return;
-     rejectTask(suggestedTask.id);
+     if (!suggestion.suggestedTask) return;
+     rejectTask(suggestion.suggestedTask.id);
      setShowRejectionPrompt(false);
   }
 
   const handleRewordClick = () => {
-    if (!suggestedTask) return;
+    if (!suggestion.suggestedTask) return;
     startTransition(async () => {
       try {
         const result = await rewordTask({
-          title: suggestedTask.title,
-          description: suggestedTask.description || "",
+          title: suggestion.suggestedTask.title,
+          description: suggestion.suggestedTask.description || "",
         });
         setRewordedSuggestions(result.suggestedTasks);
         setSelectedRewordedTasks(result.suggestedTasks.reduce((acc, task) => {
@@ -168,7 +166,7 @@ export function TaskSuggestion() {
   };
 
   const handleAcceptReword = () => {
-    if (!suggestedTask || rewordedSuggestions.length === 0) return;
+    if (!suggestion.suggestedTask || rewordedSuggestions.length === 0) return;
 
     const tasksToAdd = rewordedSuggestions.filter(suggestion => selectedRewordedTasks[suggestion.title]);
 
@@ -183,11 +181,11 @@ export function TaskSuggestion() {
     
     tasksToAdd.forEach(suggestion => {
         addTask({
-            parentId: suggestedTask.id,
+            parentId: suggestion.suggestedTask!.id,
             title: suggestion.title,
             description: suggestion.description,
-            category: suggestedTask.category,
-            timeOfDay: suggestedTask.timeOfDay,
+            category: suggestion.suggestedTask!.category,
+            timeOfDay: suggestion.suggestedTask!.timeOfDay,
             energyLevel: 'Low',
             duration: 15,
         });
@@ -195,7 +193,7 @@ export function TaskSuggestion() {
     
     toast({
       title: `${tasksToAdd.length} New Sub-task(s) Added!`,
-      description: `The selected tasks are now under "${suggestedTask.title}".`,
+      description: `The selected tasks are now under "${suggestion.suggestedTask!.title}".`,
     });
 
     setShowRewordDialog(false);
@@ -223,10 +221,10 @@ export function TaskSuggestion() {
   }
   
   const uncompletedTasks = tasks.filter(t => !t.completedAt && !t.isMuted && !t.parentId);
-  const otherVisibleTasks = otherTasks.filter(t => !t.completedAt && !t.isMuted && t.id !== suggestedTask?.id && !t.parentId);
-  const subtasksOfSuggested = suggestedTask ? tasks.filter(t => t.parentId === suggestedTask.id) : [];
+  const otherVisibleTasks = suggestion.otherTasks.filter(t => !t.completedAt && !t.isMuted && t.id !== suggestion.suggestedTask?.id && !t.parentId);
+  const subtasksOfSuggested = suggestion.suggestedTask ? tasks.filter(t => t.parentId === suggestion.suggestedTask!.id && !t.completedAt) : [];
 
-  if (!suggestedTask && uncompletedTasks.length === 0) {
+  if (!suggestion.suggestedTask && uncompletedTasks.length === 0) {
     return (
         <div className="w-full max-w-lg mx-auto">
           <Card >
@@ -243,7 +241,7 @@ export function TaskSuggestion() {
     )
   }
 
-  if (!suggestedTask) {
+  if (!suggestion.suggestedTask) {
     return (
         <div className="w-full max-w-lg mx-auto">
              <Card>
@@ -289,16 +287,16 @@ export function TaskSuggestion() {
             </Select>
         </div>
 
-        <CardTitle className="text-2xl pt-2">{suggestedTask.title}</CardTitle>
-        {suggestedTask.description && <CardDescription className="pt-2">{suggestedTask.description}</CardDescription>}
+        <CardTitle className="text-2xl pt-2">{suggestion.suggestedTask.title}</CardTitle>
+        {suggestion.suggestedTask.description && <CardDescription className="pt-2">{suggestion.suggestedTask.description}</CardDescription>}
       </CardHeader>
       <CardContent>
         <div className="flex flex-wrap gap-2">
-            <Badge variant="outline">{suggestedTask.category}</Badge>
-            <Badge variant="outline">{suggestedTask.energyLevel} Energy</Badge>
-            <Badge variant="outline">{suggestedTask.duration} min</Badge>
-            <Badge variant="outline">{suggestedTask.timeOfDay}</Badge>
-            {suggestedTask.rejectionCount > 0 && <Badge variant="destructive" className="animate-pulse">{suggestedTask.rejectionCount}x Skipped</Badge>}
+            <Badge variant="outline">{suggestion.suggestedTask.category}</Badge>
+            <Badge variant="outline">{suggestion.suggestedTask.energyLevel} Energy</Badge>
+            <Badge variant="outline">{suggestion.suggestedTask.duration} min</Badge>
+            <Badge variant="outline">{suggestion.suggestedTask.timeOfDay}</Badge>
+            {suggestion.suggestedTask.rejectionCount > 0 && <Badge variant="destructive" className="animate-pulse">{suggestion.suggestedTask.rejectionCount}x Skipped</Badge>}
         </div>
         <div className="mt-4 text-center">
              <Button variant="link" onClick={handleRewordClick} disabled={isPending}>
@@ -334,7 +332,7 @@ export function TaskSuggestion() {
                   </div>
                 </AccordionTrigger>
                 <AccordionContent>
-                  <SubtaskList parentTask={suggestedTask} subtasks={subtasksOfSuggested} />
+                  <SubtaskList parentTask={suggestion.suggestedTask} subtasks={subtasksOfSuggested} />
                 </AccordionContent>
               </AccordionItem>
             </Accordion>
