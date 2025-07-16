@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Check, Edit, Trash2, ChevronDown, ChevronUp } from 'lucide-react';
 import { TaskForm } from './task-form';
 import { SubtaskList } from './subtask-list';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
 
 interface TaskItemProps {
   task: Task;
@@ -70,7 +71,27 @@ export function TaskItem({ task, extraActions, isSubtask = false }: TaskItemProp
                 </Button>
                 )}
                 
-                {!hasPendingSubtasks && <CompleteButton />}
+                {hasPendingSubtasks ? (
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span tabIndex={0}>
+                          <Button variant="outline" size="sm" disabled>
+                            <Check className="h-4 w-4 mr-2" />
+                            Complete
+                          </Button>
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Complete all sub-tasks first.</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                ) : (
+                  !isSubtask && <CompleteButton />
+                )}
+                
+                {isSubtask && <CompleteButton />}
 
                 <Button variant="ghost" size="icon" onClick={() => setIsEditing(true)}>
                 <Edit className="h-4 w-4" />
