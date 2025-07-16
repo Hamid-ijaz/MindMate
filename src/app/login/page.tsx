@@ -68,14 +68,14 @@ export default function LoginPage() {
                 <Button type="submit" className="w-full">
                 Log In
                 </Button>
-                <p className="text-sm text-muted-foreground">
-                Don't have an account?{" "}
-                <Link href="/signup" className="text-primary hover:underline">
-                    Sign Up
-                </Link>
-                </p>
             </CardFooter>
         </form>
+         <p className="text-sm text-center pb-6 text-muted-foreground">
+            Don't have an account?{" "}
+            <Link href="/signup" className="text-primary hover:underline">
+                Sign Up
+            </Link>
+        </p>
       </Card>
     </div>
   );
