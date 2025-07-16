@@ -7,9 +7,10 @@
  */
 
 import { ai } from '@/ai/genkit';
-import { RewordTaskInputSchema, RewordTaskOutputSchema, type RewordTaskInput, type RewordTaskOutput } from '@/lib/types';
+import { z } from 'zod';
+import type { RewordTaskInput, RewordTaskOutput } from '@/lib/types';
 
-
+// Using the types from lib/types for the function signature
 export async function rewordTask(input: RewordTaskInput): Promise<RewordTaskOutput> {
   const { output } = await rewordTaskFlow(input);
     if (!output) {
@@ -18,10 +19,22 @@ export async function rewordTask(input: RewordTaskInput): Promise<RewordTaskOutp
     return output;
 }
 
+// Defining schemas locally to ensure Genkit processes them correctly.
+const RewordTaskInputSchemaInternal = z.object({
+  title: z.string().describe('The original title of the task.'),
+  description: z.string().describe('The original description of the task.'),
+});
+
+const RewordTaskOutputSchemaInternal = z.object({
+  title: z.string().describe('The new, rephrased title for the task that represents a smaller first step.'),
+  description: z.string().describe('A new, encouraging description for the rephrased task.'),
+});
+
+
 const prompt = ai.definePrompt({
   name: 'rewordTaskPrompt',
-  input: { schema: RewordTaskInputSchema },
-  output: { schema: RewordTaskOutputSchema },
+  input: { schema: RewordTaskInputSchemaInternal },
+  output: { schema: RewordTaskOutputSchemaInternal },
   prompt: `You are MindMate, a friendly and adaptive task companion. Your goal is to help users overcome procrastination by making tasks feel less overwhelming.
 
 A user finds the following task intimidating:
@@ -46,8 +59,8 @@ Now, rephrase the user's task.`,
 const rewordTaskFlow = ai.defineFlow(
   {
     name: 'rewordTaskFlow',
-    inputSchema: RewordTaskInputSchema,
-    outputSchema: RewordTaskOutputSchema,
+    inputSchema: RewordTaskInputSchemaInternal,
+    outputSchema: RewordTaskOutputSchemaInternal,
   },
   async (input) => {
     const { output } = await prompt(input);
