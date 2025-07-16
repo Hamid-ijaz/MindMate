@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
 export function middleware(request: NextRequest) {
-  const authCookie = request.cookies.get('mindful-tasks-auth');
+  const authCookie = request.cookies.get('mindmate-auth');
   const { pathname } = request.nextUrl;
 
   const isAuthPage = pathname === '/login' || pathname === '/signup';

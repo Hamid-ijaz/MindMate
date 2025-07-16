@@ -9,7 +9,7 @@ import { ThemeProvider } from '@/contexts/theme-context';
 import { ManageTasksSheet } from '@/components/manage-tasks-sheet';
 
 export const metadata: Metadata = {
-  title: 'Mindful Tasks',
+  title: 'MindMate',
   description: 'Your Adaptive Task Companion',
 };
 

@@ -74,7 +74,7 @@ export default function SignupPage() {
           <form onSubmit={form.handleSubmit(onSubmit)}>
             <CardHeader>
               <CardTitle>Create an Account</CardTitle>
-              <CardDescription>Start your journey with Mindful Tasks today.</CardDescription>
+              <CardDescription>Start your journey with MindMate today.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-2 gap-4">

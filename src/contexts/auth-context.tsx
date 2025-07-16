@@ -18,8 +18,8 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const USERS_STORAGE_KEY = 'mindful-tasks-users';
-const AUTH_COOKIE_KEY = 'mindful-tasks-auth';
+const USERS_STORAGE_KEY = 'mindmate-users';
+const AUTH_COOKIE_KEY = 'mindmate-auth';
 
 const getStoredUsers = (): User[] => {
   if (typeof window === 'undefined') return [];

@@ -39,7 +39,7 @@ export default function LoginPage() {
         <form onSubmit={handleSubmit}>
             <CardHeader>
             <CardTitle>Welcome Back</CardTitle>
-            <CardDescription>Log in to manage your mindful tasks.</CardDescription>
+            <CardDescription>Log in to manage your tasks with MindMate.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
                 <div className="space-y-2">
