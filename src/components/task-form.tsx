@@ -115,10 +115,10 @@ export function TaskForm({ task, onFinished, parentId, defaultValues: propDefaul
 
   const handleEnhanceClick = () => {
     const title = form.getValues("title");
-    if (!title || title.length < 5) {
+    if (!title || title.length < 3) {
         toast({
             title: "Title is too short",
-            description: "Please enter a more descriptive title to enhance.",
+            description: "Please enter a title to enhance.",
             variant: "destructive"
         })
         return;
@@ -128,9 +128,14 @@ export function TaskForm({ task, onFinished, parentId, defaultValues: propDefaul
             const result = await enhanceTask({ title });
             form.setValue("title", result.rephrasedTitle);
             form.setValue("description", result.description);
+            form.setValue("category", result.category);
+            form.setValue("energyLevel", result.energyLevel);
+            form.setValue("duration", result.duration as TaskDuration);
+            form.setValue("timeOfDay", result.timeOfDay);
+
             toast({
                 title: "Task Enhanced!",
-                description: "The title and description have been improved by AI.",
+                description: "The task details have been filled in by AI.",
             });
         } catch (error) {
             console.error("Failed to enhance task:", error);
@@ -203,7 +208,7 @@ export function TaskForm({ task, onFinished, parentId, defaultValues: propDefaul
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Category</FormLabel>
-                <Select onValueChange={field.onChange} defaultValue={field.value}>
+                <Select onValueChange={field.onChange} value={field.value}>
                   <FormControl>
                     <SelectTrigger>
                       <SelectValue placeholder="Select a category" />
@@ -225,7 +230,7 @@ export function TaskForm({ task, onFinished, parentId, defaultValues: propDefaul
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Energy Level</FormLabel>
-                <Select onValueChange={field.onChange} defaultValue={field.value}>
+                <Select onValueChange={field.onChange} value={field.value}>
                   <FormControl>
                     <SelectTrigger>
                       <SelectValue placeholder="How much energy does this require?" />
@@ -247,7 +252,7 @@ export function TaskForm({ task, onFinished, parentId, defaultValues: propDefaul
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Estimated Duration</FormLabel>
-                <Select onValueChange={field.onChange} defaultValue={String(field.value)}>
+                <Select onValueChange={field.onChange} value={String(field.value)}>
                   <FormControl>
                     <SelectTrigger>
                       <SelectValue placeholder="Select a duration" />
@@ -269,7 +274,7 @@ export function TaskForm({ task, onFinished, parentId, defaultValues: propDefaul
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Preferred Time of Day</FormLabel>
-                <Select onValueChange={field.onChange} defaultValue={field.value}>
+                <Select onValueChange={field.onChange} value={field.value}>
                   <FormControl>
                     <SelectTrigger>
                       <SelectValue placeholder="When is it best to do this?" />
