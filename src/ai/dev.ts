@@ -2,3 +2,4 @@
 import './flows/reword-task-flow';
 import './flows/chat-flow';
 import './flows/summarize-url-flow';
+import './flows/enhance-task-flow';

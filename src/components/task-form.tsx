@@ -37,7 +37,8 @@ import {
 } from "@/lib/types";
 import { useState, useTransition } from "react";
 import { summarizeUrl } from "@/ai/flows/summarize-url-flow";
-import { Loader2 } from "lucide-react";
+import { enhanceTask } from "@/ai/flows/enhance-task-flow";
+import { Loader2, Wand2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 const formSchema = z.object({
@@ -65,7 +66,8 @@ const urlRegex = new RegExp(
 
 export function TaskForm({ task, onFinished, parentId, defaultValues: propDefaults }: TaskFormProps) {
   const { addTask, updateTask } = useTasks();
-  const [isSummarizing, startTransition] = useTransition();
+  const [isSummarizing, startSummarizeTransition] = useTransition();
+  const [isEnhancing, startEnhanceTransition] = useTransition();
   const { toast } = useToast();
 
   const defaultValues: Partial<TaskFormValues> = task ? {
@@ -89,7 +91,7 @@ export function TaskForm({ task, onFinished, parentId, defaultValues: propDefaul
   const handleTitleBlur = (e: React.FocusEvent<HTMLInputElement>) => {
     const title = e.target.value;
     if (urlRegex.test(title)) {
-      startTransition(async () => {
+      startSummarizeTransition(async () => {
         try {
           const result = await summarizeUrl({ url: title });
           if (result.summary) {
@@ -111,6 +113,36 @@ export function TaskForm({ task, onFinished, parentId, defaultValues: propDefaul
     }
   };
 
+  const handleEnhanceClick = () => {
+    const title = form.getValues("title");
+    if (!title || title.length < 5) {
+        toast({
+            title: "Title is too short",
+            description: "Please enter a more descriptive title to enhance.",
+            variant: "destructive"
+        })
+        return;
+    };
+    startEnhanceTransition(async () => {
+        try {
+            const result = await enhanceTask({ title });
+            form.setValue("title", result.rephrasedTitle);
+            form.setValue("description", result.description);
+            toast({
+                title: "Task Enhanced!",
+                description: "The title and description have been improved by AI.",
+            });
+        } catch (error) {
+            console.error("Failed to enhance task:", error);
+            toast({
+                title: "AI Error",
+                description: "Could not enhance the task. Please try again.",
+                variant: "destructive",
+            });
+        }
+    });
+  }
+
   const onSubmit = (data: TaskFormValues) => {
     if (task) {
       updateTask(task.id, data);
@@ -119,7 +151,7 @@ export function TaskForm({ task, onFinished, parentId, defaultValues: propDefaul
     }
     onFinished?.();
     if (!task) {
-      form.reset();
+      form.reset(defaultValues);
     }
   };
 
@@ -132,9 +164,14 @@ export function TaskForm({ task, onFinished, parentId, defaultValues: propDefaul
           render={({ field }) => (
             <FormItem>
               <FormLabel>Task Title</FormLabel>
-              <FormControl>
-                <Input placeholder="e.g., Draft the project proposal" {...field} onBlur={handleTitleBlur} />
-              </FormControl>
+              <div className="flex items-center gap-2">
+                <FormControl>
+                    <Input placeholder="e.g., Draft the project proposal" {...field} onBlur={handleTitleBlur} />
+                </FormControl>
+                <Button variant="outline" size="icon" type="button" onClick={handleEnhanceClick} disabled={isEnhancing}>
+                    {isEnhancing ? <Loader2 className="animate-spin"/> : <Wand2 />}
+                </Button>
+              </div>
               <FormMessage />
             </FormItem>
           )}
