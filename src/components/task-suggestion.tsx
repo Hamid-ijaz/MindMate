@@ -23,6 +23,7 @@ import { Checkbox } from "./ui/checkbox";
 import { Label } from "./ui/label";
 import { PlusCircle } from "lucide-react";
 import { SubtaskList } from "./subtask-list";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./ui/tooltip";
 
 const getDefaultEnergyLevel = (): EnergyLevel => {
     const timeOfDay = getCurrentTimeOfDay();
@@ -223,6 +224,7 @@ export function TaskSuggestion() {
   const uncompletedTasks = tasks.filter(t => !t.completedAt && !t.isMuted && !t.parentId);
   const otherVisibleTasks = suggestion.otherTasks.filter(t => !t.completedAt && !t.isMuted && t.id !== suggestion.suggestedTask?.id && !t.parentId);
   const subtasksOfSuggested = suggestion.suggestedTask ? tasks.filter(t => t.parentId === suggestion.suggestedTask!.id && !t.completedAt) : [];
+  const hasPendingSubtasks = subtasksOfSuggested.length > 0;
 
   if (!suggestion.suggestedTask && uncompletedTasks.length === 0) {
     return (
@@ -318,13 +320,30 @@ export function TaskSuggestion() {
         <Button variant="destructive" size="lg" onClick={handleReject}>
           <X className="mr-2 h-5 w-5" /> Not Now
         </Button>
-        <Button size="lg" className="col-span-2 bg-green-500 hover:bg-green-600 text-white" onClick={handleAccept}>
-          <Check className="mr-2 h-5 w-5" /> Let's Do It
-        </Button>
+        {hasPendingSubtasks ? (
+            <TooltipProvider>
+                <Tooltip>
+                    <TooltipTrigger asChild>
+                        <span className="col-span-2" tabIndex={0}>
+                           <Button size="lg" className="w-full col-span-2 bg-green-500 hover:bg-green-600 text-white" disabled>
+                                <Check className="mr-2 h-5 w-5" /> Let's Do It
+                           </Button>
+                        </span>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                        <p>Complete all sub-tasks first</p>
+                    </TooltipContent>
+                </Tooltip>
+            </TooltipProvider>
+        ) : (
+            <Button size="lg" className="col-span-2 bg-green-500 hover:bg-green-600 text-white" onClick={handleAccept}>
+                <Check className="mr-2 h-5 w-5" /> Let's Do It
+            </Button>
+        )}
       </CardFooter>
       {subtasksOfSuggested.length > 0 && (
           <CardContent>
-            <Accordion type="single" collapsible className="w-full">
+            <Accordion type="single" collapsible defaultValue="subtasks" className="w-full">
               <AccordionItem value="subtasks">
                 <AccordionTrigger>
                   <div className="flex items-center gap-2 text-sm">
@@ -419,3 +438,5 @@ function OtherTasksList({ tasks }: { tasks: Task[] }) {
         </Accordion>
     )
 }
+
+    
