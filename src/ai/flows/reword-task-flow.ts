@@ -4,24 +4,10 @@
  * @fileOverview An AI flow to reword a task to make it less daunting.
  *
  * - rewordTask - A function that handles the task rewording process.
- * - RewordTaskInput - The input type for the rewordTask function.
- * - RewordTaskOutput - The return type for the rewordTask function.
  */
 
 import { ai } from '@/ai/genkit';
-import { z } from 'genkit';
-
-const RewordTaskInputSchema = z.object({
-  title: z.string().describe('The original title of the task.'),
-  description: z.string().describe('The original description of the task.'),
-});
-export type RewordTaskInput = z.infer<typeof RewordTaskInputSchema>;
-
-const RewordTaskOutputSchema = z.object({
-  title: z.string().describe('The new, rephrased title for the task that represents a smaller first step.'),
-  description: z.string().describe('A new, encouraging description for the rephrased task.'),
-});
-export type RewordTaskOutput = z.infer<typeof RewordTaskOutputSchema>;
+import { RewordTaskInputSchema, RewordTaskOutputSchema, type RewordTaskInput, type RewordTaskOutput } from '@/lib/types';
 
 
 export async function rewordTask(input: RewordTaskInput): Promise<RewordTaskOutput> {

@@ -38,3 +38,16 @@ export interface Accomplishment {
     date: string; // YYYY-MM-DD
     content: string;
 }
+
+// Schema for the rewordTask AI flow
+export const RewordTaskInputSchema = z.object({
+  title: z.string().describe('The original title of the task.'),
+  description: z.string().describe('The original description of the task.'),
+});
+export type RewordTaskInput = z.infer<typeof RewordTaskInputSchema>;
+
+export const RewordTaskOutputSchema = z.object({
+  title: z.string().describe('The new, rephrased title for the task that represents a smaller first step.'),
+  description: z.string().describe('A new, encouraging description for the rephrased task.'),
+});
+export type RewordTaskOutput = z.infer<typeof RewordTaskOutputSchema>;
