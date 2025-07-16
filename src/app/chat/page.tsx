@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useTasks } from '@/contexts/task-context';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -9,7 +9,6 @@ import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 import { getCurrentTimeOfDay } from '@/lib/utils';
-import type { Task } from '@/lib/types';
 import { TaskItem } from '@/components/task-item';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
@@ -67,7 +66,6 @@ function EveningCheckin() {
       toast({
         title: "Accomplishment Saved!",
         description: "Great job today. See you tomorrow!",
-        className: "bg-primary/10 border-primary/20",
       });
     }
   };
