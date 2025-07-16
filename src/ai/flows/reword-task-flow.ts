@@ -11,13 +11,13 @@
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 
-export const RewordTaskInputSchema = z.object({
+const RewordTaskInputSchema = z.object({
   title: z.string().describe('The original title of the task.'),
   description: z.string().describe('The original description of the task.'),
 });
 export type RewordTaskInput = z.infer<typeof RewordTaskInputSchema>;
 
-export const RewordTaskOutputSchema = z.object({
+const RewordTaskOutputSchema = z.object({
   title: z.string().describe('The new, rephrased title for the task that represents a smaller first step.'),
   description: z.string().describe('A new, encouraging description for the rephrased task.'),
 });
