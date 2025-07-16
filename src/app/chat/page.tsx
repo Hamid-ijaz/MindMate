@@ -81,7 +81,7 @@ export default function ChatPage() {
 
                 const result = await chat({
                     message: currentInput,
-                    tasks: serializableTasks as Task[],
+                    tasks: serializableTasks,
                 });
                 
                 const assistantMessage: Message = { 

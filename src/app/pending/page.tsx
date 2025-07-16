@@ -6,7 +6,7 @@ import { useTasks } from '@/contexts/task-context';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { TaskItem } from '@/components/task-item';
 import { Button } from '@/components/ui/button';
-import { RotateCcw, Wand2, Loader2, PlusCircle } from 'lucide-react';
+import { Wand2, Loader2, PlusCircle } from 'lucide-react';
 import { AlertDialog, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { rewordTask } from '@/ai/flows/reword-task-flow';
 import { useToast } from '@/hooks/use-toast';

@@ -146,8 +146,8 @@ export function TaskSuggestion() {
     startTransition(async () => {
       try {
         const result = await rewordTask({
-          title: suggestion.suggestedTask.title,
-          description: suggestion.suggestedTask.description || "",
+          title: suggestion.suggestedTask!.title,
+          description: suggestion.suggestedTask!.description || "",
         });
         setRewordedSuggestions(result.suggestedTasks);
         setSelectedRewordedTasks(result.suggestedTasks.reduce((acc, task) => {
@@ -180,11 +180,11 @@ export function TaskSuggestion() {
         return;
     }
     
-    tasksToAdd.forEach(suggestion => {
+    tasksToAdd.forEach(s => {
         addTask({
             parentId: suggestion.suggestedTask!.id,
-            title: suggestion.title,
-            description: suggestion.description,
+            title: s.title,
+            description: s.description,
             category: suggestion.suggestedTask!.category,
             timeOfDay: suggestion.suggestedTask!.timeOfDay,
             energyLevel: 'Low',
