@@ -10,7 +10,6 @@ import { Button } from '@/components/ui/button';
 import { Check, Edit, Trash2, ChevronDown, ChevronUp } from 'lucide-react';
 import { TaskForm } from './task-form';
 import { SubtaskList } from './subtask-list';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
 
 interface TaskItemProps {
   task: Task;
@@ -42,7 +41,7 @@ export function TaskItem({ task, extraActions, isSubtask = false }: TaskItemProp
   }
 
   const CompleteButton = () => (
-    <Button variant="outline" size="sm" onClick={() => acceptTask(task.id)} disabled={hasPendingSubtasks}>
+    <Button variant="outline" size="sm" onClick={() => acceptTask(task.id)}>
       <Check className="h-4 w-4 mr-2" />
       Complete
     </Button>
@@ -71,23 +70,7 @@ export function TaskItem({ task, extraActions, isSubtask = false }: TaskItemProp
                 </Button>
                 )}
                 
-                {hasPendingSubtasks ? (
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        {/* The button is wrapped in a span for the tooltip to work when disabled */}
-                        <span> 
-                          <CompleteButton />
-                        </span>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p>Complete all sub-tasks first.</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                ) : (
-                  <CompleteButton />
-                )}
+                {!hasPendingSubtasks && <CompleteButton />}
 
                 <Button variant="ghost" size="icon" onClick={() => setIsEditing(true)}>
                 <Edit className="h-4 w-4" />
