@@ -12,9 +12,10 @@ import { TaskForm } from './task-form';
 
 interface TaskItemProps {
   task: Task;
+  extraActions?: React.ReactNode;
 }
 
-export function TaskItem({ task }: TaskItemProps) {
+export function TaskItem({ task, extraActions }: TaskItemProps) {
   const { deleteTask, acceptTask } = useTasks();
   const [isEditing, setIsEditing] = useState(false);
 
@@ -45,6 +46,7 @@ export function TaskItem({ task }: TaskItemProps) {
         <Badge variant="secondary">{task.timeOfDay}</Badge>
       </CardContent>
       <CardFooter className="flex justify-end gap-2">
+        {extraActions}
         <Button variant="outline" size="sm" onClick={() => acceptTask(task.id)}>
           <Check className="h-4 w-4 mr-2" />
           Complete
