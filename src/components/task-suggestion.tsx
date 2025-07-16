@@ -112,7 +112,6 @@ export function TaskSuggestion() {
     setShowAffirmation(true);
     setTimeout(() => {
       setShowAffirmation(false);
-      getNextTask(currentEnergy);
     }, 2000);
   };
 
@@ -123,7 +122,6 @@ export function TaskSuggestion() {
       setShowRejectionPrompt(true);
     } else {
       rejectTask(suggestedTask.id);
-      getNextTask(currentEnergy);
     }
   };
   
@@ -135,14 +133,12 @@ export function TaskSuggestion() {
         title: "Task Muted",
         description: "We won't suggest this task again for a while.",
     });
-    getNextTask(currentEnergy);
   };
   
   const handleSkipFromDialog = () => {
      if (!suggestedTask) return;
      rejectTask(suggestedTask.id);
      setShowRejectionPrompt(false);
-     getNextTask(currentEnergy);
   }
 
   const handleRewordClick = () => {
