@@ -20,27 +20,13 @@ interface TaskItemProps {
 }
 
 export function TaskItem({ task, extraActions, isSubtask = false, isHistoryView = false }: TaskItemProps) {
-  const { tasks, deleteTask, acceptTask, uncompleteTask } = useTasks();
-  const [isEditing, setIsEditing] = useState(false);
+  const { tasks, deleteTask, acceptTask, uncompleteTask, startEditingTask } = useTasks();
   const [showSubtasks, setShowSubtasks] = useState(false);
-
-  const handleEditFinish = () => {
-    setIsEditing(false);
-  };
 
   const subtasks = tasks.filter(t => t.parentId === task.id);
   const pendingSubtasks = subtasks.filter(t => !t.completedAt);
   const hasPendingSubtasks = pendingSubtasks.length > 0;
 
-  if (isEditing) {
-    return (
-      <Card className="bg-secondary">
-        <CardContent className="p-4">
-          <TaskForm task={task} onFinished={handleEditFinish} />
-        </CardContent>
-      </Card>
-    );
-  }
 
   const CompleteButton = () => (
     <Button variant="outline" size="sm" onClick={() => acceptTask(task.id)}>
@@ -100,7 +86,7 @@ export function TaskItem({ task, extraActions, isSubtask = false, isHistoryView 
                 
                 {isSubtask && <CompleteButton />}
 
-                <Button variant="ghost" size="icon" onClick={() => setIsEditing(true)}>
+                <Button variant="ghost" size="icon" onClick={() => startEditingTask(task.id)}>
                 <Edit className="h-4 w-4" />
                 </Button>
                 <Button variant="ghost" size="icon" onClick={() => deleteTask(task.id)}>

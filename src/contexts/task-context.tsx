@@ -19,6 +19,12 @@ interface TaskContextType {
   uncompleteTask: (id: string) => void;
   addAccomplishment: (content: string) => void;
   isLoading: boolean;
+  // State for the edit/add sheet
+  isSheetOpen: boolean;
+  setIsSheetOpen: (isOpen: boolean) => void;
+  editingTask: Task | null;
+  startEditingTask: (taskId: string) => void;
+  stopEditingTask: () => void;
 }
 
 const TaskContext = createContext<TaskContextType | undefined>(undefined);
@@ -44,6 +50,12 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
   const [accomplishments, setAccomplishments] = useState<Accomplishment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
+
+  // State for the edit/add sheet
+  const [isSheetOpen, setIsSheetOpen] = useState(false);
+  const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
+  
+  const editingTask = tasks.find(t => t.id === editingTaskId) || null;
 
   useEffect(() => {
     if (!authLoading) {
@@ -148,9 +160,21 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
     };
     setAccomplishments(prev => [...prev, newAccomplishment]);
   }, []);
+
+  const startEditingTask = useCallback((taskId: string) => {
+    setEditingTaskId(taskId);
+    setIsSheetOpen(true);
+  }, []);
+
+  const stopEditingTask = useCallback(() => {
+    setEditingTaskId(null);
+  }, []);
   
   return (
-    <TaskContext.Provider value={{ tasks, accomplishments, addAccomplishment, addTask, updateTask, deleteTask, acceptTask, rejectTask, muteTask, uncompleteTask, isLoading: isLoading || authLoading }}>
+    <TaskContext.Provider value={{ 
+        tasks, accomplishments, addAccomplishment, addTask, updateTask, deleteTask, acceptTask, rejectTask, muteTask, uncompleteTask, isLoading: isLoading || authLoading,
+        isSheetOpen, setIsSheetOpen, editingTask, startEditingTask, stopEditingTask
+    }}>
       {children}
     </TaskContext.Provider>
   );

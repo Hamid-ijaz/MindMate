@@ -6,6 +6,7 @@ import { TaskProvider } from '@/contexts/task-context';
 import { Header } from '@/components/header';
 import { Toaster } from '@/components/ui/toaster';
 import { ThemeProvider } from '@/contexts/theme-context';
+import { ManageTasksSheet } from '@/components/manage-tasks-sheet';
 
 export const metadata: Metadata = {
   title: 'Mindful Tasks',
@@ -33,6 +34,7 @@ export default function RootLayout({
                 <main className="flex-1">{children}</main>
               </div>
               <Toaster />
+              <ManageTasksSheet />
             </TaskProvider>
           </AuthProvider>
         </ThemeProvider>

@@ -4,7 +4,7 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { Logo } from './logo';
-import { ManageTasksSheet } from './manage-tasks-sheet';
+import { AddTaskButton, ManageTasksSheet } from './manage-tasks-sheet';
 import { useAuth } from '@/contexts/auth-context';
 import { Button } from './ui/button';
 import { Skeleton } from './ui/skeleton';
@@ -62,9 +62,10 @@ export function Header() {
                   <span className="hidden sm:inline">Completed</span>
                 </Link>
               </Button>
-              <ManageTasksSheet />
+              <AddTaskButton />
               <ThemePicker />
               <Button variant="ghost" size="sm" onClick={handleLogout}>Logout</Button>
+              <ManageTasksSheet />
             </>
           ) : (
              !isAuthPage && (
