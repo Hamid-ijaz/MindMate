@@ -1,47 +1,75 @@
 "use client";
 
-import { useState, useEffect, useTransition } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useTasks } from "@/contexts/task-context";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import type { EnergyLevel, Task, SuggestTaskOutput } from "@/lib/types";
-import { AlertCircle, Check, Sparkles, X, Loader2, ChevronDown } from "lucide-react";
+import type { EnergyLevel, Task } from "@/lib/types";
+import { AlertCircle, Check, Sparkles, X, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { getRandomQuote } from "@/lib/motivational-quotes";
-import { MAX_REJECTIONS_BEFORE_PROMPT } from "@/lib/constants";
+import { MAX_REJECTIONS_BEFORE_PROMPT, REJECTION_HOURS } from "@/lib/constants";
 import { AlertDialog, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "./ui/alert-dialog";
 import { ManageTasksSheet } from "./manage-tasks-sheet";
-import { suggestTask } from "@/ai/flows/suggest-task-flow";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "./ui/accordion";
 import { ScrollArea } from "./ui/scroll-area";
-import { Skeleton } from "./ui/skeleton";
 
 
 export function TaskSuggestion() {
   const { tasks, acceptTask, rejectTask, muteTask, isLoading: tasksLoading } = useTasks();
   const [currentEnergy, setCurrentEnergy] = useState<EnergyLevel | null>(null);
-  const [aiSuggestion, setAiSuggestion] = useState<SuggestTaskOutput | null>(null);
+  const [suggestion, setSuggestion] = useState<{ suggestedTask: Task | null, otherTasks: Task[] }>({ suggestedTask: null, otherTasks: [] });
   const [showAffirmation, setShowAffirmation] = useState(false);
   const [showRejectionPrompt, setShowRejectionPrompt] = useState(false);
-  const [isPending, startTransition] = useTransition();
 
   const { toast } = useToast();
-  
-  const suggestedTask = aiSuggestion?.suggestedTask;
-  const otherTasks = aiSuggestion?.otherTasks || [];
 
+  const { suggestedTask, otherTasks } = suggestion;
+  
   const getNextTask = (energy: EnergyLevel | null) => {
-    if (energy) {
-      startTransition(async () => {
-        const uncompletedTasks = tasks.filter(t => !t.completedAt);
-        const suggestion = await suggestTask({ tasks: uncompletedTasks, energyLevel: energy });
-        setAiSuggestion(suggestion);
-      });
-    } else {
-      setAiSuggestion(null);
+    if (!energy) {
+      setSuggestion({ suggestedTask: null, otherTasks: [] });
+      return;
     }
+
+    const uncompletedTasks = tasks.filter(t => !t.completedAt && !t.isMuted);
+
+    const now = Date.now();
+    const rejectionTimeout = REJECTION_HOURS * 60 * 60 * 1000;
+
+    const possibleTasks = uncompletedTasks.filter(task => {
+        const isEnergyMatch = task.energyLevel === energy;
+        const recentlyRejected = task.lastRejectedAt && (now - task.lastRejectedAt < rejectionTimeout);
+        return isEnergyMatch && !recentlyRejected;
+    });
+
+    if (possibleTasks.length === 0) {
+        // Fallback: try to find any task if no perfect match
+        const fallbackTasks = uncompletedTasks.filter(t => !t.isMuted);
+        if (fallbackTasks.length > 0) {
+            fallbackTasks.sort((a, b) => (a.rejectionCount || 0) - (b.rejectionCount || 0));
+            const bestFallback = fallbackTasks[0];
+            const remaining = fallbackTasks.slice(1);
+            setSuggestion({ suggestedTask: bestFallback, otherTasks: remaining });
+        } else {
+             setSuggestion({ suggestedTask: null, otherTasks: [] });
+        }
+        return;
+    }
+
+    possibleTasks.sort((a, b) => {
+        if (a.rejectionCount !== b.rejectionCount) {
+            return (a.rejectionCount || 0) - (b.rejectionCount || 0);
+        }
+        return a.duration - b.duration;
+    });
+
+    const bestTask = possibleTasks[0];
+    const remainingTasks = uncompletedTasks.filter(t => t.id !== bestTask.id);
+    
+    setSuggestion({ suggestedTask: bestTask, otherTasks: remainingTasks });
   };
 
   useEffect(() => {
@@ -120,18 +148,6 @@ export function TaskSuggestion() {
       </Card>
     );
   }
-
-  if (isPending) {
-    return (
-        <Card className="w-full max-w-lg mx-auto">
-            <CardContent className="p-6 text-center flex flex-col items-center justify-center h-80">
-                <Loader2 className="w-16 h-16 text-primary animate-spin" />
-                <p className="mt-4 text-xl font-semibold">Thinking...</p>
-                <p className="text-muted-foreground mt-2">Our AI is picking the perfect task for you.</p>
-            </CardContent>
-        </Card>
-    );
-  }
   
   if (showAffirmation) {
     return (
@@ -150,7 +166,7 @@ export function TaskSuggestion() {
           <Card >
              <CardContent className="p-6 text-center flex flex-col items-center justify-center h-80">
                 <Check className="w-16 h-16 text-green-500" />
-                <p className="mt-4 text-xl font-semibold">{aiSuggestion?.suggestionText || "All clear!"}</p>
+                <p className="mt-4 text-xl font-semibold">All clear!</p>
                 <p className="text-muted-foreground mt-2">There are no tasks matching your current state. Enjoy your break or add a new task.</p>
                 <div className="mt-6">
                     <ManageTasksSheet />
@@ -166,7 +182,7 @@ export function TaskSuggestion() {
     <div className="w-full max-w-lg mx-auto">
     <Card className="shadow-lg">
       <CardHeader>
-        <CardDescription className="text-lg text-center font-medium text-primary pb-2">{aiSuggestion?.suggestionText}</CardDescription>
+        <CardDescription className="text-lg text-center font-medium text-primary pb-2">Ready for this one?</CardDescription>
         <CardTitle className="text-2xl pt-2">{suggestedTask.title}</CardTitle>
         {suggestedTask.description && <CardDescription className="pt-2">{suggestedTask.description}</CardDescription>}
       </CardHeader>
