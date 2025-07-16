@@ -8,7 +8,7 @@ import { ManageTasksSheet } from './manage-tasks-sheet';
 import { useAuth } from '@/contexts/auth-context';
 import { Button } from './ui/button';
 import { Skeleton } from './ui/skeleton';
-import { MessageSquare, ListChecks } from 'lucide-react';
+import { MessageSquare, ListChecks, HomeIcon } from 'lucide-react';
 
 export function Header() {
   const pathname = usePathname();
@@ -37,6 +37,12 @@ export function Header() {
           ) : isAuthenticated ? (
             <>
               <span className="text-sm text-muted-foreground hidden sm:inline">Welcome, {user?.email}</span>
+               <Button variant="outline" size="sm" asChild>
+                <Link href="/">
+                  <HomeIcon className="mr-0 sm:mr-2 h-4 w-4" />
+                  <span className="hidden sm:inline">Home</span>
+                </Link>
+              </Button>
                <Button variant="outline" size="sm" asChild>
                 <Link href="/chat">
                   <MessageSquare className="mr-0 sm:mr-2 h-4 w-4" />

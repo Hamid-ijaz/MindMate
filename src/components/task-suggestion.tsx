@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import type { EnergyLevel, Task } from "@/lib/types";
+import type { EnergyLevel, Task, TimeOfDay } from "@/lib/types";
 import { AlertCircle, Check, Sparkles, X, Loader2, Wand2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { getRandomQuote } from "@/lib/motivational-quotes";
@@ -17,9 +17,23 @@ import { ManageTasksSheet } from "./manage-tasks-sheet";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "./ui/accordion";
 import { ScrollArea } from "./ui/scroll-area";
 import { rewordTask } from "@/ai/flows/reword-task-flow";
+import { getCurrentTimeOfDay } from "@/lib/utils";
+
+const getDefaultEnergyLevel = (): EnergyLevel => {
+    const timeOfDay = getCurrentTimeOfDay();
+    switch (timeOfDay) {
+        case "Morning":
+        case "Evening":
+            return "Low";
+        case "Afternoon":
+            return "Medium";
+        default:
+            return "Medium";
+    }
+};
 
 export function TaskSuggestion() {
-  const { tasks, acceptTask, rejectTask, muteTask, addTask, isLoading: tasksLoading } = useTasks();
+  const { tasks, acceptTask, rejectTask, muteTask, addTask, isLoading: tasksLoading, updateTask } = useTasks();
   const [currentEnergy, setCurrentEnergy] = useState<EnergyLevel | null>(null);
   const [suggestion, setSuggestion] = useState<{ suggestedTask: Task | null, otherTasks: Task[] }>({ suggestedTask: null, otherTasks: [] });
   const [showAffirmation, setShowAffirmation] = useState(false);
@@ -28,6 +42,9 @@ export function TaskSuggestion() {
   const [rewordedSuggestion, setRewordedSuggestion] = useState<{ title: string; description: string } | null>(null);
   const [isPending, startTransition] = useTransition();
 
+  useEffect(() => {
+    setCurrentEnergy(getDefaultEnergyLevel());
+  }, []);
 
   const { toast } = useToast();
 
@@ -170,31 +187,8 @@ export function TaskSuggestion() {
     setRewordedSuggestion(null);
   };
 
-  if (tasksLoading) {
+  if (tasksLoading || !currentEnergy) {
     return <Card className="w-full max-w-lg mx-auto animate-pulse"><div className="h-80" /></Card>;
-  }
-  
-  if (!currentEnergy) {
-    return (
-      <Card className="w-full max-w-lg mx-auto">
-        <CardHeader>
-          <CardTitle>How are you feeling?</CardTitle>
-          <CardDescription>Select your current energy level to get a task suggestion.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Select onValueChange={(value: EnergyLevel) => setCurrentEnergy(value)}>
-            <SelectTrigger>
-              <SelectValue placeholder="Select energy level..." />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="Low">Low - Just need a small win</SelectItem>
-              <SelectItem value="Medium">Medium - Ready to get things done</SelectItem>
-              <SelectItem value="High">High - Let's tackle a big one!</SelectItem>
-            </SelectContent>
-          </Select>
-        </CardContent>
-      </Card>
-    );
   }
   
   if (showAffirmation) {
@@ -230,7 +224,20 @@ export function TaskSuggestion() {
     <div className="w-full max-w-lg mx-auto">
     <Card className="shadow-lg">
       <CardHeader>
-        <CardDescription className="text-lg text-center font-medium text-primary pb-2">Ready for this one?</CardDescription>
+        <div className="flex justify-between items-center pb-2">
+            <CardDescription className="text-lg font-medium text-primary">Ready for this one?</CardDescription>
+            <Select onValueChange={(value: EnergyLevel) => setCurrentEnergy(value)} value={currentEnergy}>
+                <SelectTrigger className="w-auto text-xs h-8 px-2">
+                    <SelectValue placeholder="Energy..." />
+                </SelectTrigger>
+                <SelectContent>
+                    <SelectItem value="Low">Low Energy</SelectItem>
+                    <SelectItem value="Medium">Medium Energy</SelectItem>
+                    <SelectItem value="High">High Energy</SelectItem>
+                </SelectContent>
+            </Select>
+        </div>
+
         <CardTitle className="text-2xl pt-2">{suggestedTask.title}</CardTitle>
         {suggestedTask.description && <CardDescription className="pt-2">{suggestedTask.description}</CardDescription>}
       </CardHeader>
@@ -269,9 +276,6 @@ export function TaskSuggestion() {
         </Button>
       </CardFooter>
     </Card>
-    <div className="text-center mt-4">
-        <Button variant="link" className="text-muted-foreground" onClick={() => setCurrentEnergy(null)}>Change energy level</Button>
-    </div>
 
     {otherTasks && otherTasks.length > 0 && <OtherTasksList tasks={otherTasks} />}
     
