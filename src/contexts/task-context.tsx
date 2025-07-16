@@ -10,7 +10,7 @@ interface TaskContextType {
   tasks: Task[];
   accomplishments: Accomplishment[];
   addTask: (task: Omit<Task, 'id' | 'createdAt' | 'rejectionCount' | 'isMuted' | 'completedAt' | 'lastRejectedAt'>) => void;
-  updateTask: (id: string, updates: Partial<Task>) => void;
+  updateTask: (id: string, updates: Partial<Omit<Task, 'id' | 'createdAt'>>) => void;
   deleteTask: (id: string) => void;
   acceptTask: (id: string) => void;
   rejectTask: (id: string) => void;
@@ -79,8 +79,8 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
     setTasks(prev => [...prev, newTask]);
   }, []);
 
-  const updateTask = useCallback((id: string, updates: Partial<Task>) => {
-    setTasks(prev => prev.map(t => (t.id === id ? { ...t, ...updates, isMuted: updates.isMuted ?? t.isMuted } : t)));
+  const updateTask = useCallback((id: string, updates: Partial<Omit<Task, 'id' | 'createdAt'>>) => {
+    setTasks(prev => prev.map(t => (t.id === id ? { ...t, ...updates } : t)));
   }, []);
 
   const deleteTask = useCallback((id: string) => {

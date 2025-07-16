@@ -1,13 +1,14 @@
+
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useTransition } from "react";
 import { useTasks } from "@/contexts/task-context";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { EnergyLevel, Task } from "@/lib/types";
-import { AlertCircle, Check, Sparkles, X, Loader2 } from "lucide-react";
+import { AlertCircle, Check, Sparkles, X, Loader2, Wand2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { getRandomQuote } from "@/lib/motivational-quotes";
 import { MAX_REJECTIONS_BEFORE_PROMPT, REJECTION_HOURS } from "@/lib/constants";
@@ -15,14 +16,18 @@ import { AlertDialog, AlertDialogContent, AlertDialogDescription, AlertDialogFoo
 import { ManageTasksSheet } from "./manage-tasks-sheet";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "./ui/accordion";
 import { ScrollArea } from "./ui/scroll-area";
-
+import { rewordTask } from "@/ai/flows/reword-task-flow";
 
 export function TaskSuggestion() {
-  const { tasks, acceptTask, rejectTask, muteTask, isLoading: tasksLoading } = useTasks();
+  const { tasks, acceptTask, rejectTask, muteTask, updateTask, isLoading: tasksLoading } = useTasks();
   const [currentEnergy, setCurrentEnergy] = useState<EnergyLevel | null>(null);
   const [suggestion, setSuggestion] = useState<{ suggestedTask: Task | null, otherTasks: Task[] }>({ suggestedTask: null, otherTasks: [] });
   const [showAffirmation, setShowAffirmation] = useState(false);
   const [showRejectionPrompt, setShowRejectionPrompt] = useState(false);
+  const [showRewordDialog, setShowRewordDialog] = useState(false);
+  const [rewordedSuggestion, setRewordedSuggestion] = useState<{ title: string; description: string } | null>(null);
+  const [isPending, startTransition] = useTransition();
+
 
   const { toast } = useToast();
 
@@ -122,6 +127,38 @@ export function TaskSuggestion() {
      getNextTask(currentEnergy);
   }
 
+  const handleRewordClick = () => {
+    if (!suggestedTask) return;
+    startTransition(async () => {
+      try {
+        const result = await rewordTask({
+          title: suggestedTask.title,
+          description: suggestedTask.description || "",
+        });
+        setRewordedSuggestion(result);
+        setShowRewordDialog(true);
+      } catch (error) {
+        console.error("Failed to reword task:", error);
+        toast({
+          title: "AI Error",
+          description: "Could not get a suggestion. Please try again.",
+          variant: "destructive",
+        });
+      }
+    });
+  };
+
+  const handleAcceptReword = () => {
+    if (!suggestedTask || !rewordedSuggestion) return;
+    updateTask(suggestedTask.id, {
+        title: rewordedSuggestion.title,
+        description: rewordedSuggestion.description,
+        duration: 15, // Assume smaller task takes less time
+    });
+    setShowRewordDialog(false);
+    setRewordedSuggestion(null);
+  };
+
   if (tasksLoading) {
     return <Card className="w-full max-w-lg mx-auto animate-pulse"><div className="h-80" /></Card>;
   }
@@ -186,12 +223,31 @@ export function TaskSuggestion() {
         <CardTitle className="text-2xl pt-2">{suggestedTask.title}</CardTitle>
         {suggestedTask.description && <CardDescription className="pt-2">{suggestedTask.description}</CardDescription>}
       </CardHeader>
-      <CardContent className="flex flex-wrap gap-2">
-        <Badge variant="outline">{suggestedTask.category}</Badge>
-        <Badge variant="outline">{suggestedTask.energyLevel} Energy</Badge>
-        <Badge variant="outline">{suggestedTask.duration} min</Badge>
-        <Badge variant="outline">{suggestedTask.timeOfDay}</Badge>
-        {suggestedTask.rejectionCount > 0 && <Badge variant="destructive" className="animate-pulse">{suggestedTask.rejectionCount}x Skipped</Badge>}
+      <CardContent>
+        <div className="flex flex-wrap gap-2">
+            <Badge variant="outline">{suggestedTask.category}</Badge>
+            <Badge variant="outline">{suggestedTask.energyLevel} Energy</Badge>
+            <Badge variant="outline">{suggestedTask.duration} min</Badge>
+            <Badge variant="outline">{suggestedTask.timeOfDay}</Badge>
+            {suggestedTask.rejectionCount > 0 && <Badge variant="destructive" className="animate-pulse">{suggestedTask.rejectionCount}x Skipped</Badge>}
+        </div>
+        {(suggestedTask.energyLevel === 'High' || suggestedTask.energyLevel === 'Medium') && (
+            <div className="mt-4 text-center">
+                 <Button variant="link" onClick={handleRewordClick} disabled={isPending}>
+                    {isPending ? (
+                        <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Thinking...
+                        </>
+                    ) : (
+                        <>
+                            <Wand2 className="mr-2 h-4 w-4" />
+                            Make this task smaller
+                        </>
+                    )}
+                </Button>
+            </div>
+        )}
       </CardContent>
       <CardFooter className="grid grid-cols-3 gap-3 pt-6">
         <Button variant="destructive" size="lg" onClick={handleReject}>
@@ -219,6 +275,25 @@ export function TaskSuggestion() {
             <AlertDialogFooter className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <Button variant="secondary" onClick={handleSkipFromDialog}>Just Skip for Now</Button>
                 <Button variant="destructive" onClick={handleMute}>Don't Ask Again</Button>
+            </AlertDialogFooter>
+        </AlertDialogContent>
+    </AlertDialog>
+
+    <AlertDialog open={showRewordDialog} onOpenChange={setShowRewordDialog}>
+        <AlertDialogContent>
+            <AlertDialogHeader>
+                <AlertDialogTitle className="flex items-center gap-2"><Wand2 className="text-primary"/>How about this instead?</AlertDialogTitle>
+                {rewordedSuggestion && (
+                    <div className="pt-4 space-y-2 text-left">
+                        <p className="font-bold text-lg">{rewordedSuggestion.title}</p>
+                        <p className="text-muted-foreground">{rewordedSuggestion.description}</p>
+                        <p className="text-sm text-blue-500 pt-2">I've also adjusted the duration to 15 minutes.</p>
+                    </div>
+                )}
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+                <Button variant="ghost" onClick={() => setShowRewordDialog(false)}>No, thanks</Button>
+                <Button onClick={handleAcceptReword}>Yes, let's do that</Button>
             </AlertDialogFooter>
         </AlertDialogContent>
     </AlertDialog>
