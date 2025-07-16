@@ -6,23 +6,25 @@ export function middleware(request: NextRequest) {
   const authCookie = request.cookies.get('mindful-tasks-auth');
   const { pathname } = request.nextUrl;
 
+  const isAuthPage = pathname === '/login' || pathname === '/signup';
+
   // If user is authenticated
   if (authCookie) {
-    // If they try to access login or signup, redirect them to the home page
-    if (pathname === '/login' || pathname === '/signup') {
+    // If they try to access an auth page (login/signup), redirect them to the home page
+    if (isAuthPage) {
       return NextResponse.redirect(new URL('/', request.url));
     }
-    // Otherwise, allow the request
+    // Otherwise, allow the request to proceed
     return NextResponse.next();
   }
 
-  // If user is not authenticated and trying to access a protected route
-  if (!authCookie && pathname !== '/login' && pathname !== '/signup') {
+  // If user is not authenticated and is trying to access a protected route
+  if (!isAuthPage) {
     // Redirect them to the login page
     return NextResponse.redirect(new URL('/login', request.url));
   }
 
-  // Allow access to login/signup for unauthenticated users
+  // Allow unauthenticated access to login and signup pages
   return NextResponse.next();
 }
 
