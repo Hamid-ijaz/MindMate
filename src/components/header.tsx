@@ -8,7 +8,7 @@ import { ManageTasksSheet } from './manage-tasks-sheet';
 import { useAuth } from '@/contexts/auth-context';
 import { Button } from './ui/button';
 import { Skeleton } from './ui/skeleton';
-import { MessageSquare } from 'lucide-react';
+import { MessageSquare, ListChecks } from 'lucide-react';
 
 export function Header() {
   const pathname = usePathname();
@@ -31,7 +31,7 @@ export function Header() {
           </Link>
         </div>
         
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2 sm:gap-4">
           {loading ? (
               <Skeleton className="h-8 w-24" />
           ) : isAuthenticated ? (
@@ -39,8 +39,14 @@ export function Header() {
               <span className="text-sm text-muted-foreground hidden sm:inline">Welcome, {user?.email}</span>
                <Button variant="outline" size="sm" asChild>
                 <Link href="/chat">
-                  <MessageSquare className="mr-2 h-4 w-4" />
-                  Check-in
+                  <MessageSquare className="mr-0 sm:mr-2 h-4 w-4" />
+                  <span className="hidden sm:inline">Check-in</span>
+                </Link>
+              </Button>
+               <Button variant="outline" size="sm" asChild>
+                <Link href="/history">
+                  <ListChecks className="mr-0 sm:mr-2 h-4 w-4" />
+                  <span className="hidden sm:inline">History</span>
                 </Link>
               </Button>
               <ManageTasksSheet />

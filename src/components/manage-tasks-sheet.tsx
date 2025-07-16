@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState } from "react";
@@ -10,13 +11,14 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { PlusCircle, List, Trash2, Edit } from "lucide-react";
+import { PlusCircle, List, Trash2, Edit, CheckCircle } from "lucide-react";
 import { TaskForm } from "./task-form";
 import { useTasks } from "@/contexts/task-context";
 import { ScrollArea } from "./ui/scroll-area";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "./ui/card";
 import { Badge } from "./ui/badge";
 import type { Task } from "@/lib/types";
+import { format } from "date-fns";
 
 
 export function ManageTasksSheet() {
@@ -29,6 +31,8 @@ export function ManageTasksSheet() {
   };
   
   const uncompletedTasks = tasks.filter(t => !t.completedAt);
+  const completedTasks = tasks.filter(t => t.completedAt).sort((a, b) => b.completedAt! - a.completedAt!);
+
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
@@ -43,24 +47,28 @@ export function ManageTasksSheet() {
           <SheetTitle>Your Tasks</SheetTitle>
         </SheetHeader>
         <Tabs defaultValue="add" className="mt-4">
-          <TabsList className="grid w-full grid-cols-2">
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="add">
               <PlusCircle className="mr-2 h-4 w-4" />
-              Add Task
+              Add
             </TabsTrigger>
-            <TabsTrigger value="manage">
+            <TabsTrigger value="pending">
               <List className="mr-2 h-4 w-4" />
-              All Tasks
+              Pending ({uncompletedTasks.length})
+            </TabsTrigger>
+             <TabsTrigger value="completed">
+              <CheckCircle className="mr-2 h-4 w-4" />
+              Completed ({completedTasks.length})
             </TabsTrigger>
           </TabsList>
           <TabsContent value="add" className="py-4">
              <TaskForm onFinished={() => setOpen(false)} />
           </TabsContent>
-          <TabsContent value="manage">
+          <TabsContent value="pending">
             <ScrollArea className="h-[calc(100vh-10rem)] pr-4">
               <div className="space-y-4 py-4">
                 {uncompletedTasks.length === 0 ? (
-                  <p className="text-center text-muted-foreground pt-8">No tasks yet. Add one!</p>
+                  <p className="text-center text-muted-foreground pt-8">No pending tasks. Add one!</p>
                 ) : (
                   uncompletedTasks.map((task: Task) => (
                     editingTask === task.id ? (
@@ -91,6 +99,28 @@ export function ManageTasksSheet() {
                         </CardFooter>
                       </Card>
                     )
+                  ))
+                )}
+              </div>
+            </ScrollArea>
+          </TabsContent>
+           <TabsContent value="completed">
+            <ScrollArea className="h-[calc(100vh-10rem)] pr-4">
+              <div className="space-y-4 py-4">
+                {completedTasks.length === 0 ? (
+                  <p className="text-center text-muted-foreground pt-8">No completed tasks yet.</p>
+                ) : (
+                  completedTasks.map((task: Task) => (
+                      <Card key={task.id} className="bg-secondary/40">
+                        <CardHeader>
+                          <CardTitle className="text-lg line-through text-muted-foreground">{task.title}</CardTitle>
+                           {task.completedAt && (
+                            <CardDescription className="text-xs">
+                                Completed: {format(new Date(task.completedAt), "MMM d, yyyy")}
+                            </CardDescription>
+                        )}
+                        </CardHeader>
+                      </Card>
                   ))
                 )}
               </div>
