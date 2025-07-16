@@ -25,13 +25,20 @@ const TaskSchema = z.object({
 });
 
 const ChatInputSchema = z.object({
-  message: z.string().describe('The user\'s message.'),
-  tasks: z.array(TaskSchema).describe('The user\'s current list of tasks.'),
+  message: z.string().describe("The user's message."),
+  tasks: z.array(TaskSchema).describe("The user's current list of tasks."),
 });
 export type ChatInput = z.infer<typeof ChatInputSchema>;
 
+
+const SuggestedTaskSchema = z.object({
+    title: z.string().describe("The title of the suggested task."),
+    description: z.string().describe("A brief, encouraging description for the new task."),
+});
+
 const ChatOutputSchema = z.object({
-  response: z.string().describe('The AI\'s response to the user.'),
+  response: z.string().describe("The AI's response to the user."),
+  suggestedTasks: z.array(SuggestedTaskSchema).optional().describe("A list of new tasks suggested by the AI, if the user asked to break down a larger task."),
 });
 export type ChatOutput = z.infer<typeof ChatOutputSchema>;
 
@@ -61,6 +68,16 @@ Here is the user's current task list:
 {{/if}}
 
 Keep your responses concise, helpful, and conversational. You can answer questions about their tasks, help them decide what to do next, offer encouragement, or just chat.
+
+IMPORTANT: If the user asks you to "break down a task" or "make a task smaller", you MUST respond by populating the 'suggestedTasks' array with 2-3 smaller, concrete, and actionable steps. Your main 'response' text should introduce these suggestions.
+
+For example, if the user says "Can you break down 'Write the quarterly report'?", your response should be:
+- response: "Of course! Here are a few smaller steps to get you started:"
+- suggestedTasks: [
+    { title: "Create an outline for the report", description: "Just the main sections. Takes about 15 mins." },
+    { title: "Gather the sales data for Q3", description: "Find the relevant numbers you'll need." },
+    { title: "Write the introduction paragraph", description: "Just get the first few sentences down." }
+]
 
 User's message: {{{message}}}
 `,

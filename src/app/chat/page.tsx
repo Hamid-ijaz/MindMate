@@ -7,31 +7,36 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { format } from 'date-fns';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { chat } from '@/ai/flows/chat-flow';
 import type { Task } from '@/lib/types';
-import { Send, Loader2 } from 'lucide-react';
+import { Send, Loader2, PlusCircle, Check } from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 
+
+interface SuggestedTask {
+    title: string;
+    description: string;
+}
 
 interface Message {
     role: 'user' | 'assistant';
     content: string;
+    suggestedTasks?: SuggestedTask[];
 }
 
 export default function ChatPage() {
-    const { tasks, isLoading: tasksLoading } = useTasks();
+    const { tasks, addTask, isLoading: tasksLoading } = useTasks();
     const { toast } = useToast();
     const [messages, setMessages] = useState<Message[]>([
-        { role: 'assistant', content: "Hello! I'm MindMate. How can I help you plan your day?" }
+        { role: 'assistant', content: "Hello! I'm MindMate. How can I help you plan your day? You can ask me to break down a large task into smaller ones!" }
     ]);
     const [input, setInput] = useState('');
     const [isPending, startTransition] = useTransition();
     const scrollAreaRef = useRef<HTMLDivElement>(null);
+    const [addedTasks, setAddedTasks] = useState<string[]>([]);
 
     useEffect(() => {
-        // Scroll to the bottom when messages change
         if (scrollAreaRef.current) {
             scrollAreaRef.current.scrollTo({
                 top: scrollAreaRef.current.scrollHeight,
@@ -40,6 +45,21 @@ export default function ChatPage() {
         }
     }, [messages]);
 
+    const handleAddTask = (task: SuggestedTask) => {
+        addTask({
+            title: task.title,
+            description: task.description,
+            category: 'Personal', // Default category
+            energyLevel: 'Low', // Default energy level
+            duration: 15, // Default duration
+            timeOfDay: 'Afternoon', // Default time of day
+        });
+        setAddedTasks(prev => [...prev, task.title]);
+        toast({
+            title: "Task Added!",
+            description: `"${task.title}" has been added to your list.`,
+        });
+    };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -47,22 +67,26 @@ export default function ChatPage() {
 
         const userMessage: Message = { role: 'user', content: input };
         setMessages(prev => [...prev, userMessage]);
+        const currentInput = input;
         setInput('');
 
         startTransition(async () => {
             try {
-                // Ensure tasks are serializable and match the Zod schema in the flow
                 const serializableTasks = tasks.map(t => ({
                     ...t,
                     description: t.description || "",
                 }));
 
                 const result = await chat({
-                    message: input,
+                    message: currentInput,
                     tasks: serializableTasks as Task[],
                 });
                 
-                const assistantMessage: Message = { role: 'assistant', content: result.response };
+                const assistantMessage: Message = { 
+                    role: 'assistant', 
+                    content: result.response,
+                    suggestedTasks: result.suggestedTasks,
+                };
                 setMessages(prev => [...prev, assistantMessage]);
 
             } catch (error) {
@@ -72,8 +96,7 @@ export default function ChatPage() {
                     description: "Sorry, I couldn't get a response. Please try again.",
                     variant: "destructive",
                 });
-                // Remove the user's message if the API call fails
-                setMessages(prev => prev.slice(0, -1));
+                setMessages(prev => prev.filter(m => m.content !== currentInput));
             }
         });
     };
@@ -97,6 +120,34 @@ export default function ChatPage() {
                                     )}
                                     <div className={`rounded-lg p-3 max-w-md ${message.role === 'user' ? 'bg-primary text-primary-foreground' : 'bg-muted'}`}>
                                         <p className="whitespace-pre-wrap">{message.content}</p>
+                                        {message.suggestedTasks && (
+                                            <div className="mt-4 space-y-2">
+                                                {message.suggestedTasks.map((task, taskIndex) => {
+                                                    const isAdded = addedTasks.includes(task.title);
+                                                    return (
+                                                        <Card key={taskIndex} className="bg-background/50">
+                                                            <CardContent className="p-3">
+                                                                <div className="flex items-center justify-between">
+                                                                    <div>
+                                                                        <p className="font-semibold">{task.title}</p>
+                                                                        <p className="text-sm text-muted-foreground">{task.description}</p>
+                                                                    </div>
+                                                                    <Button 
+                                                                        size="sm" 
+                                                                        variant={isAdded ? "secondary" : "default"}
+                                                                        onClick={() => !isAdded && handleAddTask(task)}
+                                                                        disabled={isAdded}
+                                                                        className="ml-4"
+                                                                    >
+                                                                        {isAdded ? <Check className="h-4 w-4" /> : <PlusCircle className="h-4 w-4" />}
+                                                                    </Button>
+                                                                </div>
+                                                            </CardContent>
+                                                        </Card>
+                                                    );
+                                                })}
+                                            </div>
+                                        )}
                                     </div>
                                     {message.role === 'user' && (
                                         <Avatar className="w-10 h-10 border">
@@ -121,10 +172,10 @@ export default function ChatPage() {
                         <Input
                             value={input}
                             onChange={(e) => setInput(e.target.value)}
-                            placeholder="Ask about your tasks or just say hello..."
-                            disabled={isPending}
+                            placeholder="Ask to break down a task, or just say hello..."
+                            disabled={isPending || tasksLoading}
                         />
-                        <Button type="submit" disabled={!input.trim() || isPending}>
+                        <Button type="submit" disabled={!input.trim() || isPending || tasksLoading}>
                             <Send className="h-5 w-5" />
                         </Button>
                     </form>
