@@ -25,17 +25,15 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  taskCategories,
-  energyLevels,
-  taskDurations,
   timesOfDay,
   Task,
   TaskCategory,
   EnergyLevel,
   TaskDuration,
   TimeOfDay,
+  energyLevels,
 } from "@/lib/types";
-import { useState, useTransition } from "react";
+import { useState, useTransition, useEffect } from "react";
 import { summarizeUrl } from "@/ai/flows/summarize-url-flow";
 import { enhanceTask } from "@/ai/flows/enhance-task-flow";
 import { Loader2, Wand2 } from "lucide-react";
@@ -44,9 +42,9 @@ import { useToast } from "@/hooks/use-toast";
 const formSchema = z.object({
   title: z.string().min(3, "Title must be at least 3 characters long."),
   description: z.string().optional(),
-  category: z.enum(taskCategories),
+  category: z.string().min(1, "Category is required."),
   energyLevel: z.enum(energyLevels),
-  duration: z.coerce.number().refine((val) => taskDurations.includes(val as TaskDuration)),
+  duration: z.coerce.number().min(1, "Duration is required"),
   timeOfDay: z.enum(timesOfDay),
 });
 
@@ -65,7 +63,7 @@ const urlRegex = new RegExp(
 
 
 export function TaskForm({ task, onFinished, parentId, defaultValues: propDefaults }: TaskFormProps) {
-  const { addTask, updateTask } = useTasks();
+  const { addTask, updateTask, taskCategories, taskDurations } = useTasks();
   const [isSummarizing, startSummarizeTransition] = useTransition();
   const [isEnhancing, startEnhanceTransition] = useTransition();
   const { toast } = useToast();
@@ -76,9 +74,9 @@ export function TaskForm({ task, onFinished, parentId, defaultValues: propDefaul
   } : {
     title: "",
     description: "",
-    category: "Work",
+    category: taskCategories[0] || "",
     energyLevel: "Medium",
-    duration: 30,
+    duration: taskDurations[1] || 30,
     timeOfDay: "Afternoon",
     ...propDefaults,
   };
@@ -87,6 +85,10 @@ export function TaskForm({ task, onFinished, parentId, defaultValues: propDefaul
     resolver: zodResolver(formSchema),
     defaultValues,
   });
+
+  useEffect(() => {
+    form.reset(defaultValues);
+  }, [task, form, taskCategories, taskDurations]);
 
   const handleTitleBlur = (e: React.FocusEvent<HTMLInputElement>) => {
     const title = e.target.value;
@@ -150,9 +152,9 @@ export function TaskForm({ task, onFinished, parentId, defaultValues: propDefaul
 
   const onSubmit = (data: TaskFormValues) => {
     if (task) {
-      updateTask(task.id, data);
+      updateTask(task.id, data as Partial<Task>);
     } else {
-      addTask({ ...data, parentId });
+      addTask({ ...data, parentId } as Omit<Task, 'id' | 'createdAt' | 'rejectionCount' | 'isMuted' | 'completedAt' | 'lastRejectedAt'>);
     }
     onFinished?.();
     if (!task) {

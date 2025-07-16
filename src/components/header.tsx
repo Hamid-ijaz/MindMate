@@ -8,7 +8,7 @@ import { AddTaskButton, ManageTasksSheet } from './manage-tasks-sheet';
 import { useAuth } from '@/contexts/auth-context';
 import { Button } from './ui/button';
 import { Skeleton } from './ui/skeleton';
-import { MessageSquare, ListChecks, HomeIcon, ListTodo } from 'lucide-react';
+import { MessageSquare, ListChecks, HomeIcon, ListTodo, Settings } from 'lucide-react';
 import { ThemePicker } from './theme-picker';
 
 export function Header() {
@@ -64,6 +64,11 @@ export function Header() {
               </Button>
               <AddTaskButton />
               <ThemePicker />
+              <Button variant="ghost" size="icon" asChild>
+                <Link href="/settings">
+                  <Settings />
+                </Link>
+              </Button>
               <Button variant="ghost" size="sm" onClick={handleLogout}>Logout</Button>
               <ManageTasksSheet />
             </>

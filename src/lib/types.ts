@@ -1,14 +1,15 @@
 
 import { z } from "zod";
 
-export type TaskCategory = 'Work' | 'Chores' | 'Writing' | 'Personal' | 'Study';
-export const taskCategories: [TaskCategory, ...TaskCategory[]] = ['Work', 'Chores', 'Writing', 'Personal', 'Study'];
+// These are now dynamic, but we define the type.
+export type TaskCategory = string; 
+export const taskCategories: [TaskCategory, ...TaskCategory[]] = ['Work', 'Chores', 'Writing', 'Personal', 'Study']; // Default values
 
 export type EnergyLevel = 'Low' | 'Medium' | 'High';
 export const energyLevels: [EnergyLevel, ...EnergyLevel[]] = ['Low', 'Medium', 'High'];
 
-export type TaskDuration = 15 | 30 | 60 | 90;
-export const taskDurations: [TaskDuration, ...TaskDuration[]] = [15, 30, 60, 90];
+export type TaskDuration = number;
+export const taskDurations: [TaskDuration, ...TaskDuration[]] = [15, 30, 60, 90]; // Default values
 
 export type TimeOfDay = 'Morning' | 'Afternoon' | 'Evening';
 export const timesOfDay: [TimeOfDay, ...TimeOfDay[]] = ['Morning', 'Afternoon', 'Evening'];
@@ -26,7 +27,7 @@ export interface Task {
   lastRejectedAt?: number;
   isMuted: boolean;
   completedAt?: number;
-  parentId?: string; // New field for sub-tasks
+  parentId?: string;
 }
 
 export interface User {

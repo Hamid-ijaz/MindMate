@@ -10,7 +10,9 @@
 
 import { ai } from '@/ai/genkit';
 import { z } from 'zod';
-import { taskCategories, energyLevels, taskDurations, timesOfDay } from '@/lib/types';
+import { energyLevels, timesOfDay } from '@/lib/types';
+import { LOCAL_STORAGE_KEY } from '@/lib/constants';
+
 
 const EnhanceTaskInputSchema = z.object({
   title: z.string().describe('The original title of the task provided by the user.'),
@@ -20,7 +22,7 @@ export type EnhanceTaskInput = z.infer<typeof EnhanceTaskInputSchema>;
 const EnhanceTaskOutputSchema = z.object({
   rephrasedTitle: z.string().describe("A clearer, more engaging, or more actionable version of the task title."),
   description: z.string().describe("A helpful and concise description for the task, based on the rephrased title."),
-  category: z.enum(taskCategories).describe("The predicted category for the task."),
+  category: z.string().describe("The predicted category for the task."),
   energyLevel: z.enum(energyLevels).describe("The predicted energy level required for the task."),
   duration: z.coerce.number().describe("The predicted duration in minutes for the task."),
   timeOfDay: z.enum(timesOfDay).describe("The predicted best time of day to perform the task."),
@@ -36,6 +38,19 @@ export async function enhanceTask(input: EnhanceTaskInput): Promise<EnhanceTaskO
   return output;
 }
 
+// In a real app, you would fetch these from the user's settings in the database.
+// For this example, we'll simulate fetching them. In a real scenario, this would be an async DB call.
+const getUserTaskSettings = () => {
+    // This is a placeholder. In a real app, you'd have access to the current user's
+    // settings from a database or a shared context that can be accessed on the server.
+    // Since Genkit flows run on the server, we can't directly access localStorage here.
+    // We pass them in the prompt for now.
+    return {
+        taskCategories: ['Work', 'Chores', 'Writing', 'Personal', 'Study'],
+        taskDurations: [15, 30, 60, 90],
+    }
+}
+
 const prompt = ai.definePrompt({
   name: 'enhanceTaskPrompt',
   input: { schema: EnhanceTaskInputSchema },
@@ -49,10 +64,10 @@ Your tasks are:
 1.  **Rephrase the title**: Make it more actionable, clear, and motivating. If the title is already good, you can make minor improvements or keep it as is.
 2.  **Write a description**: Based on the *rephrased* title, write a brief, helpful description (1-2 sentences).
 3.  **Predict attributes**: Based on the title and description, predict the following attributes for the task:
-    *   \`category\`: Choose one from: ${taskCategories.join(', ')}.
-    *   \`energyLevel\`: Choose one from: ${energyLevels.join(', ')}.
-    *   \`duration\`: Estimate the time required in minutes. Choose one from: ${taskDurations.join(', ')}.
-    *   \`timeOfDay\`: Choose the best time of day. Choose one from: ${timesOfDay.join(', ')}.
+    *   \`category\`: Choose one from: \${getUserTaskSettings().taskCategories.join(', ')}.
+    *   \`energyLevel\`: Choose one from: \${energyLevels.join(', ')}.
+    *   \`duration\`: Estimate the time required in minutes. Choose one from: \${getUserTaskSettings().taskDurations.join(', ')}.
+    *   \`timeOfDay\`: Choose the best time of day. Choose one from: \${timesOfDay.join(', ')}.
 
 Example:
 User Input Title: "team meeting"

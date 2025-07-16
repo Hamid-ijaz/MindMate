@@ -14,6 +14,7 @@ interface AuthContextType {
   login: (email: string, password: string) => boolean;
   signup: (userData: SignupData) => boolean;
   logout: () => void;
+  updateUser: (updates: Partial<User>) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -85,9 +86,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setUser(null);
     Cookies.remove(AUTH_COOKIE_KEY, { path: '/' });
   };
+  
+  const updateUser = (updates: Partial<User>) => {
+    if (!user) return;
+    const users = getStoredUsers();
+    const updatedUser = { ...user, ...updates };
+    const updatedUsers = users.map(u => u.email === user.email ? updatedUser : u);
+    setStoredUsers(updatedUsers);
+    setUser(updatedUser);
+  }
 
   return (
-    <AuthContext.Provider value={{ user, isAuthenticated: !!user, loading, login, signup, logout }}>
+    <AuthContext.Provider value={{ user, isAuthenticated: !!user, loading, login, signup, logout, updateUser }}>
       {children}
     </AuthContext.Provider>
   );
