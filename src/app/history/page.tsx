@@ -32,9 +32,9 @@ export default function HistoryPage() {
   const [selectedTasks, setSelectedTasks] = useState<Record<string, boolean>>({});
   const [taskToReword, setTaskToReword] = useState<Task | null>(null);
 
-
-  const completedTasks = tasks.filter(t => t.completedAt).sort((a, b) => b.completedAt! - a.completedAt!);
-  const uncompletedTasks = tasks.filter(t => !t.completedAt);
+  const rootTasks = tasks.filter(t => !t.parentId);
+  const completedTasks = rootTasks.filter(t => t.completedAt).sort((a, b) => b.completedAt! - a.completedAt!);
+  const uncompletedTasks = rootTasks.filter(t => !t.completedAt);
 
   const handleRewordClick = (task: Task) => {
     setTaskToReword(task);
@@ -81,6 +81,7 @@ export default function HistoryPage() {
     
     tasksToAdd.forEach(suggestion => {
         addTask({
+            parentId: taskToReword.id, // Set the parent ID
             title: suggestion.title,
             description: suggestion.description,
             category: taskToReword.category,
@@ -91,8 +92,8 @@ export default function HistoryPage() {
     });
     
     toast({
-      title: `${tasksToAdd.length} New Task(s) Added!`,
-      description: `The selected tasks are now on your list.`,
+      title: `${tasksToAdd.length} New Sub-task(s) Added!`,
+      description: `The selected tasks are now under "${taskToReword.title}".`,
     });
 
     setShowRewordDialog(false);
@@ -181,7 +182,7 @@ export default function HistoryPage() {
                 <AlertDialogHeader>
                     <AlertDialogTitle className="flex items-center gap-2"><Wand2 className="text-primary"/>Here's a breakdown</AlertDialogTitle>
                     <AlertDialogDescription>
-                       Select which steps you'd like to add as new, low-energy tasks.
+                       Select which steps you'd like to add as new sub-tasks for "{taskToReword?.title}". They will be low-energy tasks.
                     </AlertDialogDescription>
                 </AlertDialogHeader>
                 <div className="py-4 space-y-3 max-h-64 overflow-y-auto pr-2">
@@ -189,7 +190,7 @@ export default function HistoryPage() {
                        <div key={index} className="flex items-start gap-3 rounded-md border p-3">
                          <Checkbox 
                            id={`task-${index}`} 
-                           checked={selectedTasks[suggestion.title]}
+                           checked={!!selectedTasks[suggestion.title]}
                            onCheckedChange={() => handleToggleSelection(suggestion.title)}
                            className="mt-1"
                          />

@@ -16,9 +16,12 @@ import { AlertDialog, AlertDialogContent, AlertDialogDescription, AlertDialogFoo
 import { ManageTasksSheet } from "./manage-tasks-sheet";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "./ui/accordion";
 import { ScrollArea } from "./ui/scroll-area";
-import { rewordTask } from "@/ai/flows/reword-task-flow";
+import { rewordTask } from '@/ai/flows/reword-task-flow';
 import { getCurrentTimeOfDay } from "@/lib/utils";
 import { TaskItem } from "./task-item";
+import { Checkbox } from "./ui/checkbox";
+import { Label } from "./ui/label";
+import { PlusCircle } from "lucide-react";
 
 const getDefaultEnergyLevel = (): EnergyLevel => {
     const timeOfDay = getCurrentTimeOfDay();
@@ -34,13 +37,15 @@ const getDefaultEnergyLevel = (): EnergyLevel => {
 };
 
 export function TaskSuggestion() {
-  const { tasks, acceptTask, rejectTask, muteTask, addTask, isLoading: tasksLoading, updateTask } = useTasks();
+  const { tasks, acceptTask, rejectTask, muteTask, addTask, isLoading: tasksLoading } = useTasks();
   const [currentEnergy, setCurrentEnergy] = useState<EnergyLevel | null>(null);
   const [suggestion, setSuggestion] = useState<{ suggestedTask: Task | null, otherTasks: Task[] }>({ suggestedTask: null, otherTasks: [] });
   const [showAffirmation, setShowAffirmation] = useState(false);
   const [showRejectionPrompt, setShowRejectionPrompt] = useState(false);
   const [showRewordDialog, setShowRewordDialog] = useState(false);
-  const [rewordedSuggestion, setRewordedSuggestion] = useState<{ title: string; description: string } | null>(null);
+  const [rewordedSuggestions, setRewordedSuggestions] = useState<{ title: string; description: string }[]>([]);
+  const [selectedRewordedTasks, setSelectedRewordedTasks] = useState<Record<string, boolean>>({});
+
   const [isPending, startTransition] = useTransition();
 
   useEffect(() => {
@@ -57,7 +62,7 @@ export function TaskSuggestion() {
       return;
     }
 
-    const uncompletedTasks = tasks.filter(t => !t.completedAt && !t.isMuted);
+    const uncompletedTasks = tasks.filter(t => !t.completedAt && !t.isMuted && !t.parentId);
 
     const now = Date.now();
     const rejectionTimeout = REJECTION_HOURS * 60 * 60 * 1000;
@@ -104,11 +109,6 @@ export function TaskSuggestion() {
   const handleAccept = () => {
     if (!suggestedTask) return;
     acceptTask(suggestedTask.id);
-    toast({
-      title: "Task Completed!",
-      description: getRandomQuote(),
-      className: "bg-primary/10 border-primary/20",
-    });
     setShowAffirmation(true);
     setTimeout(() => {
       setShowAffirmation(false);
@@ -149,7 +149,11 @@ export function TaskSuggestion() {
           title: suggestedTask.title,
           description: suggestedTask.description || "",
         });
-        setRewordedSuggestion(result);
+        setRewordedSuggestions(result.suggestedTasks);
+        setSelectedRewordedTasks(result.suggestedTasks.reduce((acc, task) => {
+          acc[task.title] = true;
+          return acc;
+        }, {} as Record<string, boolean>));
         setShowRewordDialog(true);
       } catch (error) {
         console.error("Failed to reword task:", error);
@@ -163,25 +167,43 @@ export function TaskSuggestion() {
   };
 
   const handleAcceptReword = () => {
-    if (!suggestedTask || !rewordedSuggestion) return;
+    if (!suggestedTask || rewordedSuggestions.length === 0) return;
+
+    const tasksToAdd = rewordedSuggestions.filter(suggestion => selectedRewordedTasks[suggestion.title]);
+
+     if(tasksToAdd.length === 0) {
+        toast({
+            title: "No tasks selected",
+            description: "Please select at least one task to add.",
+            variant: "destructive"
+        });
+        return;
+    }
     
-    // Add the reworded suggestion as a new task
-    addTask({
-      title: rewordedSuggestion.title,
-      description: rewordedSuggestion.description,
-      category: suggestedTask.category, // Inherit category
-      timeOfDay: suggestedTask.timeOfDay, // Inherit time of day
-      energyLevel: 'Low', // New task is 'Low' energy
-      duration: 15, // New task is short
+    tasksToAdd.forEach(suggestion => {
+        addTask({
+            parentId: suggestedTask.id,
+            title: suggestion.title,
+            description: suggestion.description,
+            category: suggestedTask.category,
+            timeOfDay: suggestedTask.timeOfDay,
+            energyLevel: 'Low',
+            duration: 15,
+        });
     });
     
     toast({
-      title: "New Task Added!",
-      description: `"${rewordedSuggestion.title}" is now on your list.`,
+      title: `${tasksToAdd.length} New Sub-task(s) Added!`,
+      description: `The selected tasks are now under "${suggestedTask.title}".`,
     });
 
     setShowRewordDialog(false);
-    setRewordedSuggestion(null);
+    setRewordedSuggestions([]);
+    setSelectedRewordedTasks({});
+  };
+
+  const handleToggleRewordSelection = (title: string) => {
+    setSelectedRewordedTasks(prev => ({...prev, [title]: !prev[title]}));
   };
 
   if (tasksLoading || !currentEnergy) {
@@ -199,8 +221,8 @@ export function TaskSuggestion() {
     );
   }
   
-  const uncompletedTasks = tasks.filter(t => !t.completedAt && !t.isMuted);
-  const otherVisibleTasks = otherTasks.filter(t => !t.completedAt && !t.isMuted && t.id !== suggestedTask?.id);
+  const uncompletedTasks = tasks.filter(t => !t.completedAt && !t.isMuted && !t.parentId);
+  const otherVisibleTasks = otherTasks.filter(t => !t.completedAt && !t.isMuted && t.id !== suggestedTask?.id && !t.parentId);
 
   if (!suggestedTask && uncompletedTasks.length === 0) {
     return (
@@ -276,23 +298,21 @@ export function TaskSuggestion() {
             <Badge variant="outline">{suggestedTask.timeOfDay}</Badge>
             {suggestedTask.rejectionCount > 0 && <Badge variant="destructive" className="animate-pulse">{suggestedTask.rejectionCount}x Skipped</Badge>}
         </div>
-        {(suggestedTask.energyLevel === 'High' || suggestedTask.energyLevel === 'Medium') && (
-            <div className="mt-4 text-center">
-                 <Button variant="link" onClick={handleRewordClick} disabled={isPending}>
-                    {isPending ? (
-                        <>
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            Thinking...
-                        </>
-                    ) : (
-                        <>
-                            <Wand2 className="mr-2 h-4 w-4" />
-                            Make this task smaller
-                        </>
-                    )}
-                </Button>
-            </div>
-        )}
+        <div className="mt-4 text-center">
+             <Button variant="link" onClick={handleRewordClick} disabled={isPending}>
+                {isPending ? (
+                    <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Thinking...
+                    </>
+                ) : (
+                    <>
+                        <Wand2 className="mr-2 h-4 w-4" />
+                        Divide this task
+                    </>
+                )}
+            </Button>
+        </div>
       </CardContent>
       <CardFooter className="grid grid-cols-3 gap-3 pt-6">
         <Button variant="destructive" size="lg" onClick={handleReject}>
@@ -322,20 +342,35 @@ export function TaskSuggestion() {
     </AlertDialog>
 
     <AlertDialog open={showRewordDialog} onOpenChange={setShowRewordDialog}>
-        <AlertDialogContent>
+        <AlertDialogContent className="max-w-xl">
             <AlertDialogHeader>
-                <AlertDialogTitle className="flex items-center gap-2"><Wand2 className="text-primary"/>How about this instead?</AlertDialogTitle>
-                {rewordedSuggestion && (
-                    <div className="pt-4 space-y-2 text-left">
-                        <p className="font-bold text-lg">{rewordedSuggestion.title}</p>
-                        <p className="text-muted-foreground">{rewordedSuggestion.description}</p>
-                        <p className="text-sm text-blue-500 pt-2">I've also adjusted the duration to 15 minutes.</p>
-                    </div>
-                )}
+                <AlertDialogTitle className="flex items-center gap-2"><Wand2 className="text-primary"/>Here's a breakdown</AlertDialogTitle>
+                <AlertDialogDescription>
+                   Select which steps you'd like to add as new sub-tasks.
+                </AlertDialogDescription>
             </AlertDialogHeader>
+            <div className="py-4 space-y-3 max-h-64 overflow-y-auto pr-2">
+                {rewordedSuggestions.map((suggestion, index) => (
+                   <div key={index} className="flex items-start gap-3 rounded-md border p-3">
+                     <Checkbox 
+                       id={`reword-task-${index}`} 
+                       checked={!!selectedRewordedTasks[suggestion.title]}
+                       onCheckedChange={() => handleToggleRewordSelection(suggestion.title)}
+                       className="mt-1"
+                     />
+                     <Label htmlFor={`reword-task-${index}`} className="flex-1 cursor-pointer">
+                        <p className="font-semibold">{suggestion.title}</p>
+                        <p className="text-sm text-muted-foreground">{suggestion.description}</p>
+                     </Label>
+                   </div>
+                ))}
+            </div>
             <AlertDialogFooter>
-                <Button variant="ghost" onClick={() => setShowRewordDialog(false)}>No, thanks</Button>
-                <Button onClick={handleAcceptReword}>Yes, let's do that</Button>
+                <Button variant="ghost" onClick={() => setShowRewordDialog(false)}>Cancel</Button>
+                <Button onClick={handleAcceptReword}>
+                    <PlusCircle className="mr-2 h-4 w-4" />
+                    Add Selected Tasks
+                </Button>
             </AlertDialogFooter>
         </AlertDialogContent>
     </AlertDialog>

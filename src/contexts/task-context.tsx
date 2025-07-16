@@ -9,7 +9,7 @@ import { useAuth } from './auth-context';
 interface TaskContextType {
   tasks: Task[];
   accomplishments: Accomplishment[];
-  addTask: (task: Omit<Task, 'id' | 'createdAt' | 'rejectionCount' | 'isMuted' | 'completedAt' | 'lastRejectedAt'>) => void;
+  addTask: (task: Omit<Task, 'id' | 'createdAt' | 'rejectionCount' | 'isMuted' | 'completedAt' | 'lastRejectedAt'> & { parentId?: string }) => void;
   updateTask: (id: string, updates: Partial<Omit<Task, 'id' | 'createdAt'>>) => void;
   deleteTask: (id: string) => void;
   acceptTask: (id: string) => void;
@@ -69,7 +69,7 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [tasks, accomplishments, isLoading, user]);
 
-  const addTask = useCallback((taskData: Omit<Task, 'id' | 'createdAt' | 'rejectionCount' | 'isMuted' | 'completedAt' | 'lastRejectedAt'>) => {
+  const addTask = useCallback((taskData: Omit<Task, 'id' | 'createdAt' | 'rejectionCount' | 'isMuted' | 'completedAt' | 'lastRejectedAt'> & { parentId?: string }) => {
     const newTask: Task = {
       ...taskData,
       id: new Date().toISOString() + Math.random(),
@@ -85,7 +85,8 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   const deleteTask = useCallback((id: string) => {
-    setTasks(prev => prev.filter(t => t.id !== id));
+     // Also delete all children of this task
+    setTasks(prev => prev.filter(t => t.id !== id && t.parentId !== id));
   }, []);
   
   const acceptTask = useCallback((id: string) => {

@@ -26,6 +26,7 @@ export interface Task {
   lastRejectedAt?: number;
   isMuted: boolean;
   completedAt?: number;
+  parentId?: string; // New field for sub-tasks
 }
 
 export interface User {
@@ -46,8 +47,12 @@ export const RewordTaskInputSchema = z.object({
 });
 export type RewordTaskInput = z.infer<typeof RewordTaskInputSchema>;
 
+export const SuggestedTaskSchema = z.object({
+    title: z.string().describe("The title of a smaller, actionable sub-task."),
+    description: z.string().describe("A brief, encouraging description for the sub-task."),
+});
+
 export const RewordTaskOutputSchema = z.object({
-  title: z.string().describe('The new, rephrased title for the task that represents a smaller first step.'),
-  description: z.string().describe('A new, encouraging description for the rephrased task.'),
+  suggestedTasks: z.array(SuggestedTaskSchema).describe("A list of 2-4 smaller, concrete steps to break down the original task."),
 });
 export type RewordTaskOutput = z.infer<typeof RewordTaskOutputSchema>;

@@ -19,10 +19,11 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Badge } from "./ui/badge";
 import type { Task } from "@/lib/types";
 import { format } from "date-fns";
+import { TaskItem } from "./task-item";
 
 
 export function ManageTasksSheet() {
-  const { tasks, deleteTask, uncompleteTask } = useTasks();
+  const { tasks, uncompleteTask } = useTasks();
   const [open, setOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<string | null>(null);
 
@@ -30,8 +31,9 @@ export function ManageTasksSheet() {
     setEditingTask(null);
   };
   
-  const uncompletedTasks = tasks.filter(t => !t.completedAt);
-  const completedTasks = tasks.filter(t => t.completedAt).sort((a, b) => b.completedAt! - a.completedAt!);
+  const rootTasks = tasks.filter(t => !t.parentId);
+  const uncompletedTasks = rootTasks.filter(t => !t.completedAt);
+  const completedTasks = rootTasks.filter(t => t.completedAt).sort((a, b) => b.completedAt! - a.completedAt!);
 
 
   return (
@@ -71,34 +73,7 @@ export function ManageTasksSheet() {
                   <p className="text-center text-muted-foreground pt-8">No pending tasks. Add one!</p>
                 ) : (
                   uncompletedTasks.map((task: Task) => (
-                    editingTask === task.id ? (
-                       <Card key={task.id} className="bg-secondary">
-                        <CardContent className="p-4">
-                          <TaskForm task={task} onFinished={handleFormFinish} />
-                        </CardContent>
-                      </Card>
-                    ) : (
-                      <Card key={task.id}>
-                        <CardHeader>
-                          <CardTitle className="text-lg">{task.title}</CardTitle>
-                          {task.description && <CardDescription>{task.description}</CardDescription>}
-                        </CardHeader>
-                        <CardContent className="flex flex-wrap gap-2">
-                            <Badge variant="secondary">{task.category}</Badge>
-                            <Badge variant="secondary">{task.energyLevel} Energy</Badge>
-                            <Badge variant="secondary">{task.duration} min</Badge>
-                            <Badge variant="secondary">{task.timeOfDay}</Badge>
-                        </CardContent>
-                        <CardFooter className="flex justify-end gap-2">
-                            <Button variant="ghost" size="icon" onClick={() => setEditingTask(task.id)}>
-                                <Edit className="h-4 w-4" />
-                            </Button>
-                            <Button variant="ghost" size="icon" onClick={() => deleteTask(task.id)}>
-                                <Trash2 className="h-4 w-4 text-destructive" />
-                            </Button>
-                        </CardFooter>
-                      </Card>
-                    )
+                    <TaskItem key={task.id} task={task} />
                   ))
                 )}
               </div>
@@ -121,8 +96,8 @@ export function ManageTasksSheet() {
                         )}
                         </CardHeader>
                          <CardFooter className="justify-end">
-                            <Button variant="ghost" size="icon" onClick={() => uncompleteTask(task.id)}>
-                                <RotateCcw className="h-4 w-4" />
+                            <Button variant="ghost" size="sm" onClick={() => uncompleteTask(task.id)}>
+                                <RotateCcw className="h-4 w-4" /> Redo
                             </Button>
                         </CardFooter>
                       </Card>

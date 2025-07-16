@@ -46,6 +46,7 @@ export default function ChatPage() {
     }, [messages]);
 
     const handleAddTask = (task: SuggestedTask) => {
+        // Here we don't have a parent task context, so we add them as root tasks.
         addTask({
             title: task.title,
             description: task.description,
@@ -72,7 +73,8 @@ export default function ChatPage() {
 
         startTransition(async () => {
             try {
-                const serializableTasks = tasks.map(t => ({
+                // We only need to serialize root tasks for the main chat context
+                const serializableTasks = tasks.filter(t => !t.parentId).map(t => ({
                     ...t,
                     description: t.description || "",
                 }));
@@ -122,6 +124,7 @@ export default function ChatPage() {
                                         <p className="whitespace-pre-wrap">{message.content}</p>
                                         {message.suggestedTasks && (
                                             <div className="mt-4 space-y-2">
+                                                <p className="text-sm font-semibold mb-2">Here are some smaller steps:</p>
                                                 {message.suggestedTasks.map((task, taskIndex) => {
                                                     const isAdded = addedTasks.includes(task.title);
                                                     return (

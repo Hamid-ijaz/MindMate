@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useForm } from "react-hook-form";
@@ -49,9 +50,11 @@ type TaskFormValues = z.infer<typeof formSchema>;
 interface TaskFormProps {
   task?: Task;
   onFinished?: () => void;
+  parentId?: string;
+  defaultValues?: Partial<TaskFormValues>;
 }
 
-export function TaskForm({ task, onFinished }: TaskFormProps) {
+export function TaskForm({ task, onFinished, parentId, defaultValues: propDefaults }: TaskFormProps) {
   const { addTask, updateTask } = useTasks();
 
   const defaultValues: Partial<TaskFormValues> = task ? {
@@ -64,6 +67,7 @@ export function TaskForm({ task, onFinished }: TaskFormProps) {
     energyLevel: "Medium",
     duration: 30,
     timeOfDay: "Afternoon",
+    ...propDefaults,
   };
 
   const form = useForm<TaskFormValues>({
@@ -75,7 +79,7 @@ export function TaskForm({ task, onFinished }: TaskFormProps) {
     if (task) {
       updateTask(task.id, data);
     } else {
-      addTask(data);
+      addTask({ ...data, parentId });
     }
     onFinished?.();
     if (!task) {
@@ -202,8 +206,11 @@ export function TaskForm({ task, onFinished }: TaskFormProps) {
             )}
           />
         </div>
-        <div className="flex justify-end">
-          <Button type="submit">{task ? "Save Changes" : "Add Task"}</Button>
+        <div className="flex justify-end gap-2">
+            {onFinished && (
+                <Button variant="ghost" type="button" onClick={onFinished}>Cancel</Button>
+            )}
+            <Button type="submit">{task ? "Save Changes" : parentId ? "Add Sub-task" : "Add Task"}</Button>
         </div>
       </form>
     </Form>
