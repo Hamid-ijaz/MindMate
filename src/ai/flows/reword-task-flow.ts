@@ -8,33 +8,34 @@
 
 import { ai } from '@/ai/genkit';
 import { z } from 'zod';
-import type { RewordTaskInput, RewordTaskOutput } from '@/lib/types';
 
-// Using the types from lib/types for the function signature
-export async function rewordTask(input: RewordTaskInput): Promise<RewordTaskOutput> {
-  const { output } = await rewordTaskFlow(input);
-    if (!output) {
-        throw new Error("AI failed to generate a suggestion.");
-    }
-    return output;
-}
-
-// Defining schemas locally to ensure Genkit processes them correctly.
-const RewordTaskInputSchemaInternal = z.object({
+// Define schemas and types locally within the flow file.
+const RewordTaskInputSchema = z.object({
   title: z.string().describe('The original title of the task.'),
   description: z.string().describe('The original description of the task.'),
 });
+type RewordTaskInput = z.infer<typeof RewordTaskInputSchema>;
 
-const RewordTaskOutputSchemaInternal = z.object({
+const RewordTaskOutputSchema = z.object({
   title: z.string().describe('The new, rephrased title for the task that represents a smaller first step.'),
   description: z.string().describe('A new, encouraging description for the rephrased task.'),
 });
+type RewordTaskOutput = z.infer<typeof RewordTaskOutputSchema>;
 
+
+// The exported function that the UI will call.
+export async function rewordTask(input: RewordTaskInput): Promise<RewordTaskOutput> {
+  const output = await rewordTaskFlow(input);
+  if (!output) {
+      throw new Error("AI failed to generate a suggestion.");
+  }
+  return output;
+}
 
 const prompt = ai.definePrompt({
   name: 'rewordTaskPrompt',
-  input: { schema: RewordTaskInputSchemaInternal },
-  output: { schema: RewordTaskOutputSchemaInternal },
+  input: { schema: RewordTaskInputSchema },
+  output: { schema: RewordTaskOutputSchema },
   prompt: `You are MindMate, a friendly and adaptive task companion. Your goal is to help users overcome procrastination by making tasks feel less overwhelming.
 
 A user finds the following task intimidating:
@@ -59,11 +60,13 @@ Now, rephrase the user's task.`,
 const rewordTaskFlow = ai.defineFlow(
   {
     name: 'rewordTaskFlow',
-    inputSchema: RewordTaskInputSchemaInternal,
-    outputSchema: RewordTaskOutputSchemaInternal,
+    inputSchema: RewordTaskInputSchema,
+    outputSchema: RewordTaskOutputSchema,
   },
   async (input) => {
     const { output } = await prompt(input);
+    // The '!' tells TypeScript that we are confident `output` will not be null.
+    // The function signature ensures the type is correct.
     return output!;
   }
 );
