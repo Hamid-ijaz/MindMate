@@ -57,8 +57,7 @@ export default function SignupPage() {
     });
     
     if (success) {
-      router.push('/');
-      router.refresh(); 
+      window.location.href = '/';
     } else {
       toast({
         title: "Signup Failed",
