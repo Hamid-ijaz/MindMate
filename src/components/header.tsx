@@ -8,7 +8,7 @@ import { ManageTasksSheet } from './manage-tasks-sheet';
 import { useAuth } from '@/contexts/auth-context';
 import { Button } from './ui/button';
 import { Skeleton } from './ui/skeleton';
-import { MessageSquare, ListChecks, HomeIcon } from 'lucide-react';
+import { MessageSquare, ListChecks, HomeIcon, ListTodo } from 'lucide-react';
 import { ThemeToggle } from './theme-toggle';
 
 export function Header() {
@@ -51,9 +51,15 @@ export function Header() {
                 </Link>
               </Button>
                <Button variant="outline" size="sm" asChild>
+                <Link href="/pending">
+                  <ListTodo className="mr-0 sm:mr-2 h-4 w-4" />
+                  <span className="hidden sm:inline">Pending</span>
+                </Link>
+              </Button>
+               <Button variant="outline" size="sm" asChild>
                 <Link href="/history">
                   <ListChecks className="mr-0 sm:mr-2 h-4 w-4" />
-                  <span className="hidden sm:inline">History</span>
+                  <span className="hidden sm:inline">Completed</span>
                 </Link>
               </Button>
               <ManageTasksSheet />
