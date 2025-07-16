@@ -1,148 +1,135 @@
 
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useRef, useEffect, useTransition } from 'react';
 import { useTasks } from '@/contexts/task-context';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Textarea } from '@/components/ui/textarea';
+import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
-import { getCurrentTimeOfDay } from '@/lib/utils';
-import { TaskItem } from '@/components/task-item';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { chat } from '@/ai/flows/chat-flow';
+import type { Task } from '@/lib/types';
+import { Send, Loader2 } from 'lucide-react';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 
-function MorningCheckin() {
-    const { tasks } = useTasks();
 
-    const morningTasks = tasks.filter(t => !t.completedAt && t.timeOfDay === 'Morning').slice(0, 3);
-
-    return (
-        <div className="space-y-6">
-            <div className="flex items-start gap-4">
-                <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center font-bold text-primary shrink-0">
-                    M
-                </div>
-                <div className="bg-muted rounded-lg p-4 w-full">
-                    <p className="font-semibold">MindMate</p>
-                    {morningTasks.length > 0 ? (
-                        <p className="text-muted-foreground">
-                            Good morning! Here are a few tasks to get your day started. Which one will you tackle first?
-                        </p>
-                    ) : (
-                        <p className="text-muted-foreground">
-                            Good morning! You have no tasks scheduled for this morning. Add some tasks to get started.
-                        </p>
-                    )}
-                </div>
-            </div>
-            {morningTasks.length > 0 && (
-                 <ScrollArea className="h-96 pr-4">
-                    <div className="space-y-4">
-                        {morningTasks.map(task => (
-                            <TaskItem key={task.id} task={task} />
-                        ))}
-                    </div>
-                </ScrollArea>
-            )}
-        </div>
-    )
+interface Message {
+    role: 'user' | 'assistant';
+    content: string;
 }
-
-
-function EveningCheckin() {
-  const { addAccomplishment, accomplishments } = useTasks();
-  const [todayLog, setTodayLog] = useState('');
-  const { toast } = useToast();
-
-  const today = new Date().toISOString().split('T')[0];
-  const hasLoggedToday = accomplishments.some(a => a.date === today);
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (todayLog.trim().length > 0) {
-      addAccomplishment(todayLog);
-      setTodayLog('');
-      toast({
-        title: "Accomplishment Saved!",
-        description: "Great job today. See you tomorrow!",
-      });
-    }
-  };
-
-   return (
-    <div className="space-y-6">
-        <div className="flex items-start gap-4">
-            <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center font-bold text-primary shrink-0">
-            M
-            </div>
-            <div className="bg-muted rounded-lg p-4 w-full">
-            <p className="font-semibold">MindMate</p>
-            <p className="text-muted-foreground">
-                Time for our evening check-in. What did you accomplish today?
-            </p>
-            </div>
-        </div>
-        {hasLoggedToday ? (
-            <div className="flex items-start gap-4 justify-end">
-            <div className="bg-primary text-primary-foreground rounded-lg p-4 max-w-md">
-                <p className="font-semibold">You</p>
-                <p className="whitespace-pre-wrap">{accomplishments.find(a => a.date === today)?.content}</p>
-                <p className="text-xs text-right pt-2 opacity-70">Already logged for today. Great work!</p>
-            </div>
-            <div className="w-10 h-10 rounded-full bg-accent flex items-center justify-center font-bold text-accent-foreground shrink-0">
-                Y
-            </div>
-            </div>
-        ) : (
-            <form onSubmit={handleSubmit} className="flex items-start gap-4 justify-end">
-            <div className="w-full space-y-2">
-                <Textarea
-                placeholder="e.g., Finished the report, went for a run, and planned tomorrow's meeting..."
-                value={todayLog}
-                onChange={(e) => setTodayLog(e.target.value)}
-                className="min-h-[100px]"
-                />
-                    <div className="flex justify-end">
-                    <Button type="submit">Log My Wins</Button>
-                </div>
-            </div>
-                <div className="w-10 h-10 rounded-full bg-accent flex items-center justify-center font-bold text-accent-foreground shrink-0">
-                Y
-            </div>
-            </form>
-        )}
-    </div>
-  );
-}
-
 
 export default function ChatPage() {
-    const [timeOfDay, setTimeOfDay] = useState<ReturnType<typeof getCurrentTimeOfDay> | null>(null);
+    const { tasks, isLoading: tasksLoading } = useTasks();
+    const { toast } = useToast();
+    const [messages, setMessages] = useState<Message[]>([
+        { role: 'assistant', content: "Hello! I'm MindMate. How can I help you plan your day?" }
+    ]);
+    const [input, setInput] = useState('');
+    const [isPending, startTransition] = useTransition();
+    const scrollAreaRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
-        setTimeOfDay(getCurrentTimeOfDay());
-    }, []);
+        // Scroll to the bottom when messages change
+        if (scrollAreaRef.current) {
+            scrollAreaRef.current.scrollTo({
+                top: scrollAreaRef.current.scrollHeight,
+                behavior: 'smooth'
+            });
+        }
+    }, [messages]);
 
-    if (!timeOfDay) {
-        return null; // or a loading skeleton
-    }
 
-    const isMorning = timeOfDay === 'Morning';
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!input.trim() || isPending) return;
+
+        const userMessage: Message = { role: 'user', content: input };
+        setMessages(prev => [...prev, userMessage]);
+        setInput('');
+
+        startTransition(async () => {
+            try {
+                // Ensure tasks are serializable and match the Zod schema in the flow
+                const serializableTasks = tasks.map(t => ({
+                    ...t,
+                    description: t.description || "",
+                }));
+
+                const result = await chat({
+                    message: input,
+                    tasks: serializableTasks as Task[],
+                });
+                
+                const assistantMessage: Message = { role: 'assistant', content: result.response };
+                setMessages(prev => [...prev, assistantMessage]);
+
+            } catch (error) {
+                console.error("Chat error:", error);
+                toast({
+                    title: "AI Error",
+                    description: "Sorry, I couldn't get a response. Please try again.",
+                    variant: "destructive",
+                });
+                // Remove the user's message if the API call fails
+                setMessages(prev => prev.slice(0, -1));
+            }
+        });
+    };
 
     return (
-        <div className="container mx-auto max-w-2xl py-8 md:py-16">
-        <Card>
-            <CardHeader>
-            <CardTitle className="text-2xl">{isMorning ? "Morning Kickstart" : "Daily Check-in"}</CardTitle>
-            <CardDescription>
-                {format(new Date(), "eeee, MMMM d")}
-            </CardDescription>
-            </CardHeader>
-            <CardContent>
-                {isMorning ? <MorningCheckin /> : <EveningCheckin />}
-            </CardContent>
-        </Card>
+        <div className="container mx-auto max-w-2xl py-8 md:py-12">
+            <Card className="h-[calc(100vh-12rem)] flex flex-col">
+                <CardHeader>
+                    <CardTitle className="text-2xl">Chat with MindMate</CardTitle>
+                    <CardDescription>Your AI-powered task companion</CardDescription>
+                </CardHeader>
+                <CardContent className="flex-1 flex flex-col gap-4 overflow-hidden">
+                    <ScrollArea className="flex-1 pr-4" ref={scrollAreaRef}>
+                        <div className="space-y-6">
+                            {messages.map((message, index) => (
+                                <div key={index} className={`flex items-start gap-4 ${message.role === 'user' ? 'justify-end' : ''}`}>
+                                    {message.role === 'assistant' && (
+                                        <Avatar className="w-10 h-10 border">
+                                            <AvatarFallback className="bg-primary/20 text-primary font-bold">M</AvatarFallback>
+                                        </Avatar>
+                                    )}
+                                    <div className={`rounded-lg p-3 max-w-md ${message.role === 'user' ? 'bg-primary text-primary-foreground' : 'bg-muted'}`}>
+                                        <p className="whitespace-pre-wrap">{message.content}</p>
+                                    </div>
+                                    {message.role === 'user' && (
+                                        <Avatar className="w-10 h-10 border">
+                                            <AvatarFallback className="bg-accent text-accent-foreground font-bold">Y</AvatarFallback>
+                                        </Avatar>
+                                    )}
+                                </div>
+                            ))}
+                             {isPending && (
+                                <div className="flex items-start gap-4">
+                                     <Avatar className="w-10 h-10 border">
+                                        <AvatarFallback className="bg-primary/20 text-primary font-bold">M</AvatarFallback>
+                                    </Avatar>
+                                    <div className="rounded-lg p-3 max-w-md bg-muted flex items-center">
+                                       <Loader2 className="h-5 w-5 animate-spin"/>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </ScrollArea>
+                    <form onSubmit={handleSubmit} className="flex items-center gap-2 pt-4">
+                        <Input
+                            value={input}
+                            onChange={(e) => setInput(e.target.value)}
+                            placeholder="Ask about your tasks or just say hello..."
+                            disabled={isPending}
+                        />
+                        <Button type="submit" disabled={!input.trim() || isPending}>
+                            <Send className="h-5 w-5" />
+                        </Button>
+                    </form>
+                </CardContent>
+            </Card>
         </div>
     );
 }
