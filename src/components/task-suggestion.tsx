@@ -19,7 +19,7 @@ import { ScrollArea } from "./ui/scroll-area";
 import { rewordTask } from "@/ai/flows/reword-task-flow";
 
 export function TaskSuggestion() {
-  const { tasks, acceptTask, rejectTask, muteTask, updateTask, isLoading: tasksLoading } = useTasks();
+  const { tasks, acceptTask, rejectTask, muteTask, addTask, isLoading: tasksLoading } = useTasks();
   const [currentEnergy, setCurrentEnergy] = useState<EnergyLevel | null>(null);
   const [suggestion, setSuggestion] = useState<{ suggestedTask: Task | null, otherTasks: Task[] }>({ suggestedTask: null, otherTasks: [] });
   const [showAffirmation, setShowAffirmation] = useState(false);
@@ -150,11 +150,22 @@ export function TaskSuggestion() {
 
   const handleAcceptReword = () => {
     if (!suggestedTask || !rewordedSuggestion) return;
-    updateTask(suggestedTask.id, {
-        title: rewordedSuggestion.title,
-        description: rewordedSuggestion.description,
-        duration: 15, // Assume smaller task takes less time
+    
+    // Add the reworded suggestion as a new task
+    addTask({
+      title: rewordedSuggestion.title,
+      description: rewordedSuggestion.description,
+      category: suggestedTask.category, // Inherit category
+      timeOfDay: suggestedTask.timeOfDay, // Inherit time of day
+      energyLevel: 'Low', // New task is 'Low' energy
+      duration: 15, // New task is short
     });
+    
+    toast({
+      title: "New Task Added!",
+      description: `"${rewordedSuggestion.title}" is now on your list.`,
+    });
+
     setShowRewordDialog(false);
     setRewordedSuggestion(null);
   };
