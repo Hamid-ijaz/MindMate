@@ -380,7 +380,7 @@ export function TaskSuggestion() {
         <AlertDialogContent className="max-w-xl">
             <AlertDialogHeader>
                 <AlertDialogTitle className="flex items-center gap-2"><Wand2 className="text-primary"/>Here's a breakdown</AlertDialogTitle>
-                <AlertDialogDescription>
+                <AlertDialogDescription className="break-all">
                    Select which steps you'd like to add as new sub-tasks.
                 </AlertDialogDescription>
             </AlertDialogHeader>
