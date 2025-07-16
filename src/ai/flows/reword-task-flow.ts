@@ -1,9 +1,9 @@
 
 'use server';
 /**
- * @fileOverview An AI flow to reword a task to make it less daunting.
+ * @fileOverview An AI flow to break down a task into smaller, actionable steps.
  *
- * - rewordTask - A function that handles the task rewording process.
+ * - rewordTask - A function that handles the task breakdown process.
  */
 
 import { ai } from '@/ai/genkit';
@@ -16,9 +16,13 @@ const RewordTaskInputSchema = z.object({
 });
 type RewordTaskInput = z.infer<typeof RewordTaskInputSchema>;
 
+const SuggestedTaskSchema = z.object({
+    title: z.string().describe("The title of a smaller, actionable sub-task."),
+    description: z.string().describe("A brief, encouraging description for the sub-task."),
+});
+
 const RewordTaskOutputSchema = z.object({
-  title: z.string().describe('The new, rephrased title for the task that represents a smaller first step.'),
-  description: z.string().describe('A new, encouraging description for the rephrased task.'),
+  suggestedTasks: z.array(SuggestedTaskSchema).describe("A list of 2-4 smaller, concrete steps to break down the original task."),
 });
 type RewordTaskOutput = z.infer<typeof RewordTaskOutputSchema>;
 
@@ -27,7 +31,7 @@ type RewordTaskOutput = z.infer<typeof RewordTaskOutputSchema>;
 export async function rewordTask(input: RewordTaskInput): Promise<RewordTaskOutput> {
   const output = await rewordTaskFlow(input);
   if (!output) {
-      throw new Error("AI failed to generate a suggestion.");
+      throw new Error("AI failed to generate suggestions.");
   }
   return output;
 }
@@ -42,19 +46,18 @@ A user finds the following task intimidating:
 Original Title: {{{title}}}
 Original Description: {{{description}}}
 
-Your job is to rephrase this task into a simple, concrete, and achievable first step.
-The new title should be an action the user can take right now.
-The new description should be short and encouraging.
+Your job is to break this task down into 2-4 simple, concrete, and achievable first steps.
+Each new title should be an action the user can take right now.
+Each new description should be short and encouraging.
 
-For example, if the task is "Write the quarterly report", a good rephrasing would be:
-New Title: "Open a new document and write down 3 bullet points for the report"
-New Description: "Just get the basics down. No need to write the whole thing, just start with a few ideas!"
+For example, if the task is "Write the quarterly report", a good breakdown would be:
+suggestedTasks: [
+    { title: "Create an outline for the report", description: "Just the main sections. Takes about 15 mins." },
+    { title: "Gather the sales data for Q3", description: "Find the relevant numbers you'll need." },
+    { title: "Write the introduction paragraph", description: "Just get the first few sentences down." }
+]
 
-Another example, if the task is "Clean the entire kitchen":
-New Title: "Clear off one counter in the kitchen"
-New Description: "Let's just start with one small surface. It'll only take a few minutes!"
-
-Now, rephrase the user's task.`,
+Now, break down the user's task.`,
 });
 
 const rewordTaskFlow = ai.defineFlow(
