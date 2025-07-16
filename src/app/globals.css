@@ -96,8 +96,10 @@
     @apply bg-background text-foreground;
   }
   /* Custom class for dark mode calendar dropdowns */
-  .dark .rdp-caption_dropdowns .rdp-vhidden,
-  .dark .rdp-caption_dropdowns .rdp-dropdown {
+  .dark .rdp-caption_dropdowns {
     @apply bg-popover text-popover-foreground;
+  }
+  .dark .rdp-caption_dropdowns .rdp-vhidden {
+    @apply hidden;
   }
 }
