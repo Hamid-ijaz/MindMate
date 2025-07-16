@@ -132,7 +132,7 @@ export default function ChatPage() {
                                                             <CardContent className="p-3">
                                                                 <div className="flex items-center justify-between">
                                                                     <div>
-                                                                        <p className="font-semibold">{task.title}</p>
+                                                                        <p className="font-semibold break-all">{task.title}</p>
                                                                         <p className="text-sm text-muted-foreground">{task.description}</p>
                                                                     </div>
                                                                     <Button 

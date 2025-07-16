@@ -45,7 +45,7 @@ export function TaskItem({ task, extraActions, isSubtask = false, isHistoryView 
   return (
     <Card className={isSubtask ? "border-l-4 border-primary/20" : ""}>
       <div className={isSubtask ? "p-3" : "p-6"}>
-        <CardTitle className={`${isSubtask ? "font-semibold text-base" : "text-lg"} ${task.completedAt ? "line-through text-muted-foreground" : ""}`}>{task.title}</CardTitle>
+        <CardTitle className={`${isSubtask ? "font-semibold text-base" : "text-lg"} ${task.completedAt ? "line-through text-muted-foreground" : ""} break-all`}>{task.title}</CardTitle>
         {task.description && <CardDescription className="pt-1">{task.description}</CardDescription>}
         {task.completedAt && isHistoryView && (
             <CardDescription className="text-xs pt-1">

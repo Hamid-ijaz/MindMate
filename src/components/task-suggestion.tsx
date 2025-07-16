@@ -289,7 +289,7 @@ export function TaskSuggestion() {
             </Select>
         </div>
 
-        <CardTitle className="text-2xl pt-2">{suggestion.suggestedTask.title}</CardTitle>
+        <CardTitle className="text-2xl pt-2 break-all">{suggestion.suggestedTask.title}</CardTitle>
         {suggestion.suggestedTask.description && <CardDescription className="pt-2">{suggestion.suggestedTask.description}</CardDescription>}
       </CardHeader>
       <CardContent>
