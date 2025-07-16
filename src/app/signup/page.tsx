@@ -58,7 +58,8 @@ export default function SignupPage() {
     });
     
     if (success) {
-      window.location.href = '/';
+      router.push('/');
+      router.refresh(); // Ensures middleware is re-evaluated
     } else {
       toast({
         title: "Signup Failed",

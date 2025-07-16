@@ -22,8 +22,8 @@ export default function LoginPage() {
     e.preventDefault();
     const success = login(email, password);
     if (success) {
-      // Force a hard redirect to ensure middleware is re-evaluated correctly
-      window.location.href = '/';
+      router.push('/');
+      router.refresh(); // Ensures middleware is re-evaluated
     } else {
       toast({
         title: "Login Failed",
