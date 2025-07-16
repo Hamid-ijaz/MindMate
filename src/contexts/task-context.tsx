@@ -15,6 +15,7 @@ interface TaskContextType {
   acceptTask: (id: string) => void;
   rejectTask: (id: string) => void;
   muteTask: (id: string) => void;
+  uncompleteTask: (id: string) => void;
   addAccomplishment: (content: string) => void;
   isLoading: boolean;
 }
@@ -105,6 +106,17 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
     updateTask(id, { isMuted: true });
   }, [updateTask]);
 
+  const uncompleteTask = useCallback((id: string) => {
+    const task = tasks.find(t => t.id === id);
+    if (task) {
+      updateTask(id, {
+        completedAt: undefined,
+        rejectionCount: 0,
+        lastRejectedAt: undefined,
+      });
+    }
+  }, [tasks, updateTask]);
+
   const addAccomplishment = useCallback((content: string) => {
     const newAccomplishment: Accomplishment = {
       id: new Date().toISOString() + Math.random(),
@@ -115,7 +127,7 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
   }, []);
   
   return (
-    <TaskContext.Provider value={{ tasks, accomplishments, addAccomplishment, addTask, updateTask, deleteTask, acceptTask, rejectTask, muteTask, isLoading: isLoading || authLoading }}>
+    <TaskContext.Provider value={{ tasks, accomplishments, addAccomplishment, addTask, updateTask, deleteTask, acceptTask, rejectTask, muteTask, uncompleteTask, isLoading: isLoading || authLoading }}>
       {children}
     </TaskContext.Provider>
   );

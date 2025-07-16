@@ -11,7 +11,7 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { PlusCircle, List, Trash2, Edit, CheckCircle } from "lucide-react";
+import { PlusCircle, List, Trash2, Edit, CheckCircle, RotateCcw } from "lucide-react";
 import { TaskForm } from "./task-form";
 import { useTasks } from "@/contexts/task-context";
 import { ScrollArea } from "./ui/scroll-area";
@@ -22,7 +22,7 @@ import { format } from "date-fns";
 
 
 export function ManageTasksSheet() {
-  const { tasks, deleteTask } = useTasks();
+  const { tasks, deleteTask, uncompleteTask } = useTasks();
   const [open, setOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<string | null>(null);
 
@@ -120,6 +120,11 @@ export function ManageTasksSheet() {
                             </CardDescription>
                         )}
                         </CardHeader>
+                         <CardFooter className="justify-end">
+                            <Button variant="ghost" size="icon" onClick={() => uncompleteTask(task.id)}>
+                                <RotateCcw className="h-4 w-4" />
+                            </Button>
+                        </CardFooter>
                       </Card>
                   ))
                 )}

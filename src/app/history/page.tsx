@@ -2,15 +2,17 @@
 "use client";
 
 import { useTasks } from '@/contexts/task-context';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { format } from 'date-fns';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { TaskItem } from '@/components/task-item';
+import { Button } from '@/components/ui/button';
+import { RotateCcw } from 'lucide-react';
 
 export default function HistoryPage() {
-  const { tasks } = useTasks();
+  const { tasks, uncompleteTask } = useTasks();
 
   const completedTasks = tasks.filter(t => t.completedAt).sort((a, b) => b.completedAt! - a.completedAt!);
   const uncompletedTasks = tasks.filter(t => !t.completedAt);
@@ -62,6 +64,12 @@ export default function HistoryPage() {
                             <Badge variant="outline">{task.energyLevel} Energy</Badge>
                             <Badge variant="outline">{task.duration} min</Badge>
                         </CardContent>
+                        <CardFooter className="justify-end">
+                            <Button variant="ghost" size="sm" onClick={() => uncompleteTask(task.id)}>
+                                <RotateCcw className="mr-2 h-4 w-4" />
+                                Redo
+                            </Button>
+                        </CardFooter>
                     </Card>
                     ))
                 )}
