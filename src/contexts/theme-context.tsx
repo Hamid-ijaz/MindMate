@@ -3,15 +3,20 @@
 
 import * as React from "react"
 
-type Theme = "dark" | "light" | "system"
+type Mode = "dark" | "light" | "system"
+type Theme = string;
 
 type ThemeProviderState = {
+  mode: Mode
+  setMode: (mode: Mode) => void
   theme: Theme
   setTheme: (theme: Theme) => void
 }
 
 const initialState: ThemeProviderState = {
-  theme: "system",
+  mode: "system",
+  setMode: () => null,
+  theme: "theme-default",
   setTheme: () => null,
 }
 
@@ -19,48 +24,75 @@ const ThemeProviderContext = React.createContext<ThemeProviderState>(initialStat
 
 interface ThemeProviderProps {
   children: React.ReactNode
+  defaultMode?: Mode
   defaultTheme?: Theme
-  storageKey?: string
+  modeStorageKey?: string
+  themeStorageKey?: string
   enableSystem?: boolean
   attribute?: string
 }
 
+const THEME_CLASSES = ['theme-default', 'theme-ocean', 'theme-forest', 'theme-sunset'];
+
 export function ThemeProvider({
   children,
-  defaultTheme = "system",
-  storageKey = "vite-ui-theme",
+  defaultMode = "system",
+  defaultTheme = "theme-default",
+  modeStorageKey = "vite-ui-mode",
+  themeStorageKey = "vite-ui-theme",
   enableSystem = true,
-  attribute = "class",
   ...props
 }: ThemeProviderProps) {
+  const [mode, setMode] = React.useState<Mode>(() => {
+    if (typeof window === "undefined") return defaultMode;
+    return (localStorage.getItem(modeStorageKey) as Mode) || defaultMode
+  })
+
   const [theme, setTheme] = React.useState<Theme>(() => {
     if (typeof window === "undefined") return defaultTheme;
-    return (localStorage.getItem(storageKey) as Theme) || defaultTheme
+    return (localStorage.getItem(themeStorageKey) as Theme) || defaultTheme
   })
 
   React.useEffect(() => {
     const root = window.document.documentElement
     root.classList.remove("light", "dark")
 
-    if (theme === "system") {
-      const systemTheme = window.matchMedia("(prefers-color-scheme: dark)")
+    if (mode === "system") {
+      const systemMode = window.matchMedia("(prefers-color-scheme: dark)")
         .matches
         ? "dark"
         : "light"
 
-      root.classList.add(systemTheme)
-      return
+      root.classList.add(systemMode)
+    } else {
+        root.classList.add(mode)
+    }
+    
+  }, [mode])
+
+  React.useEffect(() => {
+    const root = window.document.documentElement;
+    
+    // Remove all possible theme classes
+    root.classList.remove(...THEME_CLASSES);
+
+    if (theme) {
+      root.classList.add(theme);
     }
 
-    root.classList.add(theme)
-  }, [theme])
+  }, [theme]);
 
   const value = {
-    theme,
-    setTheme: (theme: Theme) => {
-      localStorage.setItem(storageKey, theme)
-      setTheme(theme)
+    mode,
+    setMode: (newMode: Mode) => {
+      localStorage.setItem(modeStorageKey, newMode)
+      setMode(newMode)
     },
+    theme,
+    setTheme: (newTheme: Theme) => {
+        localStorage.setItem(themeStorageKey, newTheme)
+        setTheme(newTheme)
+    }
   }
 
   return (

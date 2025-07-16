@@ -9,7 +9,7 @@ import { useAuth } from '@/contexts/auth-context';
 import { Button } from './ui/button';
 import { Skeleton } from './ui/skeleton';
 import { MessageSquare, ListChecks, HomeIcon, ListTodo } from 'lucide-react';
-import { ThemeToggle } from './theme-toggle';
+import { ThemePicker } from './theme-picker';
 
 export function Header() {
   const pathname = usePathname();
@@ -63,13 +63,13 @@ export function Header() {
                 </Link>
               </Button>
               <ManageTasksSheet />
-              <ThemeToggle />
+              <ThemePicker />
               <Button variant="ghost" size="sm" onClick={handleLogout}>Logout</Button>
             </>
           ) : (
              !isAuthPage && (
                 <>
-                    <ThemeToggle />
+                    <ThemePicker />
                     <Button asChild>
                         <Link href="/login">Login</Link>
                     </Button>
