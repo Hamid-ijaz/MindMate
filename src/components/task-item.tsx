@@ -7,7 +7,7 @@ import { useTasks } from '@/contexts/task-context';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Check, Edit, Trash2, ChevronDown, ChevronUp } from 'lucide-react';
+import { Check, Edit, Trash2, ChevronDown, ChevronUp, RotateCcw } from 'lucide-react';
 import { TaskForm } from './task-form';
 import { SubtaskList } from './subtask-list';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
@@ -16,10 +16,11 @@ interface TaskItemProps {
   task: Task;
   extraActions?: React.ReactNode;
   isSubtask?: boolean;
+  isHistoryView?: boolean;
 }
 
-export function TaskItem({ task, extraActions, isSubtask = false }: TaskItemProps) {
-  const { tasks, deleteTask, acceptTask } = useTasks();
+export function TaskItem({ task, extraActions, isSubtask = false, isHistoryView = false }: TaskItemProps) {
+  const { tasks, deleteTask, acceptTask, uncompleteTask } = useTasks();
   const [isEditing, setIsEditing] = useState(false);
   const [showSubtasks, setShowSubtasks] = useState(false);
 
@@ -48,13 +49,25 @@ export function TaskItem({ task, extraActions, isSubtask = false }: TaskItemProp
     </Button>
   );
 
+  const RedoButton = () => (
+     <Button variant="ghost" size="sm" onClick={() => uncompleteTask(task.id)}>
+        <RotateCcw className="mr-2 h-4 w-4" />
+        Redo
+    </Button>
+  );
+
   return (
     <Card className={isSubtask ? "border-l-4 border-primary/20" : ""}>
       <div className={isSubtask ? "p-3" : "p-6"}>
-        <CardTitle className={isSubtask ? "font-semibold text-base" : "text-lg"}>{task.title}</CardTitle>
+        <CardTitle className={`${isSubtask ? "font-semibold text-base" : "text-lg"} ${task.completedAt ? "line-through text-muted-foreground" : ""}`}>{task.title}</CardTitle>
         {task.description && <CardDescription className="pt-1">{task.description}</CardDescription>}
+        {task.completedAt && isHistoryView && (
+            <CardDescription className="text-xs pt-1">
+                Completed
+            </CardDescription>
+        )}
       </div>
-       {!task.completedAt && (
+       {!isHistoryView && (
         <>
             <CardContent className={`flex flex-wrap gap-2 ${isSubtask ? 'px-3 pt-0 pb-2' : 'p-6 pt-0'}`}>
                 <Badge variant="secondary">{task.category}</Badge>
@@ -71,24 +84,18 @@ export function TaskItem({ task, extraActions, isSubtask = false }: TaskItemProp
                 </Button>
                 )}
                 
-                {hasPendingSubtasks ? (
+                {!hasPendingSubtasks && !isSubtask && <CompleteButton />}
+                {hasPendingSubtasks && !isSubtask && (
                   <TooltipProvider>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <span tabIndex={0}>
-                          <Button variant="outline" size="sm" disabled>
-                            <Check className="h-4 w-4 mr-2" />
-                            Complete
-                          </Button>
-                        </span>
+                        <span tabIndex={0}><CompleteButton /></span>
                       </TooltipTrigger>
                       <TooltipContent>
                         <p>Complete all sub-tasks first.</p>
                       </TooltipContent>
                     </Tooltip>
                   </TooltipProvider>
-                ) : (
-                  !isSubtask && <CompleteButton />
                 )}
                 
                 {isSubtask && <CompleteButton />}
@@ -102,7 +109,12 @@ export function TaskItem({ task, extraActions, isSubtask = false }: TaskItemProp
             </CardFooter>
         </>
        )}
-      {showSubtasks && !isSubtask && (
+       {isHistoryView && (
+            <CardFooter className={`flex justify-end gap-2 ${isSubtask ? 'px-3 pb-3 pt-0' : 'p-6 pt-0'}`}>
+                <RedoButton />
+            </CardFooter>
+       )}
+      {showSubtasks && !isSubtask && !isHistoryView && (
         <CardContent>
             <SubtaskList parentTask={task} subtasks={subtasks} />
         </CardContent>

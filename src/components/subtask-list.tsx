@@ -23,12 +23,13 @@ export function SubtaskList({ parentTask, subtasks, isHistoryView = false }: Sub
     setIsAdding(false);
   };
   
+  // In history view, show all associated subtasks. Otherwise, show only pending ones.
   const subtasksToDisplay = isHistoryView ? subtasks : subtasks.filter(st => !st.completedAt);
 
   return (
     <div className="pl-4 border-l-2 border-muted-foreground/20 space-y-3">
         {subtasksToDisplay.map(subtask => (
-            <TaskItem key={subtask.id} task={subtask} isSubtask />
+            <TaskItem key={subtask.id} task={subtask} isSubtask isHistoryView={isHistoryView} />
         ))}
 
         {!isHistoryView && isAdding && (
@@ -45,6 +46,12 @@ export function SubtaskList({ parentTask, subtasks, isHistoryView = false }: Sub
                     />
                 </CardContent>
             </Card>
+        )}
+
+        {!isHistoryView && !isAdding && subtasksToDisplay.length < subtasks.length && (
+            <p className="text-xs text-muted-foreground italic">
+                {subtasks.length - subtasksToDisplay.length} completed sub-task(s) are hidden.
+            </p>
         )}
 
         {!isHistoryView && !isAdding && (
