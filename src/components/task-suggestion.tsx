@@ -18,6 +18,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "./
 import { ScrollArea } from "./ui/scroll-area";
 import { rewordTask } from "@/ai/flows/reword-task-flow";
 import { getCurrentTimeOfDay } from "@/lib/utils";
+import { TaskItem } from "./task-item";
 
 const getDefaultEnergyLevel = (): EnergyLevel => {
     const timeOfDay = getCurrentTimeOfDay();
@@ -201,24 +202,54 @@ export function TaskSuggestion() {
       </Card>
     );
   }
+  
+  const uncompletedTasks = tasks.filter(t => !t.completedAt && !t.isMuted);
+  const otherVisibleTasks = otherTasks.filter(t => !t.completedAt && !t.isMuted && t.id !== suggestedTask?.id);
 
-  if (!suggestedTask) {
+  if (!suggestedTask && uncompletedTasks.length === 0) {
     return (
         <div className="w-full max-w-lg mx-auto">
           <Card >
              <CardContent className="p-6 text-center flex flex-col items-center justify-center h-80">
                 <Check className="w-16 h-16 text-green-500" />
                 <p className="mt-4 text-xl font-semibold">All clear!</p>
-                <p className="text-muted-foreground mt-2">There are no tasks matching your current state. Enjoy your break or add a new task.</p>
+                <p className="text-muted-foreground mt-2">There are no pending tasks. Enjoy your break or add a new one.</p>
                 <div className="mt-6">
                     <ManageTasksSheet />
                 </div>
             </CardContent>
           </Card>
-           {otherTasks && otherTasks.length > 0 && <OtherTasksList tasks={otherTasks} />}
         </div>
     )
   }
+
+  if (!suggestedTask) {
+    return (
+        <div className="w-full max-w-lg mx-auto">
+             <Card>
+                <CardContent className="p-6 text-center flex flex-col items-center justify-center h-80">
+                    <AlertCircle className="w-16 h-16 text-primary" />
+                    <p className="mt-4 text-xl font-semibold">No matching tasks</p>
+                    <p className="text-muted-foreground mt-2">No tasks match your current energy level. Try a different energy level or see other available tasks below.</p>
+                     <div className="mt-4">
+                        <Select onValueChange={(value: EnergyLevel) => setCurrentEnergy(value)} value={currentEnergy || undefined}>
+                            <SelectTrigger className="w-auto">
+                                <SelectValue placeholder="Energy..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="Low">Low Energy</SelectItem>
+                                <SelectItem value="Medium">Medium Energy</SelectItem>
+                                <SelectItem value="High">High Energy</SelectItem>
+                            </SelectContent>
+                        </Select>
+                     </div>
+                </CardContent>
+            </Card>
+           {otherVisibleTasks && otherVisibleTasks.length > 0 && <OtherTasksList tasks={otherVisibleTasks} />}
+        </div>
+    )
+  }
+
 
   return (
     <div className="w-full max-w-lg mx-auto">
@@ -277,7 +308,7 @@ export function TaskSuggestion() {
       </CardFooter>
     </Card>
 
-    {otherTasks && otherTasks.length > 0 && <OtherTasksList tasks={otherTasks} />}
+    {otherVisibleTasks && otherVisibleTasks.length > 0 && <OtherTasksList tasks={otherVisibleTasks} />}
     
     <AlertDialog open={showRejectionPrompt} onOpenChange={setShowRejectionPrompt}>
         <AlertDialogContent>
@@ -332,16 +363,7 @@ function OtherTasksList({ tasks }: { tasks: Task[] }) {
                     <ScrollArea className="h-64 pr-4">
                         <div className="space-y-3">
                             {tasks.map(task => (
-                                <Card key={task.id} className="bg-secondary/50">
-                                    <CardContent className="p-3">
-                                        <p className="font-semibold">{task.title}</p>
-                                        <div className="flex flex-wrap gap-2 mt-2">
-                                            <Badge variant="secondary">{task.category}</Badge>
-                                            <Badge variant="secondary">{task.energyLevel}</Badge>
-                                            <Badge variant="secondary">{task.duration}m</Badge>
-                                        </div>
-                                    </CardContent>
-                                </Card>
+                                <TaskItem key={task.id} task={task} />
                             ))}
                         </div>
                     </ScrollArea>

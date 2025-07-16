@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { format } from 'date-fns';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
+import { TaskItem } from '@/components/task-item';
 
 export default function HistoryPage() {
   const { tasks } = useTasks();
@@ -30,16 +31,7 @@ export default function HistoryPage() {
                 <p className="text-muted-foreground">No pending tasks. Great job!</p>
               ) : (
                 uncompletedTasks.map(task => (
-                  <Card key={task.id}>
-                    <CardHeader>
-                      <CardTitle className="text-xl">{task.title}</CardTitle>
-                    </CardHeader>
-                    <CardContent className="flex flex-wrap gap-2">
-                      <Badge variant="secondary">{task.category}</Badge>
-                      <Badge variant="secondary">{task.energyLevel} Energy</Badge>
-                      <Badge variant="secondary">{task.duration} min</Badge>
-                    </CardContent>
-                  </Card>
+                  <TaskItem key={task.id} task={task} />
                 ))
               )}
             </div>
