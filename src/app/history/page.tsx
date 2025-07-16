@@ -52,7 +52,7 @@ export default function HistoryPage() {
                 Part of: <Link href="/pending" className="font-semibold hover:underline ml-1">{parentTask.title}</Link>
              </CardDescription>
           )}
-          <CardTitle className="text-xl line-through">{task.title}</CardTitle>
+          <CardTitle className="text-xl line-through break-all">{task.title}</CardTitle>
           {task.completedAt && (
               <CardDescription>
               Completed on: {format(new Date(task.completedAt), "MMMM d, yyyy 'at' h:mm a")}
