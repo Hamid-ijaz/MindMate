@@ -5,6 +5,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback, Rea
 import type { Task, Accomplishment } from '@/lib/types';
 import { LOCAL_STORAGE_KEY } from '@/lib/constants';
 import { useAuth } from './auth-context';
+import { useToast } from '@/hooks/use-toast';
 
 interface TaskContextType {
   tasks: Task[];
@@ -42,6 +43,7 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [accomplishments, setAccomplishments] = useState<Accomplishment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const { toast } = useToast();
 
   useEffect(() => {
     if (!authLoading) {
@@ -90,8 +92,20 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
   }, []);
   
   const acceptTask = useCallback((id: string) => {
+    const subtasks = tasks.filter(t => t.parentId === id);
+    const pendingSubtasks = subtasks.filter(t => !t.completedAt);
+
+    if (pendingSubtasks.length > 0) {
+      toast({
+        title: "Cannot Complete Task",
+        description: "Please complete all sub-tasks before marking the parent task as done.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     updateTask(id, { completedAt: Date.now() });
-  }, [updateTask]);
+  }, [tasks, updateTask, toast]);
 
   const rejectTask = useCallback((id: string) => {
     const task = tasks.find(t => t.id === id);
@@ -110,13 +124,21 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
   const uncompleteTask = useCallback((id: string) => {
     const task = tasks.find(t => t.id === id);
     if (task) {
-      updateTask(id, {
-        completedAt: undefined,
-        rejectionCount: 0,
-        lastRejectedAt: undefined,
-      });
+      // Also un-complete all children
+      const childrenIds = tasks.filter(t => t.parentId === id).map(t => t.id);
+      setTasks(prev => prev.map(t => {
+        if (t.id === id || childrenIds.includes(t.id)) {
+          return {
+            ...t,
+            completedAt: undefined,
+            rejectionCount: 0,
+            lastRejectedAt: undefined,
+          };
+        }
+        return t;
+      }));
     }
-  }, [tasks, updateTask]);
+  }, [tasks]);
 
   const addAccomplishment = useCallback((content: string) => {
     const newAccomplishment: Accomplishment = {

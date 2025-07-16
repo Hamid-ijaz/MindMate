@@ -13,25 +13,25 @@ import { Card, CardContent } from './ui/card';
 interface SubtaskListProps {
   parentTask: Task;
   subtasks: Task[];
+  isHistoryView?: boolean;
 }
 
-export function SubtaskList({ parentTask, subtasks }: SubtaskListProps) {
+export function SubtaskList({ parentTask, subtasks, isHistoryView = false }: SubtaskListProps) {
   const [isAdding, setIsAdding] = useState(false);
-  const { addTask } = useTasks();
 
   const handleFormFinish = () => {
     setIsAdding(false);
   };
   
-  const pendingSubtasks = subtasks.filter(st => !st.completedAt);
+  const subtasksToDisplay = isHistoryView ? subtasks : subtasks.filter(st => !st.completedAt);
 
   return (
     <div className="pl-4 border-l-2 border-muted-foreground/20 space-y-3">
-        {pendingSubtasks.map(subtask => (
+        {subtasksToDisplay.map(subtask => (
             <TaskItem key={subtask.id} task={subtask} isSubtask />
         ))}
 
-        {isAdding && (
+        {!isHistoryView && isAdding && (
              <Card className="bg-secondary">
                 <CardContent className="p-4">
                     <h3 className="text-sm font-semibold mb-2">New Sub-task for "{parentTask.title}"</h3>
@@ -47,7 +47,7 @@ export function SubtaskList({ parentTask, subtasks }: SubtaskListProps) {
             </Card>
         )}
 
-        {!isAdding && (
+        {!isHistoryView && !isAdding && (
             <Button variant="ghost" size="sm" onClick={() => setIsAdding(true)}>
                 <PlusCircle className="mr-2 h-4 w-4" />
                 Add Sub-task

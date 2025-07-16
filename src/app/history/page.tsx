@@ -7,12 +7,23 @@ import { Badge } from '@/components/ui/badge';
 import { format } from 'date-fns';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
-import { RotateCcw } from 'lucide-react';
+import { RotateCcw, ChevronDown, ChevronUp } from 'lucide-react';
+import { SubtaskList } from '@/components/subtask-list';
+import { useState } from 'react';
 
 export default function HistoryPage() {
   const { tasks, uncompleteTask } = useTasks();
+  const [expandedTasks, setExpandedTasks] = useState<Record<string, boolean>>({});
 
-  const completedTasks = tasks.filter(t => t.completedAt).sort((a, b) => b.completedAt! - a.completedAt!);
+  const completedRootTasks = tasks.filter(t => t.completedAt && !t.parentId).sort((a, b) => b.completedAt! - a.completedAt!);
+
+  const getSubtasks = (parentId: string) => {
+    return tasks.filter(t => t.parentId === parentId);
+  }
+
+  const toggleExpand = (taskId: string) => {
+    setExpandedTasks(prev => ({...prev, [taskId]: !prev[taskId]}));
+  }
 
   return (
     <div className="container mx-auto max-w-4xl py-8 md:py-16">
@@ -23,35 +34,50 @@ export default function HistoryPage() {
       
       <div className="space-y-12">
         <div>
-            <h2 className="text-2xl font-semibold mb-4">Completed ({completedTasks.length})</h2>
+            <h2 className="text-2xl font-semibold mb-4">Completed ({completedRootTasks.length})</h2>
             <ScrollArea className="h-[calc(100vh-20rem)] pr-4">
                  <div className="space-y-4">
-                {completedTasks.length === 0 ? (
+                {completedRootTasks.length === 0 ? (
                     <p className="text-muted-foreground">You haven't completed any tasks yet.</p>
                 ) : (
-                    completedTasks.map(task => (
-                    <Card key={task.id} className="bg-secondary/50 opacity-80">
-                        <CardHeader>
-                        <CardTitle className="text-xl line-through">{task.title}</CardTitle>
-                        {task.completedAt && (
-                            <CardDescription>
-                            Completed on: {format(new Date(task.completedAt), "MMMM d, yyyy 'at' h:mm a")}
-                            </CardDescription>
-                        )}
-                        </CardHeader>
-                        <CardContent className="flex flex-wrap gap-2">
-                            <Badge variant="outline">{task.category}</Badge>
-                            <Badge variant="outline">{task.energyLevel} Energy</Badge>
-                            <Badge variant="outline">{task.duration} min</Badge>
-                        </CardContent>
-                        <CardFooter className="justify-end">
-                            <Button variant="ghost" size="sm" onClick={() => uncompleteTask(task.id)}>
-                                <RotateCcw className="mr-2 h-4 w-4" />
-                                Redo
-                            </Button>
-                        </CardFooter>
-                    </Card>
-                    ))
+                    completedRootTasks.map(task => {
+                      const subtasks = getSubtasks(task.id);
+                      const isExpanded = expandedTasks[task.id];
+                      return (
+                        <Card key={task.id} className="bg-card/50 opacity-80">
+                          <CardHeader>
+                            <CardTitle className="text-xl line-through">{task.title}</CardTitle>
+                            {task.completedAt && (
+                                <CardDescription>
+                                Completed on: {format(new Date(task.completedAt), "MMMM d, yyyy 'at' h:mm a")}
+                                </CardDescription>
+                            )}
+                          </CardHeader>
+                          <CardContent className="flex flex-wrap gap-2">
+                              <Badge variant="outline">{task.category}</Badge>
+                              <Badge variant="outline">{task.energyLevel} Energy</Badge>
+                              <Badge variant="outline">{task.duration} min</Badge>
+                          </CardContent>
+                          <CardFooter className="justify-end gap-2">
+                              {subtasks.length > 0 && (
+                                <Button variant="ghost" size="sm" onClick={() => toggleExpand(task.id)}>
+                                  {isExpanded ? <ChevronUp className="h-4 w-4 mr-2" /> : <ChevronDown className="h-4 w-4 mr-2" />}
+                                  Subtasks ({subtasks.length})
+                                </Button>
+                              )}
+                              <Button variant="ghost" size="sm" onClick={() => uncompleteTask(task.id)}>
+                                  <RotateCcw className="mr-2 h-4 w-4" />
+                                  Redo
+                              </Button>
+                          </CardFooter>
+                          {isExpanded && subtasks.length > 0 && (
+                            <CardContent>
+                              <SubtaskList parentTask={task} subtasks={subtasks} isHistoryView={true} />
+                            </CardContent>
+                          )}
+                        </Card>
+                      )
+                    })
                 )}
                 </div>
             </ScrollArea>
