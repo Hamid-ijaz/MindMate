@@ -10,7 +10,6 @@ import { useAuth } from "@/contexts/auth-context";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -59,7 +58,7 @@ export default function SignupPage() {
     
     if (success) {
       router.push('/');
-      router.refresh(); // Ensures middleware is re-evaluated
+      router.refresh(); 
     } else {
       toast({
         title: "Signup Failed",
@@ -138,7 +137,7 @@ export default function SignupPage() {
                     control={form.control}
                     name="dob"
                     render={({ field }) => (
-                        <FormItem className="flex flex-col">
+                        <FormItem className="flex flex-col pt-2">
                         <FormLabel>Date of Birth (Optional)</FormLabel>
                         <Popover>
                             <PopoverTrigger asChild>
@@ -162,6 +161,9 @@ export default function SignupPage() {
                             <PopoverContent className="w-auto p-0" align="start">
                             <Calendar
                                 mode="single"
+                                captionLayout="dropdown-buttons"
+                                fromYear={1920}
+                                toYear={new Date().getFullYear()}
                                 selected={field.value}
                                 onSelect={field.onChange}
                                 disabled={(date) =>
@@ -194,15 +196,15 @@ export default function SignupPage() {
               <Button type="submit" className="w-full">
                 Sign Up
               </Button>
-              <p className="text-sm text-muted-foreground">
-                Already have an account?{" "}
-                <Link href="/login" className="text-primary hover:underline">
-                  Log In
-                </Link>
-              </p>
             </CardFooter>
           </form>
         </Form>
+        <p className="text-sm text-center pb-6 text-muted-foreground">
+          Already have an account?{" "}
+          <Link href="/login" className="text-primary hover:underline">
+            Log In
+          </Link>
+        </p>
       </Card>
     </div>
   );
