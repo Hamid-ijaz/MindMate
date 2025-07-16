@@ -30,7 +30,11 @@ export interface Task {
 }
 
 export interface User {
+  firstName: string;
+  lastName: string;
   email: string;
+  phone?: string;
+  dob?: string;
   password?: string; // In a real app, this would be a hash
 }
 

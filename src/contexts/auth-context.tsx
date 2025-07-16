@@ -5,12 +5,14 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import type { User } from '@/lib/types';
 import Cookies from 'js-cookie';
 
+type SignupData = Omit<User, 'password'> & { password?: string };
+
 interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
   loading: boolean;
   login: (email: string, password: string) => boolean;
-  signup: (email: string, password: string) => boolean;
+  signup: (userData: SignupData) => boolean;
   logout: () => void;
 }
 
@@ -66,12 +68,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return false;
   };
 
-  const signup = (email: string, password: string): boolean => {
+  const signup = (userData: SignupData): boolean => {
     const users = getStoredUsers();
-    if (users.find(u => u.email === email)) {
+    if (users.find(u => u.email === userData.email)) {
       return false; // User already exists
     }
-    const newUser: User = { email, password };
+    const newUser: User = { ...userData };
     const updatedUsers = [...users, newUser];
     setStoredUsers(updatedUsers);
     setUser(newUser);

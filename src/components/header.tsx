@@ -37,7 +37,7 @@ export function Header() {
               <Skeleton className="h-8 w-24" />
           ) : isAuthenticated ? (
             <>
-              <span className="text-sm text-muted-foreground hidden sm:inline">Welcome, {user?.email}</span>
+              <span className="text-sm text-muted-foreground hidden sm:inline">Welcome, {user?.firstName}</span>
                <Button variant="outline" size="sm" asChild>
                 <Link href="/">
                   <HomeIcon className="mr-0 sm:mr-2 h-4 w-4" />
