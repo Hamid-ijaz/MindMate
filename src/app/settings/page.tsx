@@ -14,6 +14,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Trash2, PlusCircle } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useEffect } from "react";
 
 const profileSchema = z.object({
   firstName: z.string().min(2, "First name is required"),
@@ -80,20 +81,40 @@ export default function SettingsPage() {
 
   const profileForm = useForm<z.infer<typeof profileSchema>>({
     resolver: zodResolver(profileSchema),
-    values: {
-      firstName: user?.firstName || "",
-      lastName: user?.lastName || "",
-      email: user?.email || "",
+    defaultValues: {
+      firstName: "",
+      lastName: "",
+      email: "",
     },
   });
 
   const taskSettingsForm = useForm<z.infer<typeof taskSettingsSchema>>({
       resolver: zodResolver(taskSettingsSchema),
-      values: {
-          categories: taskCategories.map(c => ({ value: c })),
-          durations: taskDurations.map(d => ({ value: d })),
+      defaultValues: {
+          categories: [],
+          durations: [],
       }
   });
+  
+  useEffect(() => {
+    if (!isLoading && user) {
+        profileForm.reset({
+          firstName: user.firstName,
+          lastName: user.lastName,
+          email: user.email,
+        });
+    }
+  }, [isLoading, user, profileForm]);
+
+  useEffect(() => {
+     if (!isLoading) {
+        taskSettingsForm.reset({
+          categories: taskCategories.map(c => ({ value: c })),
+          durations: taskDurations.map(d => ({ value: d })),
+        });
+     }
+  }, [isLoading, taskCategories, taskDurations, taskSettingsForm]);
+
 
   const { fields: categoryFields, append: appendCategory, remove: removeCategory } = useFieldArray({
       control: taskSettingsForm.control,
@@ -129,19 +150,6 @@ export default function SettingsPage() {
     toast({ title: "Task Settings Saved", description: "Your custom categories and durations have been updated." });
   };
   
-  // Resets the form with the latest user data when loading is complete.
-  if (!isLoading && user) {
-      profileForm.reset({
-        firstName: user.firstName,
-        lastName: user.lastName,
-        email: user.email,
-      });
-      taskSettingsForm.reset({
-        categories: taskCategories.map(c => ({ value: c })),
-        durations: taskDurations.map(d => ({ value: d })),
-      });
-  }
-
   return (
     <div className="container mx-auto max-w-4xl py-8 md:py-12">
       <div className="mb-8">
