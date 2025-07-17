@@ -24,7 +24,7 @@ export function Header() {
 
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div className="container flex h-16 items-center">
+      <div className="container flex h-16 items-center px-4 md:px-6">
 
         <div className="flex items-center gap-2 md:gap-6">
           <Link href="/">
@@ -41,25 +41,25 @@ export function Header() {
                      <Button variant="ghost" size="sm" asChild>
                         <Link href="/">
                         <HomeIcon className="mr-2 h-4 w-4" />
-                        Home
+                        <span className="hidden sm:inline">Home</span>
                         </Link>
                     </Button>
                     <Button variant="ghost" size="sm" asChild>
                         <Link href="/chat">
                         <MessageSquare className="mr-2 h-4 w-4" />
-                        Check-in
+                        <span className="hidden sm:inline">Check-in</span>
                         </Link>
                     </Button>
                     <Button variant="ghost" size="sm" asChild>
                         <Link href="/pending">
                         <ListTodo className="mr-2 h-4 w-4" />
-                        Pending
+                        <span className="hidden sm:inline">Pending</span>
                         </Link>
                     </Button>
                     <Button variant="ghost" size="sm" asChild>
                         <Link href="/history">
                         <ListChecks className="mr-2 h-4 w-4" />
-                        Completed
+                        <span className="hidden sm:inline">Completed</span>
                         </Link>
                     </Button>
                 </div>
