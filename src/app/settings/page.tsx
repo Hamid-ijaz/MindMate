@@ -129,7 +129,7 @@ export default function SettingsPage() {
   });
 
 
-  const onProfileSubmit = async (data: z.infer<typeof profileSchema>>) => {
+  const onProfileSubmit = async (data: z.infer<typeof profileSchema>) => {
     try {
       await updateUser(data);
       toast({ title: "Profile Updated", description: "Your information has been saved." });
@@ -310,3 +310,5 @@ export default function SettingsPage() {
     </div>
   );
 }
+
+    
