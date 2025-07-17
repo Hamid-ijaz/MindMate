@@ -11,10 +11,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useToast } from "@/hooks/use-toast";
-import { Trash2, PlusCircle } from "lucide-react";
+import { Trash2, PlusCircle, Bell, BellOff } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useEffect } from "react";
+import { useNotifications } from "@/contexts/notification-context";
 
 const profileSchema = z.object({
   firstName: z.string().min(2, "First name is required"),
@@ -76,6 +77,7 @@ export default function SettingsPage() {
   const { user, updateUser, loading: authLoading } = useAuth();
   const { toast } = useToast();
   const { taskCategories, setTaskCategories, taskDurations, setTaskDurations, isLoading: tasksLoading } = useTasks();
+  const { permission, requestPermission } = useNotifications();
 
   const isLoading = authLoading || tasksLoading;
 
@@ -127,7 +129,7 @@ export default function SettingsPage() {
   });
 
 
-  const onProfileSubmit = async (data: z.infer<typeof profileSchema>) => {
+  const onProfileSubmit = async (data: z.infer<typeof profileSchema>>) => {
     try {
       await updateUser(data);
       toast({ title: "Profile Updated", description: "Your information has been saved." });
@@ -162,54 +164,81 @@ export default function SettingsPage() {
       ) : (
         <div className="grid gap-8">
             <Card>
-            <CardHeader>
-                <CardTitle>My Profile</CardTitle>
-                <CardDescription>Update your personal information.</CardDescription>
-            </CardHeader>
-            <CardContent>
-                <Form {...profileForm}>
-                <form onSubmit={profileForm.handleSubmit(onProfileSubmit)} className="space-y-4">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <FormField
-                        control={profileForm.control}
-                        name="firstName"
-                        render={({ field }) => (
-                            <FormItem>
-                            <FormLabel>First Name</FormLabel>
-                            <FormControl><Input {...field} /></FormControl>
-                            <FormMessage />
-                            </FormItem>
-                        )}
-                        />
-                        <FormField
-                        control={profileForm.control}
-                        name="lastName"
-                        render={({ field }) => (
-                            <FormItem>
-                            <FormLabel>Last Name</FormLabel>
-                            <FormControl><Input {...field} /></FormControl>
-                            <FormMessage />
-                            </FormItem>
-                        )}
-                        />
-                    </div>
-                    <FormField
-                    control={profileForm.control}
-                    name="email"
-                    render={({ field }) => (
-                        <FormItem>
-                        <FormLabel>Email</FormLabel>
-                        <FormControl><Input readOnly disabled {...field} /></FormControl>
-                        <FormMessage />
-                        </FormItem>
-                    )}
-                    />
-                    <div className="flex justify-end">
-                    <Button type="submit">Save Profile</Button>
-                    </div>
-                </form>
-                </Form>
-            </CardContent>
+              <CardHeader>
+                  <CardTitle>My Profile</CardTitle>
+                  <CardDescription>Update your personal information.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                  <Form {...profileForm}>
+                  <form onSubmit={profileForm.handleSubmit(onProfileSubmit)} className="space-y-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <FormField
+                          control={profileForm.control}
+                          name="firstName"
+                          render={({ field }) => (
+                              <FormItem>
+                              <FormLabel>First Name</FormLabel>
+                              <FormControl><Input {...field} /></FormControl>
+                              <FormMessage />
+                              </FormItem>
+                          )}
+                          />
+                          <FormField
+                          control={profileForm.control}
+                          name="lastName"
+                          render={({ field }) => (
+                              <FormItem>
+                              <FormLabel>Last Name</FormLabel>
+                              <FormControl><Input {...field} /></FormControl>
+                              <FormMessage />
+                              </FormItem>
+                          )}
+                          />
+                      </div>
+                      <FormField
+                      control={profileForm.control}
+                      name="email"
+                      render={({ field }) => (
+                          <FormItem>
+                          <FormLabel>Email</FormLabel>
+                          <FormControl><Input readOnly disabled {...field} /></FormControl>
+                          <FormMessage />
+                          </FormItem>
+                      )}
+                      />
+                      <div className="flex justify-end">
+                      <Button type="submit">Save Profile</Button>
+                      </div>
+                  </form>
+                  </Form>
+              </CardContent>
+            </Card>
+            
+            <Card>
+              <CardHeader>
+                <CardTitle>Notifications</CardTitle>
+                <CardDescription>Manage how you receive reminders.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {permission === 'granted' && (
+                  <div className="flex items-center text-sm text-green-600">
+                    <Bell className="mr-2 h-4 w-4" />
+                    <span>Notifications are enabled.</span>
+                  </div>
+                )}
+                 {permission === 'denied' && (
+                  <div className="flex items-center text-sm text-destructive">
+                    <BellOff className="mr-2 h-4 w-4" />
+                    <span>Notifications are blocked. You'll need to enable them in your browser settings.</span>
+                  </div>
+                )}
+                {permission === 'default' && (
+                  <Button onClick={requestPermission}>
+                    <Bell className="mr-2 h-4 w-4" />
+                    Enable Notifications
+                  </Button>
+                )}
+              </CardContent>
             </Card>
 
             <Card>
@@ -281,5 +310,3 @@ export default function SettingsPage() {
     </div>
   );
 }
-
-    

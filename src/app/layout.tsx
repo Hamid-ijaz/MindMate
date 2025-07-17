@@ -8,6 +8,7 @@ import { Toaster } from '@/components/ui/toaster';
 import { ThemeProvider } from '@/contexts/theme-context';
 import { ManageTasksSheet } from '@/components/manage-tasks-sheet';
 import { MobileNav } from '@/components/mobile-nav';
+import { NotificationProvider } from '@/contexts/notification-context';
 
 export const metadata: Metadata = {
   title: 'MindMate',
@@ -29,15 +30,17 @@ export default function RootLayout({
       <body className="font-body antialiased">
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
           <AuthProvider>
-            <TaskProvider>
-              <div className="relative flex min-h-screen flex-col">
-                <Header />
-                <main className="flex-1 pb-16 md:pb-0">{children}</main>
-                <MobileNav />
-              </div>
-              <Toaster />
-              <ManageTasksSheet />
-            </TaskProvider>
+            <NotificationProvider>
+              <TaskProvider>
+                <div className="relative flex min-h-screen flex-col">
+                  <Header />
+                  <main className="flex-1 pb-16 md:pb-0">{children}</main>
+                  <MobileNav />
+                </div>
+                <Toaster />
+                <ManageTasksSheet />
+              </TaskProvider>
+            </NotificationProvider>
           </AuthProvider>
         </ThemeProvider>
       </body>
