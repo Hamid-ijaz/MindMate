@@ -18,7 +18,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "./
 import { ScrollArea } from "./ui/scroll-area";
 import { rewordTask } from '@/ai/flows/reword-task-flow';
 import { getCurrentTimeOfDay } from "@/lib/utils";
-import { TaskItem } from "./task-item";
+import { TaskItem } from "@/components/task-item";
 import { Checkbox } from "./ui/checkbox";
 import { Label } from "./ui/label";
 import { PlusCircle } from "lucide-react";
@@ -438,5 +438,3 @@ function OtherTasksList({ tasks }: { tasks: Task[] }) {
         </Accordion>
     )
 }
-
-    

@@ -4,7 +4,7 @@
 import { useState, useTransition } from 'react';
 import { useTasks } from '@/contexts/task-context';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { TaskItem } from '@/components/ui/task-item';
+import { TaskItem } from '@/components/task-item';
 import { Button } from '@/components/ui/button';
 import { Wand2, Loader2, PlusCircle } from 'lucide-react';
 import { AlertDialog, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
