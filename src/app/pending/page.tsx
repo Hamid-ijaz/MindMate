@@ -4,7 +4,7 @@
 import { useState, useTransition } from 'react';
 import { useTasks } from '@/contexts/task-context';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { TaskItem } from '@/components/task-item';
+import { TaskItem } from '@/components/ui/task-item';
 import { Button } from '@/components/ui/button';
 import { Wand2, Loader2, PlusCircle } from 'lucide-react';
 import { AlertDialog, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
@@ -13,14 +13,36 @@ import { useToast } from '@/hooks/use-toast';
 import type { Task } from '@/lib/types';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
 
 interface SuggestedTask {
   title: string;
   description: string;
 }
 
+function PendingTasksSkeleton() {
+  return (
+    <div className="space-y-4">
+      {[...Array(3)].map((_, i) => (
+         <Card key={i}>
+            <div className="p-6">
+              <Skeleton className="h-6 w-3/4 mb-2" />
+              <Skeleton className="h-4 w-full" />
+            </div>
+            <CardContent className="flex flex-wrap gap-2 pt-0">
+                <Skeleton className="h-6 w-20 rounded-full" />
+                <Skeleton className="h-6 w-24 rounded-full" />
+                <Skeleton className="h-6 w-16 rounded-full" />
+            </CardContent>
+        </Card>
+      ))}
+    </div>
+  )
+}
+
 export default function PendingTasksPage() {
-  const { tasks, addTask } = useTasks();
+  const { tasks, addTask, isLoading } = useTasks();
   const { toast } = useToast();
   const [isPending, startTransition] = useTransition();
   const [showRewordDialog, setShowRewordDialog] = useState(false);
@@ -107,10 +129,12 @@ export default function PendingTasksPage() {
       
       <div className="space-y-12">
         <div>
-          <h2 className="text-2xl font-semibold mb-4">To-Do ({uncompletedTasks.length})</h2>
+          <h2 className="text-2xl font-semibold mb-4">To-Do ({isLoading ? '...' : uncompletedTasks.length})</h2>
           <ScrollArea className="h-[calc(100vh-20rem)] pr-4">
             <div className="space-y-4">
-              {uncompletedTasks.length === 0 ? (
+              {isLoading ? (
+                <PendingTasksSkeleton />
+              ) : uncompletedTasks.length === 0 ? (
                 <p className="text-muted-foreground">No pending tasks. Great job!</p>
               ) : (
                 uncompletedTasks.map(task => (

@@ -12,9 +12,33 @@ import { SubtaskList } from '@/components/subtask-list';
 import { useState } from 'react';
 import type { Task } from '@/lib/types';
 import Link from 'next/link';
+import { Skeleton } from '@/components/ui/skeleton';
+
+function HistorySkeleton() {
+  return (
+    <div className="space-y-4">
+      {[...Array(3)].map((_, i) => (
+        <Card key={i}>
+          <CardHeader>
+            <Skeleton className="h-6 w-3/4" />
+            <Skeleton className="h-4 w-1/2" />
+          </CardHeader>
+          <CardContent className="flex flex-wrap gap-2">
+            <Skeleton className="h-6 w-20 rounded-full" />
+            <Skeleton className="h-6 w-24 rounded-full" />
+            <Skeleton className="h-6 w-16 rounded-full" />
+          </CardContent>
+          <CardFooter className="justify-end gap-2">
+            <Skeleton className="h-9 w-24 rounded-md" />
+          </CardFooter>
+        </Card>
+      ))}
+    </div>
+  );
+}
 
 export default function HistoryPage() {
-  const { tasks, uncompleteTask } = useTasks();
+  const { tasks, uncompleteTask, isLoading } = useTasks();
   const [expandedTasks, setExpandedTasks] = useState<Record<string, boolean>>({});
 
   const allCompletedTasks = tasks.filter(t => t.completedAt).sort((a, b) => b.completedAt! - a.completedAt!);
@@ -94,10 +118,12 @@ export default function HistoryPage() {
       
       <div className="space-y-12">
         <div>
-            <h2 className="text-2xl font-semibold mb-4">History ({allCompletedTasks.length})</h2>
+            <h2 className="text-2xl font-semibold mb-4">History ({isLoading ? '...' : allCompletedTasks.length})</h2>
             <ScrollArea className="h-[calc(100vh-20rem)] pr-4">
                  <div className="space-y-4">
-                {allCompletedTasks.length === 0 ? (
+                {isLoading ? (
+                  <HistorySkeleton />
+                ) : allCompletedTasks.length === 0 ? (
                     <p className="text-muted-foreground">You haven't completed any tasks yet.</p>
                 ) : (
                     allCompletedTasks.map(task => {
