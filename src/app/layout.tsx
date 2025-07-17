@@ -7,6 +7,7 @@ import { Header } from '@/components/header';
 import { Toaster } from '@/components/ui/toaster';
 import { ThemeProvider } from '@/contexts/theme-context';
 import { ManageTasksSheet } from '@/components/manage-tasks-sheet';
+import { MobileNav } from '@/components/mobile-nav';
 
 export const metadata: Metadata = {
   title: 'MindMate',
@@ -31,7 +32,8 @@ export default function RootLayout({
             <TaskProvider>
               <div className="relative flex min-h-screen flex-col">
                 <Header />
-                <main className="flex-1">{children}</main>
+                <main className="flex-1 pb-16 md:pb-0">{children}</main>
+                <MobileNav />
               </div>
               <Toaster />
               <ManageTasksSheet />

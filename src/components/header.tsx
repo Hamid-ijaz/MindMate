@@ -2,7 +2,7 @@
 "use client";
 
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import { Logo } from './logo';
 import { AddTaskButton } from './manage-tasks-sheet';
 import { useAuth } from '@/contexts/auth-context';
@@ -14,7 +14,6 @@ import { ThemePicker } from './theme-picker';
 export function Header() {
   const pathname = usePathname();
   const { isAuthenticated, user, logout, loading } = useAuth();
-  const router = useRouter();
 
   const handleLogout = () => {
     logout();
@@ -25,7 +24,8 @@ export function Header() {
 
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div className="container flex h-16 items-center justify-between">
+      <div className="container flex h-16 items-center">
+
         <div className="flex items-center gap-2 md:gap-6">
           <Link href="/">
             <Logo />
@@ -35,7 +35,7 @@ export function Header() {
            )}
         </div>
         
-        <nav className="hidden md:flex flex-1 justify-center">
+        <nav className="hidden absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 md:flex">
              {isAuthenticated && (
                 <div className="flex items-center gap-2 sm:gap-4">
                      <Button variant="ghost" size="sm" asChild>
@@ -66,17 +66,12 @@ export function Header() {
             )}
         </nav>
 
-        <div className="flex items-center gap-2 sm:gap-4 justify-end">
+        <div className="ml-auto flex items-center gap-2 sm:gap-4">
           {loading ? (
               <Skeleton className="h-8 w-24" />
           ) : isAuthenticated ? (
             <>
-              <div className="md:hidden">
-                <AddTaskButton />
-              </div>
-              <div className="hidden md:flex">
-                 <AddTaskButton />
-              </div>
+              <AddTaskButton />
               <ThemePicker />
               <Button variant="ghost" size="icon" asChild>
                 <Link href="/settings">
@@ -97,34 +92,6 @@ export function Header() {
           )}
         </div>
       </div>
-      
-       {isAuthenticated && (
-         <nav className="md:hidden flex h-16 items-center justify-center border-t">
-            <div className="flex items-center gap-2 sm:gap-4">
-                <Button variant="ghost" size="icon" asChild>
-                    <Link href="/">
-                    <HomeIcon className="h-5 w-5" />
-                    </Link>
-                </Button>
-                <Button variant="ghost" size="icon" asChild>
-                    <Link href="/chat">
-                    <MessageSquare className="h-5 w-5" />
-                    </Link>
-                </Button>
-                <Button variant="ghost" size="icon" asChild>
-                    <Link href="/pending">
-                    <ListTodo className="h-5 w-5" />
-                    </Link>
-                </Button>
-                <Button variant="ghost" size="icon" asChild>
-                    <Link href="/history">
-                    <ListChecks className="h-5 w-5" />
-                    </Link>
-                </Button>
-            </div>
-        </nav>
-      )}
-
     </header>
   );
 }
