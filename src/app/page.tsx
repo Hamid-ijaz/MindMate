@@ -1,3 +1,4 @@
+
 "use client";
 
 import { TaskSuggestion } from "@/components/task-suggestion";
@@ -9,7 +10,7 @@ export default function Home() {
 
   if (loading) {
     return (
-      <div className="container mx-auto max-w-4xl py-8 md:py-16">
+      <div className="container mx-auto max-w-4xl py-8 md:py-16 px-4">
         <div className="flex flex-col items-center text-center">
             <Skeleton className="h-12 w-3/4 mb-4" />
             <Skeleton className="h-6 w-1/2" />
@@ -26,7 +27,7 @@ export default function Home() {
   }
 
   return (
-    <div className="container mx-auto max-w-4xl py-8 md:py-16">
+    <div className="container mx-auto max-w-4xl py-8 md:py-16 px-4">
       <div className="flex flex-col items-center text-center">
         <h1 className="text-3xl font-bold tracking-tighter sm:text-4xl md:text-5xl">
           What will you accomplish next?

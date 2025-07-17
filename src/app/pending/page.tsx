@@ -121,7 +121,7 @@ export default function PendingTasksPage() {
 
 
   return (
-    <div className="container mx-auto max-w-4xl py-8 md:py-16">
+    <div className="container mx-auto max-w-4xl py-8 md:py-16 px-4">
       <div className="mb-8">
         <h1 className="text-3xl font-bold tracking-tighter sm:text-4xl">Pending Tasks</h1>
         <p className="mt-2 text-muted-foreground">Here's what's on your plate. You can do it!</p>

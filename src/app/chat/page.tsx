@@ -104,7 +104,7 @@ export default function ChatPage() {
     };
 
     return (
-        <div className="container mx-auto max-w-2xl py-4 md:py-12">
+        <div className="container mx-auto max-w-2xl py-4 md:py-12 px-4">
             <Card className="h-[calc(100vh-8rem)] md:h-[calc(100vh-12rem)] flex flex-col">
                 <CardHeader>
                     <CardTitle className="text-2xl">Chat with MindMate</CardTitle>

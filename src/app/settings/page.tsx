@@ -140,7 +140,7 @@ export default function SettingsPage() {
     }
   };
 
-  const onTaskSettingsSubmit = (data: z.infer<typeof taskSettingsSchema>) => {
+  const onTaskSettingsSubmit = (data: z.infer<typeof taskSettingsSchema>>) => {
     const newCategories = data.categories.map(c => c.value);
     const newDurations = data.durations.map(d => d.value).sort((a, b) => a - b);
     
@@ -151,7 +151,7 @@ export default function SettingsPage() {
   };
   
   return (
-    <div className="container mx-auto max-w-4xl py-8 md:py-12">
+    <div className="container mx-auto max-w-4xl py-8 md:py-12 px-4">
       <div className="mb-8">
         <h1 className="text-3xl font-bold tracking-tighter sm:text-4xl">Settings</h1>
         <p className="mt-2 text-muted-foreground">Manage your account and application settings.</p>
