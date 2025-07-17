@@ -206,23 +206,25 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
     const task = tasks.find(t => t.id === id);
     if (task) {
       const childrenIds = tasks.filter(t => t.parentId === id).map(t => t.id);
-      
+      const updates = { completedAt: null, rejectionCount: 0, lastRejectedAt: null };
+
       // Update parent task
-      await updateTask(id, { completedAt: undefined, rejectionCount: 0, lastRejectedAt: undefined });
+      await updateTask(id, updates);
       
       // Update children tasks
       for (const childId of childrenIds) {
-        await updateTask(childId, { completedAt: undefined, rejectionCount: 0, lastRejectedAt: undefined });
+        await updateTask(childId, updates);
       }
       
       setTasks(prev => prev.map(t => {
         if (t.id === id || childrenIds.includes(t.id)) {
-          return { ...t, completedAt: undefined, rejectionCount: 0, lastRejectedAt: undefined };
+          return { ...t, ...updates, completedAt: undefined, lastRejectedAt: undefined };
         }
         return t;
       }));
     }
   }, [tasks, updateTask]);
+
 
   const addAccomplishment = useCallback(async (content: string) => {
     if (!user?.email) return;
