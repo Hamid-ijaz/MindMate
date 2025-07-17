@@ -25,8 +25,8 @@ export function Header() {
 
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div className="container flex h-16 max-w-7xl items-center justify-between">
-        <div className="flex items-center gap-6">
+      <div className="container flex h-16 items-center justify-between">
+        <div className="flex items-center gap-2 md:gap-6">
           <Link href="/">
             <Logo />
           </Link>
@@ -35,34 +35,33 @@ export function Header() {
            )}
         </div>
         
-        <nav className="flex-1 flex justify-center">
+        <nav className="hidden md:flex flex-1 justify-center">
              {isAuthenticated && (
                 <div className="flex items-center gap-2 sm:gap-4">
-                     <Button variant="outline" size="sm" asChild>
+                     <Button variant="ghost" size="sm" asChild>
                         <Link href="/">
-                        <HomeIcon className="mr-0 sm:mr-2 h-4 w-4" />
-                        <span className="hidden sm:inline">Home</span>
+                        <HomeIcon className="mr-2 h-4 w-4" />
+                        Home
                         </Link>
                     </Button>
-                    <Button variant="outline" size="sm" asChild>
+                    <Button variant="ghost" size="sm" asChild>
                         <Link href="/chat">
-                        <MessageSquare className="mr-0 sm:mr-2 h-4 w-4" />
-                        <span className="hidden sm:inline">Check-in</span>
+                        <MessageSquare className="mr-2 h-4 w-4" />
+                        Check-in
                         </Link>
                     </Button>
-                    <Button variant="outline" size="sm" asChild>
+                    <Button variant="ghost" size="sm" asChild>
                         <Link href="/pending">
-                        <ListTodo className="mr-0 sm:mr-2 h-4 w-4" />
-                        <span className="hidden sm:inline">Pending</span>
+                        <ListTodo className="mr-2 h-4 w-4" />
+                        Pending
                         </Link>
                     </Button>
-                    <Button variant="outline" size="sm" asChild>
+                    <Button variant="ghost" size="sm" asChild>
                         <Link href="/history">
-                        <ListChecks className="mr-0 sm:mr-2 h-4 w-4" />
-                        <span className="hidden sm:inline">Completed</span>
+                        <ListChecks className="mr-2 h-4 w-4" />
+                        Completed
                         </Link>
                     </Button>
-                    <AddTaskButton />
                 </div>
             )}
         </nav>
@@ -72,6 +71,12 @@ export function Header() {
               <Skeleton className="h-8 w-24" />
           ) : isAuthenticated ? (
             <>
+              <div className="md:hidden">
+                <AddTaskButton />
+              </div>
+              <div className="hidden md:flex">
+                 <AddTaskButton />
+              </div>
               <ThemePicker />
               <Button variant="ghost" size="icon" asChild>
                 <Link href="/settings">
@@ -92,6 +97,34 @@ export function Header() {
           )}
         </div>
       </div>
+      
+       {isAuthenticated && (
+         <nav className="md:hidden flex h-16 items-center justify-center border-t">
+            <div className="flex items-center gap-2 sm:gap-4">
+                <Button variant="ghost" size="icon" asChild>
+                    <Link href="/">
+                    <HomeIcon className="h-5 w-5" />
+                    </Link>
+                </Button>
+                <Button variant="ghost" size="icon" asChild>
+                    <Link href="/chat">
+                    <MessageSquare className="h-5 w-5" />
+                    </Link>
+                </Button>
+                <Button variant="ghost" size="icon" asChild>
+                    <Link href="/pending">
+                    <ListTodo className="h-5 w-5" />
+                    </Link>
+                </Button>
+                <Button variant="ghost" size="icon" asChild>
+                    <Link href="/history">
+                    <ListChecks className="h-5 w-5" />
+                    </Link>
+                </Button>
+            </div>
+        </nav>
+      )}
+
     </header>
   );
 }

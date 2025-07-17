@@ -119,7 +119,7 @@ export default function HistoryPage() {
       <div className="space-y-12">
         <div>
             <h2 className="text-2xl font-semibold mb-4">History ({isLoading ? '...' : allCompletedTasks.length})</h2>
-            <ScrollArea className="h-[calc(100vh-20rem)] pr-4">
+            <ScrollArea className="h-[calc(100vh-16rem)] md:h-[calc(100vh-20rem)] pr-4">
                  <div className="space-y-4">
                 {isLoading ? (
                   <HistorySkeleton />

@@ -36,7 +36,7 @@ export default function Home() {
         </p>
       </div>
 
-      <div className="mt-12">
+      <div className="mt-8 md:mt-12 px-4 md:px-0">
         <TaskSuggestion />
       </div>
     </div>

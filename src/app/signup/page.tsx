@@ -81,7 +81,7 @@ export default function SignupPage() {
   };
 
   return (
-    <div className="flex items-center justify-center min-h-[calc(100vh-4rem)] bg-background py-12">
+    <div className="flex items-center justify-center min-h-[calc(100vh-4rem)] bg-background py-12 px-4">
       <Card className="w-full max-w-lg">
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)}>
@@ -90,7 +90,7 @@ export default function SignupPage() {
               <CardDescription>Start your journey with MindMate today.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <FormField
                   control={form.control}
                   name="firstName"
@@ -131,7 +131,7 @@ export default function SignupPage() {
                   </FormItem>
                 )}
               />
-               <div className="grid grid-cols-2 gap-4">
+               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                  <FormField
                     control={form.control}
                     name="phone"

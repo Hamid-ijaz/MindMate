@@ -104,8 +104,8 @@ export default function ChatPage() {
     };
 
     return (
-        <div className="container mx-auto max-w-2xl py-8 md:py-12">
-            <Card className="h-[calc(100vh-12rem)] flex flex-col">
+        <div className="container mx-auto max-w-2xl py-4 md:py-12">
+            <Card className="h-[calc(100vh-8rem)] md:h-[calc(100vh-12rem)] flex flex-col">
                 <CardHeader>
                     <CardTitle className="text-2xl">Chat with MindMate</CardTitle>
                     <CardDescription>Your AI-powered task companion</CardDescription>
@@ -175,7 +175,7 @@ export default function ChatPage() {
                         <Input
                             value={input}
                             onChange={(e) => setInput(e.target.value)}
-                            placeholder="Ask to break down a task, or just say hello..."
+                            placeholder="Ask to break down a task..."
                             disabled={isPending || tasksLoading}
                         />
                         <Button type="submit" disabled={!input.trim() || isPending || tasksLoading}>

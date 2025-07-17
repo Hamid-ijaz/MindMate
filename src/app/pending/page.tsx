@@ -130,7 +130,7 @@ export default function PendingTasksPage() {
       <div className="space-y-12">
         <div>
           <h2 className="text-2xl font-semibold mb-4">To-Do ({isLoading ? '...' : uncompletedTasks.length})</h2>
-          <ScrollArea className="h-[calc(100vh-20rem)] pr-4">
+          <ScrollArea className="h-[calc(100vh-16rem)] md:h-[calc(100vh-20rem)] pr-4">
             <div className="space-y-4">
               {isLoading ? (
                 <PendingTasksSkeleton />
@@ -148,7 +148,8 @@ export default function PendingTasksPage() {
                           ) : (
                               <Wand2 className="mr-2 h-4 w-4" />
                           )}
-                          Divide Task
+                          <span className="hidden sm:inline">Divide Task</span>
+                          <span className="sm:hidden">Divide</span>
                       </Button>
                     }
                   />

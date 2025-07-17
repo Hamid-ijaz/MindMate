@@ -31,7 +31,7 @@ export function ManageTasksSheet() {
   
   return (
     <Sheet open={isSheetOpen} onOpenChange={handleOpenChange}>
-      <SheetContent className="w-full sm:max-w-lg">
+      <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
         <SheetHeader>
           <SheetTitle>{editingTask ? "Edit Task" : "Add a New Task"}</SheetTitle>
         </SheetHeader>
@@ -51,7 +51,8 @@ export function AddTaskButton() {
     return (
         <Button onClick={() => setIsSheetOpen(true)}>
           <PlusCircle className="mr-2 h-4 w-4" />
-          Add Task
+          <span className="hidden sm:inline">Add Task</span>
+          <span className="sm:hidden">Add</span>
         </Button>
     )
 }
