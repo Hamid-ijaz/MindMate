@@ -30,8 +30,8 @@ export function TaskItem({ task, extraActions, isSubtask = false, isHistoryView 
 
   const CompleteButton = () => (
     <Button variant="outline" size="sm" onClick={() => acceptTask(task.id)}>
-      <Check className="h-4 w-4 mr-2" />
-      Complete
+      <Check className="h-4 w-4 md:mr-2" />
+      <span className="hidden md:inline">Complete</span>
     </Button>
   );
 
@@ -61,7 +61,7 @@ export function TaskItem({ task, extraActions, isSubtask = false, isHistoryView 
                 <Badge variant="secondary">{task.duration} min</Badge>
                 <Badge variant="secondary">{task.timeOfDay}</Badge>
             </CardContent>
-            <CardFooter className={`flex justify-end gap-2 ${isSubtask ? 'px-3 pb-3 pt-0' : 'p-6 pt-0'}`}>
+            <CardFooter className={`flex flex-wrap justify-end gap-2 ${isSubtask ? 'px-3 pb-3 pt-0' : 'p-6 pt-0'}`}>
                 {extraActions}
                 {!isSubtask && subtasks.length > 0 && (
                 <Button variant="ghost" size="sm" onClick={() => setShowSubtasks(!showSubtasks)}>

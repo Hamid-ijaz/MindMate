@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useTransition } from 'react';
+import { useState, useTransition, useEffect } from 'react';
 import { useTasks } from '@/contexts/task-context';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { TaskItem } from '@/components/task-item';
@@ -146,10 +146,9 @@ export default function PendingTasksPage() {
                           {isPending && taskToReword?.id === task.id ? (
                               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                           ) : (
-                              <Wand2 className="mr-2 h-4 w-4" />
+                              <Wand2 className="h-4 w-4 md:mr-2" />
                           )}
-                          <span className="hidden sm:inline">Divide Task</span>
-                          <span className="sm:hidden">Divide</span>
+                          <span className="hidden md:inline">Divide Task</span>
                       </Button>
                     }
                   />
