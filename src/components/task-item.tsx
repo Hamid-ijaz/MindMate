@@ -66,7 +66,8 @@ export function TaskItem({ task, extraActions, isSubtask = false, isHistoryView 
                 {!isSubtask && subtasks.length > 0 && (
                 <Button variant="ghost" size="sm" onClick={() => setShowSubtasks(!showSubtasks)}>
                     {showSubtasks ? <ChevronUp className="h-4 w-4 mr-2" /> : <ChevronDown className="h-4 w-4 mr-2" />}
-                    Subtasks ({pendingSubtasks.length})
+                    <span className="hidden md:inline">Subtasks</span>
+                    <span className="md:ml-1">({pendingSubtasks.length})</span>
                 </Button>
                 )}
                 
