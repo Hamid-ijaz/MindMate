@@ -316,16 +316,16 @@ export function TaskSuggestion() {
             </Button>
         </div>
       </CardContent>
-      <CardFooter className="grid grid-cols-3 gap-3 pt-6">
-        <Button variant="destructive" size="lg" onClick={handleReject}>
+      <CardFooter className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-6">
+        <Button variant="destructive" size="lg" onClick={handleReject} className="sm:col-span-1">
           <X className="mr-2 h-5 w-5" /> Not Now
         </Button>
         {hasPendingSubtasks ? (
             <TooltipProvider>
                 <Tooltip>
                     <TooltipTrigger asChild>
-                        <span className="col-span-2" tabIndex={0}>
-                           <Button size="lg" className="w-full col-span-2 bg-green-500 hover:bg-green-600 text-white" disabled>
+                        <span className="sm:col-span-2" tabIndex={0}>
+                           <Button size="lg" className="w-full bg-green-500 hover:bg-green-600 text-white" disabled>
                                 <Check className="mr-2 h-5 w-5" /> Let's Do It
                            </Button>
                         </span>
@@ -336,7 +336,7 @@ export function TaskSuggestion() {
                 </Tooltip>
             </TooltipProvider>
         ) : (
-            <Button size="lg" className="col-span-2 bg-green-500 hover:bg-green-600 text-white" onClick={handleAccept}>
+            <Button size="lg" className="sm:col-span-2 bg-green-500 hover:bg-green-600 text-white" onClick={handleAccept}>
                 <Check className="mr-2 h-5 w-5" /> Let's Do It
             </Button>
         )}
