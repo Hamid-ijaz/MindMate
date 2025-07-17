@@ -140,7 +140,7 @@ export default function SettingsPage() {
     }
   };
 
-  const onTaskSettingsSubmit = (data: z.infer<typeof taskSettingsSchema>>) => {
+  const onTaskSettingsSubmit = (data: z.infer<typeof taskSettingsSchema>) => {
     const newCategories = data.categories.map(c => c.value);
     const newDurations = data.durations.map(d => d.value).sort((a, b) => a - b);
     
@@ -281,3 +281,5 @@ export default function SettingsPage() {
     </div>
   );
 }
+
+    
