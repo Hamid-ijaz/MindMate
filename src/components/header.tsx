@@ -25,8 +25,8 @@ export function Header() {
 
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div className="container flex h-16 max-w-7xl items-center">
-        <div className="flex items-center gap-6 flex-1">
+      <div className="container flex h-16 max-w-7xl items-center justify-between">
+        <div className="flex items-center gap-6">
           <Link href="/">
             <Logo />
           </Link>
@@ -35,7 +35,7 @@ export function Header() {
            )}
         </div>
         
-        <div className="flex-1 flex justify-center">
+        <nav className="flex-1 flex justify-center">
              {isAuthenticated && (
                 <div className="flex items-center gap-2 sm:gap-4">
                      <Button variant="outline" size="sm" asChild>
@@ -65,9 +65,9 @@ export function Header() {
                     <AddTaskButton />
                 </div>
             )}
-        </div>
+        </nav>
 
-        <div className="flex items-center gap-2 sm:gap-4 flex-1 justify-end">
+        <div className="flex items-center gap-2 sm:gap-4 justify-end">
           {loading ? (
               <Skeleton className="h-8 w-24" />
           ) : isAuthenticated ? (
