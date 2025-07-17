@@ -71,7 +71,9 @@ export function Header() {
               <Skeleton className="h-8 w-24" />
           ) : isAuthenticated ? (
             <>
-              <AddTaskButton />
+              <div className="hidden md:block">
+                <AddTaskButton />
+              </div>
               <ThemePicker />
               <Button variant="ghost" size="icon" asChild>
                 <Link href="/settings">

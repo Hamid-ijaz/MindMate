@@ -11,6 +11,7 @@ import { PlusCircle } from "lucide-react";
 import { TaskForm } from "./task-form";
 import { useTasks } from "@/contexts/task-context";
 import { Button } from "./ui/button";
+import { cn } from "@/lib/utils";
 
 
 export function ManageTasksSheet() {
@@ -46,13 +47,30 @@ export function ManageTasksSheet() {
   );
 }
 
-export function AddTaskButton() {
+interface AddTaskButtonProps extends React.ComponentProps<typeof Button> {
+    isMobile?: boolean;
+}
+
+export function AddTaskButton({ isMobile, className, ...props }: AddTaskButtonProps) {
     const { setIsSheetOpen } = useTasks();
+
+    if (isMobile) {
+        return (
+            <Button 
+                onClick={() => setIsSheetOpen(true)}
+                className={cn("rounded-full h-14 w-14 shadow-lg", className)}
+                {...props}
+            >
+              <PlusCircle className="h-6 w-6" />
+              <span className="sr-only">Add Task</span>
+            </Button>
+        )
+    }
+
     return (
-        <Button onClick={() => setIsSheetOpen(true)}>
+        <Button onClick={() => setIsSheetOpen(true)} className={className} {...props}>
           <PlusCircle className="mr-2 h-4 w-4" />
-          <span className="hidden sm:inline">Add Task</span>
-          <span className="sm:hidden">Add</span>
+          <span>Add Task</span>
         </Button>
     )
 }
