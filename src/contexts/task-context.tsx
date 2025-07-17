@@ -3,7 +3,7 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import type { Task, Accomplishment, TaskCategory, TaskDuration, TimeOfDay } from '@/lib/types';
-import { LOCAL_STORAGE_KEY } from '@/lib/constants';
+import { taskService, accomplishmentService, userSettingsService } from '@/lib/firestore';
 import { useAuth } from './auth-context';
 import { useToast } from '@/hooks/use-toast';
 
@@ -36,26 +36,6 @@ interface TaskContextType {
 
 const TaskContext = createContext<TaskContextType | undefined>(undefined);
 
-const getInitialState = (userEmail: string | null): { tasks: Task[], accomplishments: Accomplishment[], taskCategories: TaskCategory[], taskDurations: TaskDuration[] } => {
-  if (typeof window === 'undefined' || !userEmail) {
-    return { tasks: [], accomplishments: [], taskCategories: DEFAULT_CATEGORIES, taskDurations: DEFAULT_DURATIONS };
-  }
-  try {
-    const key = `${LOCAL_STORAGE_KEY}-${userEmail}`;
-    const item = window.localStorage.getItem(key);
-    const parsed = item ? JSON.parse(item) : {};
-    return { 
-        tasks: parsed.tasks || [], 
-        accomplishments: parsed.accomplishments || [],
-        taskCategories: parsed.taskCategories || DEFAULT_CATEGORIES,
-        taskDurations: parsed.taskDurations || DEFAULT_DURATIONS
-    };
-  } catch (error) {
-    console.error('Error reading from localStorage', error);
-    return { tasks: [], accomplishments: [], taskCategories: DEFAULT_CATEGORIES, taskDurations: DEFAULT_DURATIONS };
-  }
-};
-
 export const TaskProvider = ({ children }: { children: ReactNode }) => {
   const { user, loading: authLoading } = useAuth();
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -70,37 +50,78 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
   
   const editingTask = tasks.find(t => t.id === editingTaskId) || null;
 
+  // Load user data when user changes
   useEffect(() => {
     if (!authLoading) {
       if (user?.email) {
-        const state = getInitialState(user.email);
-        setTasks(state.tasks);
-        setAccomplishments(state.accomplishments);
-        setTaskCategories(state.taskCategories);
-        setTaskDurations(state.taskDurations);
+        loadUserData();
       } else {
-        setTasks([]); 
+        // Clear data when user logs out
+        setTasks([]);
         setAccomplishments([]);
         setTaskCategories(DEFAULT_CATEGORIES);
         setTaskDurations(DEFAULT_DURATIONS);
+        setIsLoading(false);
       }
-      setIsLoading(false);
     }
   }, [user, authLoading]);
-  
-  useEffect(() => {
-    if (!isLoading && user) {
+
+  const loadUserData = async () => {
+    if (!user?.email) return;
+    
+    setIsLoading(true);
+    try {
+      // Load user settings
+      const settings = await userSettingsService.getUserSettings(user.email);
+      if (settings) {
+        setTaskCategories(settings.taskCategories.length > 0 ? settings.taskCategories : DEFAULT_CATEGORIES);
+        setTaskDurations(settings.taskDurations.length > 0 ? settings.taskDurations : DEFAULT_DURATIONS);
+      }
+
+      // Load tasks
+      const userTasks = await taskService.getTasks(user.email);
+      setTasks(userTasks);
+
+      // Load accomplishments  
+      const userAccomplishments = await accomplishmentService.getAccomplishments(user.email);
+      setAccomplishments(userAccomplishments);
+    } catch (error) {
+      console.error('Error loading user data:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load your data. Please try refreshing the page.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSetTaskCategories = useCallback(async (categories: TaskCategory[]) => {
+    setTaskCategories(categories);
+    if (user?.email) {
       try {
-        const key = `${LOCAL_STORAGE_KEY}-${user.email}`;
-        const state = { tasks, accomplishments, taskCategories, taskDurations };
-        window.localStorage.setItem(key, JSON.stringify(state));
+        await userSettingsService.updateUserSettings(user.email, { taskCategories: categories });
       } catch (error) {
-        console.error('Error writing to localStorage', error);
+        console.error('Error saving task categories:', error);
       }
     }
-  }, [tasks, accomplishments, taskCategories, taskDurations, isLoading, user]);
+  }, [user?.email]);
 
-  const addTask = useCallback((taskData: Omit<Task, 'id' | 'createdAt' | 'rejectionCount' | 'isMuted' | 'completedAt' | 'lastRejectedAt'> & { parentId?: string }) => {
+  const handleSetTaskDurations = useCallback(async (durations: TaskDuration[]) => {
+    setTaskDurations(durations);
+    if (user?.email) {
+      try {
+        await userSettingsService.updateUserSettings(user.email, { taskDurations: durations });
+      } catch (error) {
+        console.error('Error saving task durations:', error);
+      }
+    }
+  }, [user?.email]);
+
+  const addTask = useCallback(async (taskData: Omit<Task, 'id' | 'createdAt' | 'rejectionCount' | 'isMuted' | 'completedAt' | 'lastRejectedAt'> & { parentId?: string }) => {
+    if (!user?.email) return;
+
     const newTask: Task = {
       ...taskData,
       id: new Date().toISOString() + Math.random(),
@@ -108,18 +129,50 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
       rejectionCount: 0,
       isMuted: false,
     };
-    setTasks(prev => [...prev, newTask]);
-  }, []);
 
-  const updateTask = useCallback((id: string, updates: Partial<Omit<Task, 'id' | 'createdAt'>>) => {
-    setTasks(prev => prev.map(t => (t.id === id ? { ...t, ...updates } : t)));
-  }, []);
+    try {
+      const taskId = await taskService.addTask(user.email, newTask);
+      setTasks(prev => [...prev, { ...newTask, id: taskId }]);
+    } catch (error) {
+      console.error('Error adding task:', error);
+      toast({
+        title: "Error",
+        description: "Failed to add task. Please try again.",
+        variant: "destructive",
+      });
+    }
+  }, [user?.email, toast]);
 
-  const deleteTask = useCallback((id: string) => {
-    setTasks(prev => prev.filter(t => t.id !== id && t.parentId !== id));
-  }, []);
+  const updateTask = useCallback(async (id: string, updates: Partial<Omit<Task, 'id' | 'createdAt'>>) => {
+    try {
+      await taskService.updateTask(id, updates);
+      setTasks(prev => prev.map(t => (t.id === id ? { ...t, ...updates } : t)));
+    } catch (error) {
+      console.error('Error updating task:', error);
+      toast({
+        title: "Error",
+        description: "Failed to update task. Please try again.",
+        variant: "destructive",
+      });
+    }
+  }, [toast]);
+
+  const deleteTask = useCallback(async (id: string) => {
+    try {
+      await taskService.deleteTask(id);
+      await taskService.deleteTasksWithParentId(id);
+      setTasks(prev => prev.filter(t => t.id !== id && t.parentId !== id));
+    } catch (error) {
+      console.error('Error deleting task:', error);
+      toast({
+        title: "Error",
+        description: "Failed to delete task. Please try again.",
+        variant: "destructive",
+      });
+    }
+  }, [toast]);
   
-  const acceptTask = useCallback((id: string) => {
+  const acceptTask = useCallback(async (id: string) => {
     const subtasks = tasks.filter(t => t.parentId === id);
     const pendingSubtasks = subtasks.filter(t => !t.completedAt);
 
@@ -132,27 +185,36 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
       return;
     }
 
-    updateTask(id, { completedAt: Date.now() });
+    await updateTask(id, { completedAt: Date.now() });
   }, [tasks, updateTask, toast]);
 
-  const rejectTask = useCallback((id: string) => {
+  const rejectTask = useCallback(async (id: string) => {
     const task = tasks.find(t => t.id === id);
     if (task) {
-      updateTask(id, {
+      await updateTask(id, {
         rejectionCount: (task.rejectionCount || 0) + 1,
         lastRejectedAt: Date.now(),
       });
     }
   }, [tasks, updateTask]);
 
-  const muteTask = useCallback((id: string) => {
-    updateTask(id, { isMuted: true });
+  const muteTask = useCallback(async (id: string) => {
+    await updateTask(id, { isMuted: true });
   }, [updateTask]);
 
-  const uncompleteTask = useCallback((id: string) => {
+  const uncompleteTask = useCallback(async (id: string) => {
     const task = tasks.find(t => t.id === id);
     if (task) {
       const childrenIds = tasks.filter(t => t.parentId === id).map(t => t.id);
+      
+      // Update parent task
+      await updateTask(id, { completedAt: undefined, rejectionCount: 0, lastRejectedAt: undefined });
+      
+      // Update children tasks
+      for (const childId of childrenIds) {
+        await updateTask(childId, { completedAt: undefined, rejectionCount: 0, lastRejectedAt: undefined });
+      }
+      
       setTasks(prev => prev.map(t => {
         if (t.id === id || childrenIds.includes(t.id)) {
           return { ...t, completedAt: undefined, rejectionCount: 0, lastRejectedAt: undefined };
@@ -160,16 +222,29 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
         return t;
       }));
     }
-  }, [tasks]);
+  }, [tasks, updateTask]);
 
-  const addAccomplishment = useCallback((content: string) => {
+  const addAccomplishment = useCallback(async (content: string) => {
+    if (!user?.email) return;
+
     const newAccomplishment: Accomplishment = {
       id: new Date().toISOString() + Math.random(),
       date: new Date().toISOString().split('T')[0],
       content,
     };
-    setAccomplishments(prev => [...prev, newAccomplishment]);
-  }, []);
+
+    try {
+      const accomplishmentId = await accomplishmentService.addAccomplishment(user.email, newAccomplishment);
+      setAccomplishments(prev => [...prev, { ...newAccomplishment, id: accomplishmentId }]);
+    } catch (error) {
+      console.error('Error adding accomplishment:', error);
+      toast({
+        title: "Error",
+        description: "Failed to add accomplishment. Please try again.",
+        variant: "destructive",
+      });
+    }
+  }, [user?.email, toast]);
 
   const startEditingTask = useCallback((taskId: string) => {
     setEditingTaskId(taskId);
@@ -182,7 +257,9 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
   
   return (
     <TaskContext.Provider value={{ 
-        tasks, accomplishments, taskCategories, taskDurations, setTaskCategories, setTaskDurations,
+        tasks, accomplishments, taskCategories, taskDurations, 
+        setTaskCategories: handleSetTaskCategories, 
+        setTaskDurations: handleSetTaskDurations,
         addAccomplishment, addTask, updateTask, deleteTask, acceptTask, rejectTask, muteTask, uncompleteTask, 
         isLoading: isLoading || authLoading,
         isSheetOpen, setIsSheetOpen, editingTask, startEditingTask, stopEditingTask

@@ -58,9 +58,17 @@ export default function SettingsPage() {
   });
 
 
-  const onProfileSubmit = (data: z.infer<typeof profileSchema>) => {
-    updateUser(data);
-    toast({ title: "Profile Updated", description: "Your information has been saved." });
+  const onProfileSubmit = async (data: z.infer<typeof profileSchema>) => {
+    try {
+      await updateUser(data);
+      toast({ title: "Profile Updated", description: "Your information has been saved." });
+    } catch (error) {
+      toast({ 
+        title: "Update Failed", 
+        description: "Failed to update profile. Please try again.",
+        variant: "destructive"
+      });
+    }
   };
 
   const onTaskSettingsSubmit = (data: z.infer<typeof taskSettingsSchema>) => {

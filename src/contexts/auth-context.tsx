@@ -3,6 +3,7 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import type { User } from '@/lib/types';
+import { userService } from '@/lib/firestore';
 import Cookies from 'js-cookie';
 
 type SignupData = Omit<User, 'password'> & { password?: string };
@@ -11,75 +12,74 @@ interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
   loading: boolean;
-  login: (email: string, password: string) => boolean;
-  signup: (userData: SignupData) => boolean;
+  login: (email: string, password: string) => Promise<boolean>;
+  signup: (userData: SignupData) => Promise<boolean>;
   logout: () => void;
-  updateUser: (updates: Partial<User>) => void;
+  updateUser: (updates: Partial<User>) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const USERS_STORAGE_KEY = 'mindmate-users';
 const AUTH_COOKIE_KEY = 'mindmate-auth';
-
-const getStoredUsers = (): User[] => {
-  if (typeof window === 'undefined') return [];
-  try {
-    const item = window.localStorage.getItem(USERS_STORAGE_KEY);
-    return item ? JSON.parse(item) : [];
-  } catch (error) {
-    console.error('Error reading users from localStorage', error);
-    return [];
-  }
-};
-
-const setStoredUsers = (users: User[]) => {
-  if (typeof window === 'undefined') return;
-  try {
-    window.localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(users));
-  } catch (error) {
-    console.error('Error writing users to localStorage', error);
-  }
-};
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const userEmail = Cookies.get(AUTH_COOKIE_KEY);
-    if (userEmail) {
-      const users = getStoredUsers();
-      const currentUser = users.find(u => u.email === userEmail);
-      if (currentUser) {
-        setUser(currentUser);
+    const initializeAuth = async () => {
+      const userEmail = Cookies.get(AUTH_COOKIE_KEY);
+      if (userEmail) {
+        try {
+          const currentUser = await userService.getUser(userEmail);
+          if (currentUser) {
+            setUser(currentUser);
+          } else {
+            // User not found in Firestore, clear cookie
+            Cookies.remove(AUTH_COOKIE_KEY, { path: '/' });
+          }
+        } catch (error) {
+          console.error('Error fetching user:', error);
+          Cookies.remove(AUTH_COOKIE_KEY, { path: '/' });
+        }
       }
-    }
-    setLoading(false);
+      setLoading(false);
+    };
+
+    initializeAuth();
   }, []);
 
-  const login = (email: string, password: string): boolean => {
-    const users = getStoredUsers();
-    const foundUser = users.find(u => u.email === email && u.password === password);
-    if (foundUser) {
-      setUser(foundUser);
-      Cookies.set(AUTH_COOKIE_KEY, foundUser.email, { expires: 7, path: '/' });
-      return true;
+  const login = async (email: string, password: string): Promise<boolean> => {
+    try {
+      const foundUser = await userService.getUser(email);
+      if (foundUser && foundUser.password === password) {
+        setUser(foundUser);
+        Cookies.set(AUTH_COOKIE_KEY, foundUser.email, { expires: 7, path: '/' });
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error('Error during login:', error);
+      return false;
     }
-    return false;
   };
 
-  const signup = (userData: SignupData): boolean => {
-    const users = getStoredUsers();
-    if (users.find(u => u.email === userData.email)) {
-      return false; // User already exists
+  const signup = async (userData: SignupData): Promise<boolean> => {
+    try {
+      const userExists = await userService.userExists(userData.email);
+      if (userExists) {
+        return false; // User already exists
+      }
+      
+      const newUser: User = { ...userData };
+      await userService.createUser(newUser);
+      setUser(newUser);
+      Cookies.set(AUTH_COOKIE_KEY, newUser.email, { expires: 7, path: '/' });
+      return true;
+    } catch (error) {
+      console.error('Error during signup:', error);
+      return false;
     }
-    const newUser: User = { ...userData };
-    const updatedUsers = [...users, newUser];
-    setStoredUsers(updatedUsers);
-    setUser(newUser);
-    Cookies.set(AUTH_COOKIE_KEY, newUser.email, { expires: 7, path: '/' });
-    return true;
   };
 
   const logout = () => {
@@ -87,14 +87,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     Cookies.remove(AUTH_COOKIE_KEY, { path: '/' });
   };
   
-  const updateUser = (updates: Partial<User>) => {
+  const updateUser = async (updates: Partial<User>): Promise<void> => {
     if (!user) return;
-    const users = getStoredUsers();
-    const updatedUser = { ...user, ...updates };
-    const updatedUsers = users.map(u => u.email === user.email ? updatedUser : u);
-    setStoredUsers(updatedUsers);
-    setUser(updatedUser);
-  }
+    
+    try {
+      await userService.updateUser(user.email, updates);
+      const updatedUser = { ...user, ...updates };
+      setUser(updatedUser);
+    } catch (error) {
+      console.error('Error updating user:', error);
+    }
+  };
 
   return (
     <AuthContext.Provider value={{ user, isAuthenticated: !!user, loading, login, signup, logout, updateUser }}>

@@ -49,19 +49,32 @@ export default function SignupPage() {
     },
   });
 
-  const onSubmit = (data: SignupFormValues) => {
-    const success = signup({
-        ...data,
-        dob: data.dob ? format(data.dob, 'yyyy-MM-dd') : undefined,
-        phone: data.phone || undefined,
-    });
-    
-    if (success) {
-      window.location.href = '/';
-    } else {
+  const onSubmit = async (data: SignupFormValues) => {
+    try {
+      const success = await signup({
+          ...data,
+          dob: data.dob ? format(data.dob, 'yyyy-MM-dd') : undefined,
+          phone: data.phone || undefined,
+      });
+      
+      if (success) {
+        toast({
+          title: "Welcome to MindMate!",
+          description: "Your account has been created successfully.",
+        });
+        router.push('/');
+        router.refresh();
+      } else {
+        toast({
+          title: "Signup Failed",
+          description: "An account with this email already exists.",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
       toast({
-        title: "Signup Failed",
-        description: "An account with this email already exists.",
+        title: "Signup Error",
+        description: "An error occurred during signup. Please try again.",
         variant: "destructive",
       });
     }
