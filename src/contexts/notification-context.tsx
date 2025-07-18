@@ -8,6 +8,15 @@ import { useTasks } from './task-context';
 
 type NotificationPermission = 'default' | 'granted' | 'denied';
 
+export interface StoredNotification {
+    id: string;
+    title: string;
+    body?: string;
+    createdAt: number;
+    isRead: boolean;
+    data?: any;
+}
+
 interface NotificationOptions {
     body?: string;
     tag?: string;
@@ -21,38 +30,70 @@ interface NotificationContextType {
   permission: NotificationPermission;
   requestPermission: () => void;
   sendNotification: (title: string, options?: NotificationOptions) => void;
+  notifications: StoredNotification[];
+  unreadCount: number;
+  markAllAsRead: () => void;
+  markAsRead: (id: string) => void;
 }
 
 const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
 
+const NOTIFICATION_STORAGE_KEY = 'mindmate-notifications';
+
 export const NotificationProvider = ({ children }: { children: ReactNode }) => {
   const [permission, setPermission] = useState<NotificationPermission>('default');
+  const [notifications, setNotifications] = useState<StoredNotification[]>([]);
   const { toast } = useToast();
-  
+  const tasksContext = useTasks();
+
+  // Load notifications from local storage on mount
   useEffect(() => {
-    // Ensure this runs only on the client
-    if (typeof window !== 'undefined' && 'Notification' in window) {
-      setPermission(Notification.permission);
+    if (typeof window !== 'undefined') {
+      const storedNotifications = localStorage.getItem(NOTIFICATION_STORAGE_KEY);
+      if (storedNotifications) {
+        setNotifications(JSON.parse(storedNotifications));
+      }
+      if ('Notification' in window) {
+        setPermission(Notification.permission);
+      }
     }
   }, []);
 
+  // Persist notifications to local storage whenever they change
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+        localStorage.setItem(NOTIFICATION_STORAGE_KEY, JSON.stringify(notifications));
+    }
+  }, [notifications]);
+
   const playNotificationSound = () => {
-    const audio = new Audio('audio/mixkit-bell-notification-933.wav');
+    const audio = new Audio('/audio/mixkit-bell-notification-933.wav');
     audio.play().catch(error => console.error("Failed to play notification sound:", error));
   };
-
-  const sendNotification = useCallback((title: string, options?: NotificationOptions) => {
+  
+  const sendNotification = useCallback((title: string, options: NotificationOptions = {}) => {
     if (typeof window === 'undefined') return;
 
     playNotificationSound();
 
+    const newNotification: StoredNotification = {
+        id: options.tag || String(Date.now()),
+        title,
+        body: options.body,
+        createdAt: Date.now(),
+        isRead: false,
+        data: options.data
+    };
+    
+    setNotifications(prev => [newNotification, ...prev].slice(0, 50)); // Keep last 50
+
     const { dismiss } = toast({
       title: title,
-      description: options?.body,
-      duration: 30000, // Keep it on screen longer
+      description: options.body,
+      duration: 30000,
       action: (
         <div className="flex flex-col gap-2">
-            {options?.data?.taskId && options?.actions?.onComplete && (
+            {options.data?.taskId && options.actions?.onComplete && (
                  <Button size="sm" onClick={() => {
                     options.actions!.onComplete!(options.data.taskId);
                     dismiss();
@@ -66,7 +107,7 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
         </div>
       ),
     });
-  }, [toast]);
+  }, [toast, tasksContext]);
 
 
   const requestPermission = useCallback(async () => {
@@ -98,8 +139,18 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [toast]);
 
+  const markAsRead = useCallback((id: string) => {
+    setNotifications(prev => prev.map(n => n.id === id ? { ...n, isRead: true } : n));
+  }, []);
+
+  const markAllAsRead = useCallback(() => {
+    setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
+  }, []);
+
+  const unreadCount = notifications.filter(n => !n.isRead).length;
+
   return (
-    <NotificationContext.Provider value={{ permission, requestPermission, sendNotification }}>
+    <NotificationContext.Provider value={{ permission, requestPermission, sendNotification, notifications, unreadCount, markAllAsRead, markAsRead }}>
       {children}
     </NotificationContext.Provider>
   );

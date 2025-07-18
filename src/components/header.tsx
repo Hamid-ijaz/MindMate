@@ -10,6 +10,7 @@ import { Button } from './ui/button';
 import { Skeleton } from './ui/skeleton';
 import { MessageSquare, ListChecks, HomeIcon, ListTodo, Settings } from 'lucide-react';
 import { ThemePicker } from './theme-picker';
+import { NotificationHistory } from './notification-history';
 
 export function Header() {
   const pathname = usePathname();
@@ -75,6 +76,7 @@ export function Header() {
                 <AddTaskButton />
               </div>
               <ThemePicker />
+              <NotificationHistory />
               <Button variant="ghost" size="icon" asChild>
                 <Link href="/settings">
                   <Settings />
