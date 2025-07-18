@@ -50,6 +50,7 @@ export default function NotesPage() {
             </div>
             
             <EditNoteDialog 
+                key={editingNote?.id}
                 note={editingNote}
                 isOpen={!!editingNote}
                 onClose={() => setEditingNote(null)}

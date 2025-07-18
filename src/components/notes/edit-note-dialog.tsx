@@ -20,35 +20,20 @@ interface EditNoteDialogProps {
 }
 
 export function EditNoteDialog({ note, isOpen, onClose }: EditNoteDialogProps) {
-    const [title, setTitle] = useState('');
-    const [content, setContent] = useState('');
-    const [color, setColor] = useState('');
-    const [imageUrl, setImageUrl] = useState('');
-    const [fontSize, setFontSize] = useState(DEFAULT_FONT_SIZE);
+    const [title, setTitle] = useState(note?.title || '');
+    const [content, setContent] = useState(note?.content || '');
+    const [color, setColor] = useState(note?.color || '');
+    const [imageUrl, setImageUrl] = useState(note?.imageUrl || '');
+    const [fontSize, setFontSize] = useState(note?.fontSize || DEFAULT_FONT_SIZE);
     const [isSaving, setIsSaving] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
     const { updateNote, deleteNote } = useNotes();
     const { toast } = useToast();
-    const contentRef = useRef<HTMLDivElement>(null);
-
-    useEffect(() => {
-        if (note && isOpen) {
-            setTitle(note.title);
-            setContent(note.content);
-            if(contentRef.current) {
-                contentRef.current.innerHTML = note.content;
-            }
-            setColor(note.color || '');
-            setImageUrl(note.imageUrl || '');
-            setFontSize(note.fontSize || DEFAULT_FONT_SIZE);
-        }
-    }, [note, isOpen]);
     
     const handleClose = () => {
         if (note) {
-            const currentContent = contentRef.current?.innerHTML || '';
             const hasChanged = title !== note.title || 
-                               currentContent !== note.content || 
+                               content !== note.content || 
                                color !== (note.color || '') ||
                                imageUrl !== (note.imageUrl || '') ||
                                fontSize !== (note.fontSize || DEFAULT_FONT_SIZE);
@@ -63,8 +48,7 @@ export function EditNoteDialog({ note, isOpen, onClose }: EditNoteDialogProps) {
         if (!note) return;
         setIsSaving(true);
         try {
-            const updatedContent = contentRef.current?.innerHTML || '';
-            await updateNote(note.id, { title, content: updatedContent, color, imageUrl, fontSize });
+            await updateNote(note.id, { title, content, color, imageUrl, fontSize });
             toast({ title: "Note updated" });
         } catch (e) {
             toast({ title: "Error", description: "Failed to save note.", variant: "destructive" });
@@ -88,8 +72,7 @@ export function EditNoteDialog({ note, isOpen, onClose }: EditNoteDialogProps) {
     }
     
     const handleContentChange = (e: React.FormEvent<HTMLDivElement>) => {
-        // We don't need to set state here anymore as the save happens on close
-        // This prevents the re-render that causes the cursor jump
+        setContent(e.currentTarget.innerHTML);
     }
 
     return (
@@ -118,9 +101,9 @@ export function EditNoteDialog({ note, isOpen, onClose }: EditNoteDialogProps) {
 
                     <div className="px-6">
                         <div
-                            ref={contentRef}
                             contentEditable
                             onInput={handleContentChange}
+                            dangerouslySetInnerHTML={{ __html: content }}
                             className="w-full min-h-[200px] border-none focus-visible:ring-0 resize-none bg-transparent p-0 outline-none max-w-none"
                             style={{ fontSize: `${fontSize}px` }}
                         />
