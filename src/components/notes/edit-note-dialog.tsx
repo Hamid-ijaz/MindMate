@@ -87,25 +87,28 @@ export function EditNoteDialog({ note, isOpen, onClose }: EditNoteDialogProps) {
     return (
         <Dialog open={isOpen} onOpenChange={(open) => !open && handleClose()}>
             <DialogContent 
-                className="max-w-xl p-0 border-2"
+                className="max-w-xl p-0 border-2 flex flex-col max-h-[90vh]"
                 style={{ borderColor: color || 'hsl(var(--border))' }}
             >
-                {imageUrl && (
-                    <div className="relative w-full h-56">
-                        <img src={imageUrl} alt="Note" className="w-full h-full object-cover rounded-t-lg" />
-                    </div>
-                )}
-                <DialogHeader className="p-6 pb-0">
-                    <DialogTitle>
-                         <Input
-                            placeholder="Title"
-                            value={title}
-                            onChange={(e) => setTitle(e.target.value)}
-                            className="border-none focus-visible:ring-0 text-xl font-bold px-0 bg-transparent"
-                        />
-                    </DialogTitle>
-                </DialogHeader>
-                <div className="px-6">
+                <div className="flex-shrink-0">
+                    {imageUrl && (
+                        <div className="relative w-full h-56">
+                            <img src={imageUrl} alt="Note" className="w-full h-full object-cover rounded-t-lg" />
+                        </div>
+                    )}
+                    <DialogHeader className="p-6 pb-0">
+                        <DialogTitle>
+                             <Input
+                                placeholder="Title"
+                                value={title}
+                                onChange={(e) => setTitle(e.target.value)}
+                                className="border-none focus-visible:ring-0 text-xl font-bold px-0 bg-transparent"
+                            />
+                        </DialogTitle>
+                    </DialogHeader>
+                </div>
+
+                <div className="px-6 overflow-y-auto flex-grow">
                     <div
                         ref={contentRef}
                         contentEditable
@@ -114,7 +117,8 @@ export function EditNoteDialog({ note, isOpen, onClose }: EditNoteDialogProps) {
                         className="w-full min-h-[200px] border-none focus-visible:ring-0 resize-none bg-transparent p-0 text-base outline-none max-w-none"
                     />
                 </div>
-                <DialogFooter className="justify-between items-center p-3 border-t">
+                
+                <DialogFooter className="justify-between items-center p-3 border-t flex-shrink-0">
                      <div className="flex items-center">
                         <NoteToolbar
                             onSetColor={setColor}
