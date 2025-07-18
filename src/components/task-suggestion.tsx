@@ -304,7 +304,7 @@ export function TaskSuggestion() {
 
   return (
     <div className="w-full max-w-xl mx-auto">
-        <Carousel setApi={setApi} className="w-full max-w-lg mx-auto">
+        <Carousel setApi={setApi} className="w-full max-w-lg mx-auto" opts={{ loop: possibleTasks.length > 1 }}>
             <CarouselContent>
                 {possibleTasks.map((task, index) => (
                     <CarouselItem key={task.id}>
@@ -356,28 +356,28 @@ export function TaskSuggestion() {
                                         </TooltipProvider>
                                     )}
                                 </div>
-                                <div className="mt-4 flex justify-center items-center gap-4">
-                                    <Button variant="link" onClick={handleRewordClick} disabled={isPending || isAccepting || isRejecting}>
+                                <div className="mt-4 flex justify-center items-center gap-2">
+                                    <Button variant="ghost" size="sm" onClick={handleRewordClick} disabled={isPending || isAccepting || isRejecting}>
                                         {isPending ? (
                                             <>
-                                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                                Thinking...
+                                                <Loader2 className="h-4 w-4 animate-spin" />
+                                                <span className="hidden sm:inline">Thinking...</span>
                                             </>
                                         ) : (
                                             <>
-                                                <Wand2 className="mr-2 h-4 w-4" />
-                                                Divide task
+                                                <Wand2 className="h-4 w-4" />
+                                                <span className="hidden sm:inline">Divide task</span>
                                             </>
                                         )}
                                     </Button>
-                                    <Button variant="link" onClick={() => startEditingTask(task.id)} disabled={isPending || isAccepting || isRejecting}>
-                                        <Edit className="mr-2 h-4 w-4" />
-                                        Edit
+                                    <Button variant="ghost" size="sm" onClick={() => startEditingTask(task.id)} disabled={isPending || isAccepting || isRejecting}>
+                                        <Edit className="h-4 w-4" />
+                                        <span className="hidden sm:inline">Edit</span>
                                     </Button>
-                                     <Button variant="link" asChild>
+                                     <Button variant="ghost" size="sm" asChild>
                                         <Link href={`/task/${task.id}`}>
-                                            <ExternalLink className="mr-2 h-4 w-4"/>
-                                            View
+                                            <ExternalLink className="h-4 w-4"/>
+                                            <span className="hidden sm:inline">View</span>
                                         </Link>
                                      </Button>
                                 </div>
@@ -427,8 +427,12 @@ export function TaskSuggestion() {
                     </CarouselItem>
                 ))}
             </CarouselContent>
-            <CarouselPrevious className="-left-4 sm:-left-12" />
-            <CarouselNext className="-right-4 sm:-right-12" />
+            {possibleTasks.length > 1 && (
+                <>
+                    <CarouselPrevious className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-8 sm:-translate-x-12" />
+                    <CarouselNext className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-8 sm:translate-x-12" />
+                </>
+            )}
         </Carousel>
     
 
@@ -473,7 +477,7 @@ export function TaskSuggestion() {
                        className="mt-1"
                      />
                      <Label htmlFor={`reword-task-${index}`} className="flex-1 cursor-pointer">
-                        <p className="font-semibold">{suggestion.title}</p>
+                        <p className="font-semibold break-word">{suggestion.title}</p>
                         <p className="text-sm text-muted-foreground">{suggestion.description}</p>
                      </Label>
                    </div>
