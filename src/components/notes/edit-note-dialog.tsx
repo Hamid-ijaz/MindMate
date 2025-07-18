@@ -20,35 +20,56 @@ interface EditNoteDialogProps {
 }
 
 export function EditNoteDialog({ note, isOpen, onClose }: EditNoteDialogProps) {
-    const [title, setTitle] = useState(note?.title || '');
-    const [content, setContent] = useState(note?.content || '');
-    const [color, setColor] = useState(note?.color || '');
-    const [imageUrl, setImageUrl] = useState(note?.imageUrl || '');
-    const [fontSize, setFontSize] = useState(note?.fontSize || DEFAULT_FONT_SIZE);
+    const [title, setTitle] = useState('');
+    const [color, setColor] = useState('');
+    const [imageUrl, setImageUrl] = useState('');
+    const [fontSize, setFontSize] = useState(DEFAULT_FONT_SIZE);
+    
     const [isSaving, setIsSaving] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
+    
     const { updateNote, deleteNote } = useNotes();
     const { toast } = useToast();
     
-    const handleClose = () => {
+    const contentRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
         if (note) {
-            const hasChanged = title !== note.title || 
-                               content !== note.content || 
-                               color !== (note.color || '') ||
-                               imageUrl !== (note.imageUrl || '') ||
-                               fontSize !== (note.fontSize || DEFAULT_FONT_SIZE);
-            if (hasChanged) {
-                handleSave();
+            setTitle(note.title || '');
+            setColor(note.color || '');
+            setImageUrl(note.imageUrl || '');
+            setFontSize(note.fontSize || DEFAULT_FONT_SIZE);
+            if (contentRef.current) {
+                contentRef.current.innerHTML = note.content || '';
             }
         }
+    }, [note]);
+
+    const handleClose = () => {
+        if (!note) {
+            onClose();
+            return;
+        }
+
+        const currentContent = contentRef.current?.innerHTML || '';
+        const hasChanged = title !== note.title || 
+                           currentContent !== note.content || 
+                           color !== (note.color || '') ||
+                           imageUrl !== (note.imageUrl || '') ||
+                           fontSize !== (note.fontSize || DEFAULT_FONT_SIZE);
+                           
+        if (hasChanged) {
+            handleSave(currentContent);
+        }
+        
         onClose();
     }
 
-    const handleSave = async () => {
+    const handleSave = async (currentContent: string) => {
         if (!note) return;
         setIsSaving(true);
         try {
-            await updateNote(note.id, { title, content, color, imageUrl, fontSize });
+            await updateNote(note.id, { title, content: currentContent, color, imageUrl, fontSize });
             toast({ title: "Note updated" });
         } catch (e) {
             toast({ title: "Error", description: "Failed to save note.", variant: "destructive" });
@@ -69,10 +90,6 @@ export function EditNoteDialog({ note, isOpen, onClose }: EditNoteDialogProps) {
         } finally {
             setIsDeleting(false);
         }
-    }
-    
-    const handleContentChange = (e: React.FormEvent<HTMLDivElement>) => {
-        setContent(e.currentTarget.innerHTML);
     }
 
     return (
@@ -101,9 +118,9 @@ export function EditNoteDialog({ note, isOpen, onClose }: EditNoteDialogProps) {
 
                     <div className="px-6">
                         <div
+                            ref={contentRef}
                             contentEditable
-                            onInput={handleContentChange}
-                            dangerouslySetInnerHTML={{ __html: content }}
+                            suppressContentEditableWarning={true}
                             className="w-full min-h-[200px] border-none focus-visible:ring-0 resize-none bg-transparent p-0 outline-none max-w-none"
                             style={{ fontSize: `${fontSize}px` }}
                         />
