@@ -29,15 +29,14 @@ export function useSetupNotificationHandlers() {
       });
     };
 
-    // Defer the initial check to avoid updating state during render
-    const initialCheckTimeout = setTimeout(() => {
-      checkReminders();
-    }, 100);
+    // Defer the check to run after the current render cycle completes.
+    // This prevents the "cannot update a component while rendering another" error.
+    const timeoutId = setTimeout(checkReminders, 0);
 
     const intervalId = setInterval(checkReminders, 60 * 1000);
 
     return () => {
-      clearTimeout(initialCheckTimeout);
+      clearTimeout(timeoutId);
       clearInterval(intervalId);
     };
   }, [tasks, sendNotification, updateTask]);
