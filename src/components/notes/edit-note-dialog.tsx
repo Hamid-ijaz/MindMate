@@ -108,7 +108,7 @@ export function EditNoteDialog({ note, isOpen, onClose }: EditNoteDialogProps) {
                         contentEditable
                         onInput={handleContentChange}
                         dangerouslySetInnerHTML={{ __html: content }}
-                        className="w-full min-h-[200px] border-none focus-visible:ring-0 resize-none bg-transparent p-0 text-base outline-none"
+                        className="w-full min-h-[200px] border-none focus-visible:ring-0 resize-none bg-transparent p-0 text-base outline-none prose prose-sm dark:prose-invert max-w-none"
                     />
                 </div>
                 <DialogFooter className="justify-between items-center p-3 border-t">

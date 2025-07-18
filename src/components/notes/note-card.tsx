@@ -30,7 +30,7 @@ export function NoteCard({ note, onClick }: NoteCardProps) {
                 {note.title && <CardTitle className="text-lg font-semibold mb-2">{note.title}</CardTitle>}
                 {note.content && (
                     <div 
-                        className="prose prose-sm dark:prose-invert max-h-60 overflow-hidden text-sm"
+                        className="prose prose-sm dark:prose-invert max-h-60 overflow-hidden"
                         dangerouslySetInnerHTML={{ __html: note.content }}
                     />
                 )}
