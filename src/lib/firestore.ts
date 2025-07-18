@@ -16,14 +16,15 @@ import {
   writeBatch
 } from 'firebase/firestore';
 import { db } from './firebase';
-import type { Task, User, Accomplishment } from './types';
+import type { Task, User, Accomplishment, Note } from './types';
 
 // Collection names
 export const COLLECTIONS = {
   USERS: 'users',
   TASKS: 'tasks',
   ACCOMPLISHMENTS: 'accomplishments',
-  USER_SETTINGS: 'userSettings'
+  USER_SETTINGS: 'userSettings',
+  NOTES: 'notes',
 } as const;
 
 // User operations
@@ -49,8 +50,9 @@ export const userService = {
         email: data.email,
         phone: data.phone,
         dob: data.dob,
-        password: data.password
-      };
+        password: data.password,
+        // Ensure all fields are included, even if optional
+      } as User;
     }
     return null;
   },
@@ -117,7 +119,7 @@ export const taskService = {
     return querySnapshot.docs.map(deserializeTaskFromFirestore);
   },
 
-  async addTask(userEmail: string, task: Omit<Task, 'id'>): Promise<string> {
+  async addTask(userEmail: string, task: Omit<Task, 'id' | 'userEmail'>): Promise<string> {
     const tasksRef = collection(db, COLLECTIONS.TASKS);
     // Build taskData, omitting undefined fields
     const taskData: any = {
@@ -133,8 +135,8 @@ export const taskService = {
 
   async addTaskWithSubtasks(
     userEmail: string, 
-    parentTaskData: Omit<Task, 'id' | 'createdAt'>, 
-    subtasks: Omit<Task, 'id' | 'createdAt' | 'rejectionCount' | 'isMuted'>[]
+    parentTaskData: Omit<Task, 'id' | 'createdAt' | 'userEmail'>, 
+    subtasks: Omit<Task, 'id' | 'createdAt' | 'rejectionCount' | 'isMuted' | 'userEmail'>[]
   ): Promise<{ parentId: string, childIds: string[] }> {
     const batch = writeBatch(db);
     const tasksRef = collection(db, COLLECTIONS.TASKS);
@@ -174,20 +176,20 @@ export const taskService = {
     const updateData: any = { ...updates };
     
     // Convert timestamps
-    if ('completedAt' in updates) {
-      updateData.completedAt = updates.completedAt ? Timestamp.fromMillis(updates.completedAt) : null;
+    if ('completedAt' in updates && updates.completedAt) {
+      updateData.completedAt = Timestamp.fromMillis(updates.completedAt);
     }
-    if ('lastRejectedAt' in updates) {
-      updateData.lastRejectedAt = updates.lastRejectedAt ? Timestamp.fromMillis(updates.lastRejectedAt) : null;
+    if ('lastRejectedAt' in updates && updates.lastRejectedAt) {
+      updateData.lastRejectedAt = Timestamp.fromMillis(updates.lastRejectedAt);
     }
-    if ('reminderAt' in updates) {
-      updateData.reminderAt = updates.reminderAt ? Timestamp.fromMillis(updates.reminderAt) : null;
+    if ('reminderAt' in updates && updates.reminderAt) {
+      updateData.reminderAt = Timestamp.fromMillis(updates.reminderAt);
     }
-     if ('notifiedAt' in updates) {
-      updateData.notifiedAt = updates.notifiedAt ? Timestamp.fromMillis(updates.notifiedAt) : null;
+     if ('notifiedAt' in updates && updates.notifiedAt) {
+      updateData.notifiedAt = Timestamp.fromMillis(updates.notifiedAt);
     }
-    if (updates.recurrence && 'endDate' in updates.recurrence) {
-        updateData.recurrence.endDate = updates.recurrence.endDate ? Timestamp.fromMillis(updates.recurrence.endDate) : null;
+    if (updates.recurrence && 'endDate' in updates.recurrence && updates.recurrence.endDate) {
+        updateData.recurrence.endDate = Timestamp.fromMillis(updates.recurrence.endDate);
     }
     
     await updateDoc(taskRef, updateData);
@@ -211,7 +213,7 @@ export const taskService = {
     await batch.commit();
   },
 
-  async completeAndReschedule(oldTaskId: string, userEmail: string, newTaskData: Omit<Task, 'id' | 'createdAt'>): Promise<string> {
+  async completeAndReschedule(oldTaskId: string, userEmail: string, newTaskData: Omit<Task, 'id' | 'createdAt' | 'userEmail'>): Promise<string> {
     const batch = writeBatch(db);
     const tasksRef = collection(db, COLLECTIONS.TASKS);
 
@@ -245,6 +247,42 @@ export const taskService = {
   }
 };
 
+// Note operations
+export const noteService = {
+    async getNotes(userEmail: string): Promise<Note[]> {
+        const notesRef = collection(db, COLLECTIONS.NOTES);
+        const q = query(notesRef, where('userEmail', '==', userEmail), orderBy('updatedAt', 'desc'));
+        const querySnapshot = await getDocs(q);
+        return querySnapshot.docs.map(doc => {
+            const data = doc.data();
+            return {
+                ...data,
+                id: doc.id,
+                createdAt: data.createdAt.toMillis(),
+                updatedAt: data.updatedAt.toMillis(),
+            } as Note;
+        });
+    },
+
+    async addNote(note: Omit<Note, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> {
+        const notesRef = collection(db, COLLECTIONS.NOTES);
+        const now = Timestamp.now();
+        const docRef = doc(notesRef);
+        await setDoc(docRef, { ...note, createdAt: now, updatedAt: now });
+        return docRef.id;
+    },
+
+    async updateNote(noteId: string, updates: Partial<Omit<Note, 'id' | 'userEmail'>>): Promise<void> {
+        const noteRef = doc(db, COLLECTIONS.NOTES, noteId);
+        await updateDoc(noteRef, { ...updates, updatedAt: Timestamp.now() });
+    },
+
+    async deleteNote(noteId: string): Promise<void> {
+        const noteRef = doc(db, COLLECTIONS.NOTES, noteId);
+        await deleteDoc(noteRef);
+    },
+};
+
 // Accomplishment operations
 export const accomplishmentService = {
   async getAccomplishments(userEmail: string): Promise<Accomplishment[]> {
@@ -256,7 +294,7 @@ export const accomplishmentService = {
       id: doc.id,
       date: doc.data().date,
       content: doc.data().content
-    }));
+    } as Accomplishment));
   },
 
   async addAccomplishment(userEmail: string, accomplishment: Omit<Accomplishment, 'id'>): Promise<string> {
@@ -287,7 +325,7 @@ export const accomplishmentService = {
         id: doc.id,
         date: doc.data().date,
         content: doc.data().content
-      }));
+      } as Accomplishment));
       callback(accomplishments);
     });
   }

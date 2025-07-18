@@ -11,6 +11,7 @@ import { ManageTasksSheet } from '@/components/manage-tasks-sheet';
 import { MobileNav } from '@/components/mobile-nav';
 import { NotificationProvider } from '@/contexts/notification-context';
 import { useSetupNotificationHandlers } from '@/hooks/use-notification-handlers';
+import { NoteProvider } from '@/contexts/note-context';
 
 function AppInitializer({ children }: { children: React.ReactNode }) {
   useSetupNotificationHandlers();
@@ -33,17 +34,19 @@ export default function RootLayout({
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
           <AuthProvider>
             <TaskProvider>
-              <NotificationProvider>
-                <AppInitializer>
-                  <div className="relative flex min-h-screen flex-col">
-                    <Header />
-                    <main className="flex-1 pb-16 md:pb-0">{children}</main>
-                    <MobileNav />
-                  </div>
-                  <Toaster />
-                  <ManageTasksSheet />
-                </AppInitializer>
-              </NotificationProvider>
+              <NoteProvider>
+                <NotificationProvider>
+                  <AppInitializer>
+                    <div className="relative flex min-h-screen flex-col">
+                      <Header />
+                      <main className="flex-1 pb-16 md:pb-0">{children}</main>
+                      <MobileNav />
+                    </div>
+                    <Toaster />
+                    <ManageTasksSheet />
+                  </AppInitializer>
+                </NotificationProvider>
+              </NoteProvider>
             </TaskProvider>
           </AuthProvider>
         </ThemeProvider>

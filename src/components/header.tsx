@@ -8,7 +8,7 @@ import { AddTaskButton } from './manage-tasks-sheet';
 import { useAuth } from '@/contexts/auth-context';
 import { Button } from './ui/button';
 import { Skeleton } from './ui/skeleton';
-import { MessageSquare, ListChecks, HomeIcon, ListTodo, Settings } from 'lucide-react';
+import { MessageSquare, ListChecks, HomeIcon, ListTodo, Settings, Notebook } from 'lucide-react';
 import { ThemePicker } from './theme-picker';
 import { NotificationHistory } from './notification-history';
 
@@ -38,11 +38,17 @@ export function Header() {
         
         <nav className="hidden lg:flex">
              {isAuthenticated && (
-                <div className="flex items-center gap-2 sm:gap-4">
+                <div className="flex items-center gap-1">
                      <Button variant="ghost" size="sm" asChild>
                         <Link href="/">
                         <HomeIcon className="mr-2 h-4 w-4" />
                         <span className="hidden sm:inline">Home</span>
+                        </Link>
+                    </Button>
+                    <Button variant="ghost" size="sm" asChild>
+                        <Link href="/notes">
+                        <Notebook className="mr-2 h-4 w-4" />
+                        <span className="hidden sm:inline">Notes</span>
                         </Link>
                     </Button>
                     <Button variant="ghost" size="sm" asChild>

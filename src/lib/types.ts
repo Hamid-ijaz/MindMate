@@ -19,6 +19,7 @@ export const recurrenceFrequencies: RecurrenceFrequency[] = ['none', 'daily', 'w
 
 export interface Task {
   id: string;
+  userEmail: string;
   title: string;
   description?: string;
   category: TaskCategory;
@@ -52,6 +53,17 @@ export interface Accomplishment {
     id: string;
     date: string; // YYYY-MM-DD
     content: string;
+}
+
+export interface Note {
+    id: string;
+    userEmail: string;
+    title: string;
+    content: string; // Will store HTML content for rich text
+    imageUrl?: string;
+    createdAt: number;
+    updatedAt: number;
+    color?: string; // e.g., hex code for background color
 }
 
 // Schema for the rewordTask AI flow

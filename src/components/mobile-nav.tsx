@@ -4,7 +4,7 @@
 import Link from 'next/link';
 import { useAuth } from '@/contexts/auth-context';
 import { Button } from './ui/button';
-import { MessageSquare, ListChecks, HomeIcon, ListTodo } from 'lucide-react';
+import { MessageSquare, ListChecks, HomeIcon, ListTodo, Notebook } from 'lucide-react';
 import { AddTaskButton } from './manage-tasks-sheet';
 
 export function MobileNav() {
@@ -23,10 +23,10 @@ export function MobileNav() {
             <span className="sr-only">Home</span>
           </Link>
         </Button>
-        <Button variant="ghost" size="icon" asChild className="h-full w-full rounded-none">
-          <Link href="/chat">
-            <MessageSquare className="h-5 w-5" />
-            <span className="sr-only">Chat</span>
+         <Button variant="ghost" size="icon" asChild className="h-full w-full rounded-none">
+          <Link href="/notes">
+            <Notebook className="h-5 w-5" />
+            <span className="sr-only">Notes</span>
           </Link>
         </Button>
         <div className="flex justify-center items-center">
