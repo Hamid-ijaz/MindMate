@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { EnergyLevel, Task, TimeOfDay } from "@/lib/types";
-import { AlertCircle, Check, Sparkles, X, Loader2, Wand2, Edit, CalendarIcon, Repeat } from "lucide-react";
+import { AlertCircle, Check, Sparkles, X, Loader2, Wand2, Edit, CalendarIcon, Repeat, ExternalLink, ChevronLeft, ChevronRight } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { getRandomQuote } from "@/lib/motivational-quotes";
 import { MAX_REJECTIONS_BEFORE_PROMPT, REJECTION_HOURS } from "@/lib/constants";
@@ -25,6 +25,8 @@ import { SubtaskList } from "./subtask-list";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./ui/tooltip";
 import { format } from "date-fns";
 import { useNotifications } from "@/contexts/notification-context";
+import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious, type CarouselApi } from "@/components/ui/carousel";
+import Link from "next/link";
 
 const getDefaultEnergyLevel = (): EnergyLevel => {
     const timeOfDay = getCurrentTimeOfDay();
@@ -43,7 +45,6 @@ export function TaskSuggestion() {
   const { tasks, acceptTask, rejectTask, muteTask, addTask, isLoading: tasksLoading, startEditingTask } = useTasks();
   const { deleteNotification } = useNotifications();
   const [currentEnergy, setCurrentEnergy] = useState<EnergyLevel | null>(null);
-  const [suggestion, setSuggestion] = useState<{ suggestedTask: Task | null, otherTasks: Task[] }>({ suggestedTask: null, otherTasks: [] });
   const [showAffirmation, setShowAffirmation] = useState(false);
   const [showRejectionPrompt, setShowRejectionPrompt] = useState(false);
   const [showRewordDialog, setShowRewordDialog] = useState(false);
@@ -55,6 +56,8 @@ export function TaskSuggestion() {
   const [isMuting, setIsMuting] = useState(false);
   const [isAcceptingReword, setIsAcceptingReword] = useState(false);
 
+  const [api, setApi] = useState<CarouselApi>();
+  const [currentSlide, setCurrentSlide] = useState(0);
 
   const [isPending, startTransition] = useTransition();
 
@@ -62,63 +65,70 @@ export function TaskSuggestion() {
     setCurrentEnergy(getDefaultEnergyLevel());
   }, []);
 
+  useEffect(() => {
+    if (!api) return;
+
+    const handleSelect = () => {
+        setCurrentSlide(api.selectedScrollSnap());
+    };
+    api.on("select", handleSelect);
+    handleSelect();
+
+    return () => {
+        api.off("select", handleSelect);
+    }
+  }, [api])
+
   const { toast } = useToast();
 
-  const getNextTask = (energy: EnergyLevel | null) => {
-    if (!energy) {
-      setSuggestion({ suggestedTask: null, otherTasks: [] });
-      return;
-    }
-
+  const possibleTasks = useMemo(() => {
+    if (!currentEnergy) return [];
+    
     const uncompletedTasks = tasks.filter(t => !t.completedAt && !t.isMuted && !t.parentId);
-
     const now = Date.now();
     const rejectionTimeout = REJECTION_HOURS * 60 * 60 * 1000;
 
-    const possibleTasks = uncompletedTasks.filter(task => {
-        const isEnergyMatch = task.energyLevel === energy;
+    let filtered = uncompletedTasks.filter(task => {
+        const isEnergyMatch = task.energyLevel === currentEnergy;
         const recentlyRejected = task.lastRejectedAt && (now - task.lastRejectedAt < rejectionTimeout);
         return isEnergyMatch && !recentlyRejected;
     });
 
-    if (possibleTasks.length === 0) {
-        // Fallback: try to find any task if no perfect match
-        const fallbackTasks = uncompletedTasks.filter(t => !t.isMuted);
-        if (fallbackTasks.length > 0) {
-            fallbackTasks.sort((a, b) => (a.rejectionCount || 0) - (b.rejectionCount || 0));
-            const bestFallback = fallbackTasks[0];
-            const remaining = fallbackTasks.slice(1);
-            setSuggestion({ suggestedTask: bestFallback, otherTasks: remaining });
-        } else {
-             setSuggestion({ suggestedTask: null, otherTasks: [] });
-        }
-        return;
+    if (filtered.length === 0) {
+        // Fallback: try to find any task if no perfect match, ignore energy level but still respect muted/rejected status
+        filtered = uncompletedTasks.filter(t => {
+            const recentlyRejected = t.lastRejectedAt && (now - t.lastRejectedAt < rejectionTimeout);
+            return !recentlyRejected;
+        });
     }
 
-    possibleTasks.sort((a, b) => {
+    // Sort the tasks to have a consistent order
+    filtered.sort((a, b) => {
         if (a.rejectionCount !== b.rejectionCount) {
             return (a.rejectionCount || 0) - (b.rejectionCount || 0);
         }
         return a.duration - b.duration;
     });
 
-    const bestTask = possibleTasks[0];
-    const remainingTasks = uncompletedTasks.filter(t => t.id !== bestTask.id);
-    
-    setSuggestion({ suggestedTask: bestTask, otherTasks: remainingTasks });
-  };
+    return filtered;
 
-  useEffect(() => {
-    if (!tasksLoading) {
-      getNextTask(currentEnergy);
-    }
-  }, [tasks, currentEnergy, tasksLoading]);
-  
+  }, [tasks, currentEnergy]);
+
+
+  const otherVisibleTasks = useMemo(() => {
+      const allUncompleted = tasks.filter(t => !t.completedAt && !t.isMuted && !t.parentId);
+      const possibleIds = new Set(possibleTasks.map(t => t.id));
+      return allUncompleted.filter(t => !possibleIds.has(t.id));
+  }, [tasks, possibleTasks])
+
+
+  const currentTask = possibleTasks[currentSlide];
+
   const handleAccept = async () => {
-    if (!suggestion.suggestedTask) return;
+    if (!currentTask) return;
     setIsAccepting(true);
-    await acceptTask(suggestion.suggestedTask.id);
-    await deleteNotification(suggestion.suggestedTask.id);
+    await acceptTask(currentTask.id);
+    await deleteNotification(currentTask.id);
     setIsAccepting(false);
     setShowAffirmation(true);
     setTimeout(() => {
@@ -127,22 +137,22 @@ export function TaskSuggestion() {
   };
 
   const handleReject = async () => {
-    if (!suggestion.suggestedTask) return;
+    if (!currentTask) return;
     setIsRejecting(true);
-    const nextRejectionCount = (suggestion.suggestedTask.rejectionCount || 0) + 1;
+    const nextRejectionCount = (currentTask.rejectionCount || 0) + 1;
     if (nextRejectionCount >= MAX_REJECTIONS_BEFORE_PROMPT) {
       setShowRejectionPrompt(true);
     } else {
-      await rejectTask(suggestion.suggestedTask.id);
+      await rejectTask(currentTask.id);
     }
      setIsRejecting(false);
   };
   
   const handleMute = async () => {
-    if (!suggestion.suggestedTask) return;
+    if (!currentTask) return;
     setIsMuting(true);
-    await muteTask(suggestion.suggestedTask.id);
-    await deleteNotification(suggestion.suggestedTask.id);
+    await muteTask(currentTask.id);
+    await deleteNotification(currentTask.id);
     setShowRejectionPrompt(false);
     toast({
         title: "Task Muted",
@@ -152,20 +162,20 @@ export function TaskSuggestion() {
   };
   
   const handleSkipFromDialog = async () => {
-     if (!suggestion.suggestedTask) return;
+     if (!currentTask) return;
      setIsRejecting(true);
-     await rejectTask(suggestion.suggestedTask.id);
+     await rejectTask(currentTask.id);
      setShowRejectionPrompt(false);
      setIsRejecting(false);
   }
 
   const handleRewordClick = () => {
-    if (!suggestion.suggestedTask) return;
+    if (!currentTask) return;
     startTransition(async () => {
       try {
         const result = await rewordTask({
-          title: suggestion.suggestedTask!.title,
-          description: suggestion.suggestedTask!.description || "",
+          title: currentTask.title,
+          description: currentTask.description || "",
         });
         setRewordedSuggestions(result.suggestedTasks);
         setSelectedRewordedTasks(result.suggestedTasks.reduce((acc, task) => {
@@ -185,7 +195,7 @@ export function TaskSuggestion() {
   };
 
   const handleAcceptReword = async () => {
-    if (!suggestion.suggestedTask || rewordedSuggestions.length === 0) return;
+    if (!currentTask || rewordedSuggestions.length === 0) return;
 
     const tasksToAdd = rewordedSuggestions.filter(suggestion => selectedRewordedTasks[suggestion.title]);
 
@@ -201,11 +211,11 @@ export function TaskSuggestion() {
     setIsAcceptingReword(true);
     const addPromises = tasksToAdd.map(s => {
         return addTask({
-            parentId: suggestion.suggestedTask!.id,
+            parentId: currentTask.id,
             title: s.title,
             description: s.description,
-            category: suggestion.suggestedTask!.category,
-            timeOfDay: suggestion.suggestedTask!.timeOfDay,
+            category: currentTask.category,
+            timeOfDay: currentTask.timeOfDay,
             energyLevel: 'Low',
             duration: 15,
         });
@@ -216,7 +226,7 @@ export function TaskSuggestion() {
     
     toast({
       title: `${tasksToAdd.length} New Sub-task(s) Added!`,
-      description: `The selected tasks are now under "${suggestion.suggestedTask!.title}".`,
+      description: `The selected tasks are now under "${currentTask.title}".`,
     });
 
     setShowRewordDialog(false);
@@ -243,12 +253,9 @@ export function TaskSuggestion() {
     );
   }
   
-  const uncompletedTasks = tasks.filter(t => !t.completedAt && !t.isMuted && !t.parentId);
-  const otherVisibleTasks = suggestion.otherTasks.filter(t => !t.completedAt && !t.isMuted && t.id !== suggestion.suggestedTask?.id && !t.parentId);
-  const subtasksOfSuggested = suggestion.suggestedTask ? tasks.filter(t => t.parentId === suggestion.suggestedTask!.id && !t.completedAt) : [];
-  const hasPendingSubtasks = subtasksOfSuggested.length > 0;
+  const allUncompletedTasks = tasks.filter(t => !t.completedAt && !t.isMuted && !t.parentId);
 
-  if (!suggestion.suggestedTask && uncompletedTasks.length === 0) {
+  if (allUncompletedTasks.length === 0) {
     return (
         <div className="w-full max-w-lg mx-auto">
           <Card >
@@ -265,7 +272,7 @@ export function TaskSuggestion() {
     )
   }
 
-  if (!suggestion.suggestedTask) {
+  if (possibleTasks.length === 0) {
     return (
         <div className="w-full max-w-lg mx-auto">
              <Card>
@@ -292,119 +299,138 @@ export function TaskSuggestion() {
     )
   }
 
+  const subtasksOfSuggested = currentTask ? tasks.filter(t => t.parentId === currentTask.id && !t.completedAt) : [];
+  const hasPendingSubtasks = subtasksOfSuggested.length > 0;
 
   return (
-    <div className="w-full max-w-lg mx-auto">
-    <Card className="shadow-lg">
-      <CardHeader>
-        <div className="flex justify-between items-center pb-2">
-            <CardDescription className="text-lg font-medium text-primary">Ready for this one?</CardDescription>
-            <Select onValueChange={(value: EnergyLevel) => setCurrentEnergy(value)} value={currentEnergy}>
-                <SelectTrigger className="w-auto text-xs h-8 px-2">
-                    <SelectValue placeholder="Energy..." />
-                </SelectTrigger>
-                <SelectContent>
-                    <SelectItem value="Low">Low Energy</SelectItem>
-                    <SelectItem value="Medium">Medium Energy</SelectItem>
-                    <SelectItem value="High">High Energy</SelectItem>
-                </SelectContent>
-            </Select>
-        </div>
+    <div className="w-full max-w-xl mx-auto">
+        <Carousel setApi={setApi} className="w-full max-w-lg mx-auto">
+            <CarouselContent>
+                {possibleTasks.map((task, index) => (
+                    <CarouselItem key={task.id}>
+                         <Card className="shadow-lg">
+                            <CardHeader>
+                                <div className="flex justify-between items-center pb-2">
+                                    <CardDescription className="text-lg font-medium text-primary">Ready for this one?</CardDescription>
+                                    <Select onValueChange={(value: EnergyLevel) => setCurrentEnergy(value)} value={currentEnergy}>
+                                        <SelectTrigger className="w-auto text-xs h-8 px-2">
+                                            <SelectValue placeholder="Energy..." />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="Low">Low Energy</SelectItem>
+                                            <SelectItem value="Medium">Medium Energy</SelectItem>
+                                            <SelectItem value="High">High Energy</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
 
-        <CardTitle className="text-2xl pt-2 break-word">{suggestion.suggestedTask.title}</CardTitle>
-        {suggestion.suggestedTask.description && <CardDescription className="pt-2">{suggestion.suggestedTask.description}</CardDescription>}
-      </CardHeader>
-      <CardContent>
-        <div className="flex flex-wrap gap-2">
-            <Badge variant="outline">{suggestion.suggestedTask.category}</Badge>
-            <Badge variant="outline">{suggestion.suggestedTask.energyLevel} Energy</Badge>
-            <Badge variant="outline">{suggestion.suggestedTask.duration} min</Badge>
-            <Badge variant="outline">{suggestion.suggestedTask.timeOfDay}</Badge>
-            {suggestion.suggestedTask.rejectionCount > 0 && <Badge variant="destructive" className="animate-pulse">{suggestion.suggestedTask.rejectionCount}x Skipped</Badge>}
-            {suggestion.suggestedTask.reminderAt && (
-                <Badge variant="outline" className="flex items-center gap-1">
-                    <CalendarIcon className="h-3 w-3" />
-                    {format(new Date(suggestion.suggestedTask.reminderAt), "MMM d, h:mm a")}
-                </Badge>
-            )}
-            {suggestion.suggestedTask.recurrence && suggestion.suggestedTask.recurrence.frequency !== 'none' && (
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                       <Badge variant="outline" className="flex items-center gap-1 cursor-default capitalize">
-                          <Repeat className="h-3 w-3" />
-                          {suggestion.suggestedTask.recurrence.frequency}
-                       </Badge>
-                    </TooltipTrigger>
-                     <TooltipContent>
-                        {suggestion.suggestedTask.recurrence.endDate ? `Repeats ${suggestion.suggestedTask.recurrence.frequency} until ${format(new Date(suggestion.suggestedTask.recurrence.endDate), "MMM d, yyyy")}` : `Repeats ${suggestion.suggestedTask.recurrence.frequency}`}
-                     </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-            )}
-        </div>
-        <div className="mt-4 flex justify-center items-center gap-4">
-             <Button variant="link" onClick={handleRewordClick} disabled={isPending || isAccepting || isRejecting}>
-                {isPending ? (
-                    <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Thinking...
-                    </>
-                ) : (
-                    <>
-                        <Wand2 className="mr-2 h-4 w-4" />
-                        Divide task
-                    </>
-                )}
-            </Button>
-            <Button variant="link" onClick={() => startEditingTask(suggestion.suggestedTask!.id)} disabled={isPending || isAccepting || isRejecting}>
-                <Edit className="mr-2 h-4 w-4" />
-                Edit
-            </Button>
-        </div>
-      </CardContent>
-      <CardFooter className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-6">
-        <Button variant="destructive" size="lg" onClick={handleReject} className="sm:col-span-1" disabled={isRejecting || isAccepting}>
-          {isRejecting ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <X className="mr-2 h-5 w-5" />} Not Now
-        </Button>
-        {hasPendingSubtasks ? (
-            <TooltipProvider>
-                <Tooltip>
-                    <TooltipTrigger asChild>
-                        <span className="sm:col-span-2" tabIndex={0}>
-                           <Button size="lg" className="w-full bg-green-500 hover:bg-green-600 text-white" disabled>
-                                <Check className="mr-2 h-5 w-5" /> Let's Do It
-                           </Button>
-                        </span>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                        <p>Complete all sub-tasks first</p>
-                    </TooltipContent>
-                </Tooltip>
-            </TooltipProvider>
-        ) : (
-            <Button size="lg" className="sm:col-span-2 bg-green-500 hover:bg-green-600 text-white" onClick={handleAccept} disabled={isAccepting || isRejecting}>
-                {isAccepting ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <Check className="mr-2 h-5 w-5" />} Let's Do It
-            </Button>
-        )}
-      </CardFooter>
-      {subtasksOfSuggested.length > 0 && (
-          <CardContent>
-            <Accordion type="single" collapsible defaultValue="subtasks" className="w-full">
-              <AccordionItem value="subtasks">
-                <AccordionTrigger>
-                  <div className="flex items-center gap-2 text-sm">
-                    View Sub-tasks ({subtasksOfSuggested.length})
-                  </div>
-                </AccordionTrigger>
-                <AccordionContent>
-                  <SubtaskList parentTask={suggestion.suggestedTask} subtasks={subtasksOfSuggested} />
-                </AccordionContent>
-              </AccordionItem>
-            </Accordion>
-          </CardContent>
-      )}
-    </Card>
+                                <CardTitle className="text-2xl pt-2 break-word">{task.title}</CardTitle>
+                                {task.description && <CardDescription className="pt-2">{task.description}</CardDescription>}
+                            </CardHeader>
+                            <CardContent>
+                                <div className="flex flex-wrap gap-2">
+                                    <Badge variant="outline">{task.category}</Badge>
+                                    <Badge variant="outline">{task.energyLevel} Energy</Badge>
+                                    <Badge variant="outline">{task.duration} min</Badge>
+                                    <Badge variant="outline">{task.timeOfDay}</Badge>
+                                    {task.rejectionCount > 0 && <Badge variant="destructive" className="animate-pulse">{task.rejectionCount}x Skipped</Badge>}
+                                    {task.reminderAt && (
+                                        <Badge variant="outline" className="flex items-center gap-1">
+                                            <CalendarIcon className="h-3 w-3" />
+                                            {format(new Date(task.reminderAt), "MMM d, h:mm a")}
+                                        </Badge>
+                                    )}
+                                    {task.recurrence && task.recurrence.frequency !== 'none' && (
+                                        <TooltipProvider>
+                                        <Tooltip>
+                                            <TooltipTrigger asChild>
+                                            <Badge variant="outline" className="flex items-center gap-1 cursor-default capitalize">
+                                                <Repeat className="h-3 w-3" />
+                                                {task.recurrence.frequency}
+                                            </Badge>
+                                            </TooltipTrigger>
+                                            <TooltipContent>
+                                                {task.recurrence.endDate ? `Repeats ${task.recurrence.frequency} until ${format(new Date(task.recurrence.endDate), "MMM d, yyyy")}` : `Repeats ${task.recurrence.frequency}`}
+                                            </TooltipContent>
+                                        </Tooltip>
+                                        </TooltipProvider>
+                                    )}
+                                </div>
+                                <div className="mt-4 flex justify-center items-center gap-4">
+                                    <Button variant="link" onClick={handleRewordClick} disabled={isPending || isAccepting || isRejecting}>
+                                        {isPending ? (
+                                            <>
+                                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                                Thinking...
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Wand2 className="mr-2 h-4 w-4" />
+                                                Divide task
+                                            </>
+                                        )}
+                                    </Button>
+                                    <Button variant="link" onClick={() => startEditingTask(task.id)} disabled={isPending || isAccepting || isRejecting}>
+                                        <Edit className="mr-2 h-4 w-4" />
+                                        Edit
+                                    </Button>
+                                     <Button variant="link" asChild>
+                                        <Link href={`/task/${task.id}`}>
+                                            <ExternalLink className="mr-2 h-4 w-4"/>
+                                            View
+                                        </Link>
+                                     </Button>
+                                </div>
+                            </CardContent>
+                            <CardFooter className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-6">
+                                <Button variant="destructive" size="lg" onClick={handleReject} className="sm:col-span-1" disabled={isRejecting || isAccepting}>
+                                {isRejecting ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <X className="mr-2 h-5 w-5" />} Not Now
+                                </Button>
+                                {hasPendingSubtasks ? (
+                                    <TooltipProvider>
+                                        <Tooltip>
+                                            <TooltipTrigger asChild>
+                                                <span className="sm:col-span-2" tabIndex={0}>
+                                                <Button size="lg" className="w-full bg-green-500 hover:bg-green-600 text-white" disabled>
+                                                        <Check className="mr-2 h-5 w-5" /> Let's Do It
+                                                </Button>
+                                                </span>
+                                            </TooltipTrigger>
+                                            <TooltipContent>
+                                                <p>Complete all sub-tasks first</p>
+                                            </TooltipContent>
+                                        </Tooltip>
+                                    </TooltipProvider>
+                                ) : (
+                                    <Button size="lg" className="sm:col-span-2 bg-green-500 hover:bg-green-600 text-white" onClick={handleAccept} disabled={isAccepting || isRejecting}>
+                                        {isAccepting ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <Check className="mr-2 h-5 w-5" />} Let's Do It
+                                    </Button>
+                                )}
+                            </CardFooter>
+                            {subtasksOfSuggested.length > 0 && (
+                                <CardContent>
+                                    <Accordion type="single" collapsible defaultValue="subtasks" className="w-full">
+                                    <AccordionItem value="subtasks">
+                                        <AccordionTrigger>
+                                        <div className="flex items-center gap-2 text-sm">
+                                            View Sub-tasks ({subtasksOfSuggested.length})
+                                        </div>
+                                        </AccordionTrigger>
+                                        <AccordionContent>
+                                        <SubtaskList parentTask={task} subtasks={subtasksOfSuggested} />
+                                        </AccordionContent>
+                                    </AccordionItem>
+                                    </Accordion>
+                                </CardContent>
+                            )}
+                            </Card>
+                    </CarouselItem>
+                ))}
+            </CarouselContent>
+            <CarouselPrevious className="-left-4 sm:-left-12" />
+            <CarouselNext className="-right-4 sm:-right-12" />
+        </Carousel>
+    
 
     {otherVisibleTasks && otherVisibleTasks.length > 0 && <OtherTasksList tasks={otherVisibleTasks} />}
     
@@ -490,3 +516,5 @@ function OtherTasksList({ tasks }: { tasks: Task[] }) {
         </Accordion>
     )
 }
+
+    
