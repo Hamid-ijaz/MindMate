@@ -12,7 +12,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 export function NotificationHistory() {
-  const { notifications, unreadCount, markAllAsRead, markAsRead, clearAllNotifications } = useNotifications();
+  const { notifications, unreadCount, markAllAsRead, clearAllNotifications } = useNotifications();
   const router = useRouter();
   const [isClearing, setIsClearing] = useState(false);
 
