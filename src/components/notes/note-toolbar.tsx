@@ -47,8 +47,7 @@ export function NoteToolbar({ onSetColor, onSetImageUrl }: NoteToolbarProps) {
         <div className="flex items-center gap-1">
             <Button variant="ghost" size="icon" onMouseDown={(e) => e.preventDefault()} onClick={() => handleFormat('bold')}><Bold className="h-4 w-4" /></Button>
             <Button variant="ghost" size="icon" onMouseDown={(e) => e.preventDefault()} onClick={() => handleFormat('italic')}><Italic className="h-4 w-4" /></Button>
-            <Button variant="ghost" size="icon" onMouseDown={(e) => e.preventDefault()} onClick={() => handleFormat('insertUnorderedList')}><List className="h-4 w-4" /></Button>
-
+            
             <Popover>
                 <PopoverTrigger asChild>
                     <Button variant="ghost" size="icon"><ImageIcon className="h-4 w-4" /></Button>
