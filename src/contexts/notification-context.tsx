@@ -37,7 +37,7 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   const playNotificationSound = () => {
-    const audio = new Audio('https://interactive-examples.mdn.mozilla.net/media/cc0-audio/bell.wav');
+    const audio = new Audio('audio/mixkit-bell-notification-933.wav');
     audio.play().catch(error => console.error("Failed to play notification sound:", error));
   };
 
