@@ -11,6 +11,8 @@ import { useToast } from '@/hooks/use-toast';
 import { Loader2, Trash2 } from 'lucide-react';
 import { NoteToolbar } from './note-toolbar';
 
+const DEFAULT_FONT_SIZE = 14;
+
 interface EditNoteDialogProps {
     note: Note | null;
     isOpen: boolean;
@@ -22,6 +24,7 @@ export function EditNoteDialog({ note, isOpen, onClose }: EditNoteDialogProps) {
     const [content, setContent] = useState('');
     const [color, setColor] = useState('');
     const [imageUrl, setImageUrl] = useState('');
+    const [fontSize, setFontSize] = useState(DEFAULT_FONT_SIZE);
     const [isSaving, setIsSaving] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
     const { updateNote, deleteNote } = useNotes();
@@ -35,6 +38,7 @@ export function EditNoteDialog({ note, isOpen, onClose }: EditNoteDialogProps) {
             if(contentRef.current) contentRef.current.innerHTML = note.content;
             setColor(note.color || '');
             setImageUrl(note.imageUrl || '');
+            setFontSize(note.fontSize || DEFAULT_FONT_SIZE);
         }
     }, [note]);
     
@@ -44,7 +48,8 @@ export function EditNoteDialog({ note, isOpen, onClose }: EditNoteDialogProps) {
             const hasChanged = title !== note.title || 
                                currentContent !== note.content || 
                                color !== (note.color || '') ||
-                               imageUrl !== (note.imageUrl || '');
+                               imageUrl !== (note.imageUrl || '') ||
+                               fontSize !== (note.fontSize || DEFAULT_FONT_SIZE);
             if (hasChanged) {
                 handleSave();
             }
@@ -57,7 +62,7 @@ export function EditNoteDialog({ note, isOpen, onClose }: EditNoteDialogProps) {
         setIsSaving(true);
         try {
             const updatedContent = contentRef.current?.innerHTML || '';
-            await updateNote(note.id, { title, content: updatedContent, color, imageUrl });
+            await updateNote(note.id, { title, content: updatedContent, color, imageUrl, fontSize });
             toast({ title: "Note updated" });
         } catch (e) {
             toast({ title: "Error", description: "Failed to save note.", variant: "destructive" });
@@ -113,7 +118,8 @@ export function EditNoteDialog({ note, isOpen, onClose }: EditNoteDialogProps) {
                             contentEditable
                             onInput={handleContentChange}
                             dangerouslySetInnerHTML={{ __html: content }}
-                            className="w-full min-h-[200px] border-none focus-visible:ring-0 resize-none bg-transparent p-0 text-base outline-none max-w-none"
+                            className="w-full min-h-[200px] border-none focus-visible:ring-0 resize-none bg-transparent p-0 outline-none max-w-none"
+                            style={{ fontSize: `${fontSize}px` }}
                         />
                     </div>
                 </div>
@@ -123,6 +129,8 @@ export function EditNoteDialog({ note, isOpen, onClose }: EditNoteDialogProps) {
                         <NoteToolbar
                             onSetColor={setColor}
                             onSetImageUrl={setImageUrl}
+                            onSetFontSize={setFontSize}
+                            initialFontSize={fontSize}
                         />
                         <Button variant="ghost" size="icon" onClick={handleDelete} disabled={isDeleting}>
                             {isDeleting ? <Loader2 className="animate-spin" /> : <Trash2 className="text-destructive h-5 w-5" />}

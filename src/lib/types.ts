@@ -62,6 +62,7 @@ export interface Note {
     content: string; // Will store HTML content for rich text
     imageUrl?: string;
     color?: string; // e.g., hex code for background color
+    fontSize?: number; // New property for font size
     createdAt: number;
     updatedAt: number;
 }

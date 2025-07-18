@@ -1,12 +1,13 @@
 
 "use client";
 
-import { Bold, Italic, List, Image as ImageIcon, Palette, Check } from "lucide-react";
+import { Bold, Italic, List, Image as ImageIcon, Palette, Check, TextQuote } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Input } from "../ui/input";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
+import { Slider } from "../ui/slider";
 
 const NOTE_COLORS = [
     { name: 'Default', value: '' },
@@ -23,9 +24,11 @@ const NOTE_COLORS = [
 interface NoteToolbarProps {
     onSetColor: (color: string) => void;
     onSetImageUrl: (url: string) => void;
+    onSetFontSize: (size: number) => void;
+    initialFontSize: number;
 }
 
-export function NoteToolbar({ onSetColor, onSetImageUrl }: NoteToolbarProps) {
+export function NoteToolbar({ onSetColor, onSetImageUrl, onSetFontSize, initialFontSize }: NoteToolbarProps) {
     const [imageUrl, setImageUrl] = useState('');
     const { toast } = useToast();
 
@@ -47,6 +50,7 @@ export function NoteToolbar({ onSetColor, onSetImageUrl }: NoteToolbarProps) {
         <div className="flex items-center gap-1">
             <Button variant="ghost" size="icon" onMouseDown={(e) => e.preventDefault()} onClick={() => handleFormat('bold')}><Bold className="h-4 w-4" /></Button>
             <Button variant="ghost" size="icon" onMouseDown={(e) => e.preventDefault()} onClick={() => handleFormat('italic')}><Italic className="h-4 w-4" /></Button>
+            <Button variant="ghost" size="icon" onMouseDown={(e) => e.preventDefault()} onClick={() => handleFormat('insertUnorderedList')}><List className="h-4 w-4" /></Button>
             
             <Popover>
                 <PopoverTrigger asChild>
@@ -85,6 +89,24 @@ export function NoteToolbar({ onSetColor, onSetImageUrl }: NoteToolbarProps) {
                             </Button>
                         ))}
                     </div>
+                </PopoverContent>
+            </Popover>
+            
+            <Popover>
+                <PopoverTrigger asChild>
+                    <Button variant="ghost" size="icon"><TextQuote className="h-4 w-4" /></Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-48 p-3">
+                   <div className="space-y-2">
+                     <p className="text-sm font-medium">Font Size</p>
+                     <Slider
+                        defaultValue={[initialFontSize]}
+                        min={12}
+                        max={24}
+                        step={1}
+                        onValueChange={(value) => onSetFontSize(value[0])}
+                    />
+                   </div>
                 </PopoverContent>
             </Popover>
         </div>

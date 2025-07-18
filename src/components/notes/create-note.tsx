@@ -7,8 +7,10 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Image as ImageIcon, Palette, Bold, Italic, List } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { NoteToolbar } from './note-toolbar';
+
+const DEFAULT_FONT_SIZE = 14;
 
 export function CreateNote() {
     const [isFocused, setIsFocused] = useState(false);
@@ -16,6 +18,7 @@ export function CreateNote() {
     const [content, setContent] = useState('');
     const [color, setColor] = useState('');
     const [imageUrl, setImageUrl] = useState('');
+    const [fontSize, setFontSize] = useState(DEFAULT_FONT_SIZE);
     const [isSaving, setIsSaving] = useState(false);
     const { addNote } = useNotes();
     const { toast } = useToast();
@@ -51,6 +54,7 @@ export function CreateNote() {
                 content: finalContent,
                 color,
                 imageUrl,
+                fontSize,
             });
             // Reset state
             setTitle('');
@@ -58,6 +62,7 @@ export function CreateNote() {
             if (contentRef.current) contentRef.current.innerHTML = '';
             setColor('');
             setImageUrl('');
+            setFontSize(DEFAULT_FONT_SIZE);
         } catch (error) {
             toast({ title: "Error", description: "Could not save the note.", variant: "destructive" });
         } finally {
@@ -104,7 +109,8 @@ export function CreateNote() {
                         ref={contentRef}
                         contentEditable
                         onInput={handleContentChange}
-                        className="w-full min-h-[100px] border-none focus-visible:ring-0 resize-none bg-transparent p-2 text-base outline-none"
+                        className="w-full min-h-[100px] border-none focus-visible:ring-0 resize-none bg-transparent p-2 outline-none"
+                        style={{ fontSize: `${fontSize}px` }}
                         data-placeholder="Take a note..."
                     />
                 </div>
@@ -112,6 +118,8 @@ export function CreateNote() {
                      <NoteToolbar 
                         onSetColor={setColor}
                         onSetImageUrl={setImageUrl}
+                        onSetFontSize={setFontSize}
+                        initialFontSize={fontSize}
                      />
                      <Button variant="ghost" onClick={() => { handleSave(); setIsFocused(false); }} disabled={isSaving}>
                         {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}

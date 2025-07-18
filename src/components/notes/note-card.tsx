@@ -31,6 +31,7 @@ export function NoteCard({ note, onClick }: NoteCardProps) {
                 {note.content && (
                     <div 
                         className="max-h-60 overflow-hidden"
+                        style={{ fontSize: note.fontSize ? `${note.fontSize}px` : 'inherit' }}
                         dangerouslySetInnerHTML={{ __html: note.content }}
                     />
                 )}
