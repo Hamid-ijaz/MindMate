@@ -305,14 +305,16 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
     const task = tasks.find(t => t.id === id);
     if (task) {
       const childrenIds = tasks.filter(t => t.parentId === id).map(t => t.id);
-      const updates = { completedAt: undefined, rejectionCount: 0, lastRejectedAt: undefined, reminderAt: task.reminderAt, notifiedAt: undefined };
+      const updates = { completedAt: undefined, rejectionCount: 0, lastRejectedAt: undefined };
 
       // Update parent task
       await updateTask(id, updates);
+      notifiedTaskIds.current.delete(id);
       
       // Update children tasks
       for (const childId of childrenIds) {
         await updateTask(childId, updates);
+        notifiedTaskIds.current.delete(childId);
       }
       
       setTasks(prev => prev.map(t => {
