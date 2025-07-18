@@ -6,7 +6,7 @@ import { useTasks } from '@/contexts/task-context';
 import { useNotifications } from '@/contexts/notification-context';
 
 export function useSetupNotificationHandlers() {
-  const { tasks, updateTask, acceptTask } = useTasks();
+  const { tasks, updateTask } = useTasks();
   const { sendNotification } = useNotifications();
 
   useEffect(() => {
@@ -23,7 +23,6 @@ export function useSetupNotificationHandlers() {
             body: task.description || "It's time to get this done!",
             tag: task.id,
             data: { taskId: task.id },
-            actions: { onComplete: acceptTask }
           });
           updateTask(task.id, { notifiedAt: now });
         }
@@ -33,7 +32,7 @@ export function useSetupNotificationHandlers() {
     // Defer the initial check to avoid updating state during render
     const initialCheckTimeout = setTimeout(() => {
       checkReminders();
-    }, 0);
+    }, 100);
 
     const intervalId = setInterval(checkReminders, 60 * 1000);
 
@@ -41,5 +40,5 @@ export function useSetupNotificationHandlers() {
       clearTimeout(initialCheckTimeout);
       clearInterval(intervalId);
     };
-  }, [tasks, sendNotification, updateTask, acceptTask]);
+  }, [tasks, sendNotification, updateTask]);
 }
