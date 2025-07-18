@@ -94,6 +94,7 @@ export function EditNoteDialog({ note, isOpen, onClose }: EditNoteDialogProps) {
             <DialogContent 
                 className="max-w-xl p-0 border-2 flex flex-col max-h-[90vh]"
                 style={{ borderColor: color || 'hsl(var(--border))' }}
+                showCloseButton={false}
             >
                 {imageUrl && (
                     <div className="relative w-full h-56 flex-shrink-0">
