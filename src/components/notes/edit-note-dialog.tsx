@@ -46,9 +46,17 @@ export function EditNoteDialog({ note, isOpen, onClose }: EditNoteDialogProps) {
     }, [note, isOpen]);
 
     const sanitizeHtml = (html: string) => {
-        // Remove style attributes containing color properties to allow theme-based coloring.
-        return html.replace(/style="[^"]*color:[^"]*"/g, '');
-    }
+        const doc = new DOMParser().parseFromString(html, 'text/html');
+        doc.querySelectorAll('[style]').forEach(el => {
+            const element = el as HTMLElement;
+            element.style.color = '';
+            element.style.backgroundColor = '';
+            if (!element.getAttribute('style')?.trim().replace(/;/g, '')) {
+                element.removeAttribute('style');
+            }
+        });
+        return doc.body.innerHTML;
+    };
 
     const handleClose = () => {
         if (!note || !contentRef.current) {
