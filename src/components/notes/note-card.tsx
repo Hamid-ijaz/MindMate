@@ -26,7 +26,7 @@ export function NoteCard({ note, onClick }: NoteCardProps) {
                     />
                 </div>
             )}
-            <div className="p-4">
+            <CardContent className="p-4">
                 {note.title && <CardTitle className="text-lg font-semibold mb-2">{note.title}</CardTitle>}
                 {note.content && (
                     <div 
@@ -34,7 +34,7 @@ export function NoteCard({ note, onClick }: NoteCardProps) {
                         dangerouslySetInnerHTML={{ __html: note.content }}
                     />
                 )}
-            </div>
+            </CardContent>
         </Card>
     )
 }

@@ -90,12 +90,12 @@ export function EditNoteDialog({ note, isOpen, onClose }: EditNoteDialogProps) {
                 className="max-w-xl p-0 border-2 flex flex-col max-h-[90vh]"
                 style={{ borderColor: color || 'hsl(var(--border))' }}
             >
-                <div className="flex-shrink-0">
-                    {imageUrl && (
-                        <div className="relative w-full h-56">
-                            <img src={imageUrl} alt="Note" className="w-full h-full object-cover rounded-t-lg" />
-                        </div>
-                    )}
+                {imageUrl && (
+                    <div className="relative w-full h-56 flex-shrink-0">
+                        <img src={imageUrl} alt="Note" className="w-full h-full object-cover rounded-t-lg" />
+                    </div>
+                )}
+                <div className="flex-grow overflow-y-auto">
                     <DialogHeader className="p-6 pb-0">
                         <DialogTitle>
                              <Input
@@ -106,16 +106,16 @@ export function EditNoteDialog({ note, isOpen, onClose }: EditNoteDialogProps) {
                             />
                         </DialogTitle>
                     </DialogHeader>
-                </div>
 
-                <div className="px-6 overflow-y-auto flex-grow">
-                    <div
-                        ref={contentRef}
-                        contentEditable
-                        onInput={handleContentChange}
-                        dangerouslySetInnerHTML={{ __html: content }}
-                        className="w-full min-h-[200px] border-none focus-visible:ring-0 resize-none bg-transparent p-0 text-base outline-none max-w-none"
-                    />
+                    <div className="px-6">
+                        <div
+                            ref={contentRef}
+                            contentEditable
+                            onInput={handleContentChange}
+                            dangerouslySetInnerHTML={{ __html: content }}
+                            className="w-full min-h-[200px] border-none focus-visible:ring-0 resize-none bg-transparent p-0 text-base outline-none max-w-none"
+                        />
+                    </div>
                 </div>
                 
                 <DialogFooter className="justify-between items-center p-3 border-t flex-shrink-0">

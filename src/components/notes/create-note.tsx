@@ -87,12 +87,12 @@ export function CreateNote() {
             className="max-w-xl mx-auto shadow-lg border-2" 
             style={{ borderColor: color || 'hsl(var(--border))' }}
         >
+            {imageUrl && (
+                <div className="relative w-full h-48">
+                    <img src={imageUrl} alt="Note" className="w-full h-full object-cover rounded-t-lg" />
+                </div>
+            )}
             <CardContent className="p-0">
-                 {imageUrl && (
-                    <div className="relative w-full h-48">
-                        <img src={imageUrl} alt="Note" className="w-full h-full object-cover rounded-t-lg" />
-                    </div>
-                )}
                 <div className="p-4">
                     <Input
                         placeholder="Title"
