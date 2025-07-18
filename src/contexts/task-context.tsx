@@ -281,7 +281,8 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
       
       setTasks(prev => prev.map(t => {
         if (t.id === id || childrenIds.includes(t.id)) {
-          return { ...t, ...updates };
+          // Casting to any to bypass strict type check for null assignment
+          return { ...t, ...updates as any };
         }
         return t;
       }));

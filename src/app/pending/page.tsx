@@ -45,7 +45,7 @@ function PendingTasksSkeleton() {
 export default function PendingTasksPage() {
   const { tasks, addTask, isLoading } = useTasks();
   const { toast } = useToast();
-  const [isPending, startTransition] = useTransition();
+  const [isRewording, startRewordTransition] = useTransition();
   const [showRewordDialog, setShowRewordDialog] = useState(false);
   const [rewordedSuggestions, setRewordedSuggestions] = useState<SuggestedTask[]>([]);
   const [selectedTasks, setSelectedTasks] = useState<Record<string, boolean>>({});
@@ -75,7 +75,7 @@ export default function PendingTasksPage() {
 
   const handleRewordClick = (task: Task) => {
     setTaskToReword(task);
-    startTransition(async () => {
+    startRewordTransition(async () => {
       try {
         const result = await rewordTask({
           title: task.title,
@@ -162,8 +162,8 @@ export default function PendingTasksPage() {
                     <TaskItem 
                       task={task}
                       extraActions={
-                        <Button variant="outline" size="sm" onClick={() => handleRewordClick(task)} disabled={isPending && taskToReword?.id === task.id}>
-                            {isPending && taskToReword?.id === task.id ? (
+                        <Button variant="outline" size="sm" onClick={() => handleRewordClick(task)} disabled={isRewording && taskToReword?.id === task.id}>
+                            {isRewording && taskToReword?.id === task.id ? (
                                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                             ) : (
                                 <Wand2 className="h-4 w-4 md:mr-2" />

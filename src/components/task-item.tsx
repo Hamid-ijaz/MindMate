@@ -7,12 +7,15 @@ import { useTasks } from '@/contexts/task-context';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Check, Edit, Trash2, ChevronDown, ChevronUp, RotateCcw, CalendarIcon, Loader2 } from 'lucide-react';
+import { Check, Edit, Trash2, ChevronDown, ChevronUp, RotateCcw, CalendarIcon, Loader2, ExternalLink } from 'lucide-react';
 import { TaskForm } from './task-form';
 import { SubtaskList } from './subtask-list';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
 import { format } from 'date-fns';
 import { useNotifications } from '@/contexts/notification-context';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+
 
 interface TaskItemProps {
   task: Task;
@@ -27,6 +30,7 @@ export function TaskItem({ task, extraActions, isSubtask = false, isHistoryView 
   const [showSubtasks, setShowSubtasks] = useState(false);
   const [isCompleting, setIsCompleting] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const router = useRouter();
 
   const subtasks = tasks.filter(t => t.parentId === task.id);
   const pendingSubtasks = subtasks.filter(t => !t.completedAt);
@@ -46,6 +50,13 @@ export function TaskItem({ task, extraActions, isSubtask = false, isHistoryView 
     setIsDeleting(false);
   }
 
+  const handleUncomplete = async () => {
+    await uncompleteTask(task.id);
+    if(isHistoryView) {
+        router.push(`/task/${task.id}`);
+    }
+  }
+
   const CompleteButton = () => (
     <Button variant="outline" size="sm" onClick={handleComplete} disabled={isCompleting}>
       {isCompleting ? <Loader2 className="h-4 w-4 animate-spin md:mr-2" /> : <Check className="h-4 w-4 md:mr-2" />}
@@ -54,11 +65,58 @@ export function TaskItem({ task, extraActions, isSubtask = false, isHistoryView 
   );
 
   const RedoButton = () => (
-     <Button variant="ghost" size="sm" onClick={() => uncompleteTask(task.id)}>
+     <Button variant="ghost" size="sm" onClick={handleUncomplete}>
         <RotateCcw className="mr-2 h-4 w-4" />
         Redo
     </Button>
   );
+
+  // If we are on the task detail page, we don't need to render the full card again.
+  // We just provide the action buttons. This logic is a bit of a hack.
+  const isOnTaskPage = router.pathname?.includes('/task/');
+
+  if (isOnTaskPage && !isHistoryView) {
+     return (
+        <>
+            {extraActions}
+            {!isSubtask && subtasks.length > 0 && (
+            <Button variant="ghost" size="sm" onClick={() => setShowSubtasks(!showSubtasks)}>
+                {showSubtasks ? <ChevronUp className="h-4 w-4 mr-2" /> : <ChevronDown className="h-4 w-4 mr-2" />}
+                <span className="hidden md:inline">Subtasks</span>
+                <span className="md:ml-1">({pendingSubtasks.length})</span>
+            </Button>
+            )}
+            
+            {!hasPendingSubtasks && !isSubtask && <CompleteButton />}
+            {hasPendingSubtasks && !isSubtask && (
+                <TooltipProvider>
+                <Tooltip>
+                    <TooltipTrigger asChild>
+                    <span tabIndex={0}><CompleteButton /></span>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                    <p>Complete all sub-tasks first.</p>
+                    </TooltipContent>
+                </Tooltip>
+                </TooltipProvider>
+            )}
+            
+            {isSubtask && <CompleteButton />}
+
+            <Button variant="ghost" size="icon" onClick={() => startEditingTask(task.id)} disabled={isDeleting || isCompleting}>
+              <Edit className="h-4 w-4" />
+            </Button>
+            <Button variant="ghost" size="icon" onClick={handleDelete} disabled={isDeleting || isCompleting}>
+              {isDeleting ? <Loader2 className="h-4 w-4 animate-spin text-destructive" /> : <Trash2 className="h-4 w-4 text-destructive" />}
+            </Button>
+        </>
+     )
+  }
+
+   if (isOnTaskPage && isHistoryView) {
+       return <RedoButton />;
+   }
+
 
   return (
     <Card className={isSubtask ? "border-l-4 border-primary/20" : ""}>
@@ -87,6 +145,14 @@ export function TaskItem({ task, extraActions, isSubtask = false, isHistoryView 
             </CardContent>
             <CardFooter className={`flex flex-wrap justify-end gap-2 ${isSubtask ? 'px-3 pb-3 pt-0' : 'p-6 pt-0'}`}>
                 {extraActions}
+                {!isSubtask && (
+                     <Button variant="ghost" size="sm" asChild>
+                        <Link href={`/task/${task.id}`}>
+                            <ExternalLink className="h-4 w-4 md:mr-2"/>
+                             <span className="hidden md:inline">View</span>
+                        </Link>
+                     </Button>
+                )}
                 {!isSubtask && subtasks.length > 0 && (
                 <Button variant="ghost" size="sm" onClick={() => setShowSubtasks(!showSubtasks)}>
                     {showSubtasks ? <ChevronUp className="h-4 w-4 mr-2" /> : <ChevronDown className="h-4 w-4 mr-2" />}
@@ -122,6 +188,12 @@ export function TaskItem({ task, extraActions, isSubtask = false, isHistoryView 
        )}
        {isHistoryView && (
             <CardFooter className={`flex justify-end gap-2 ${isSubtask ? 'px-3 pb-3 pt-0' : 'p-6 pt-0'}`}>
+                 <Button variant="ghost" size="sm" asChild>
+                    <Link href={`/task/${task.id}`}>
+                        <ExternalLink className="h-4 w-4 md:mr-2"/>
+                            <span className="hidden md:inline">View Details</span>
+                    </Link>
+                </Button>
                 <RedoButton />
             </CardFooter>
        )}
