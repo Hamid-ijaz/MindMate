@@ -45,6 +45,7 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
 
+
   const [isSheetOpen, setIsSheetOpen] = useState(false);
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   
@@ -227,6 +228,9 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
   }, [toast]);
   
   const acceptTask = useCallback(async (id: string) => {
+    const task = tasks.find(t => t.id === id);
+    if (!task) return;
+
     const subtasks = tasks.filter(t => t.parentId === id);
     const pendingSubtasks = subtasks.filter(t => !t.completedAt);
 

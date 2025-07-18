@@ -12,6 +12,7 @@ import { TaskForm } from './task-form';
 import { SubtaskList } from './subtask-list';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
 import { format } from 'date-fns';
+import { useNotifications } from '@/contexts/notification-context';
 
 interface TaskItemProps {
   task: Task;
@@ -22,15 +23,25 @@ interface TaskItemProps {
 
 export function TaskItem({ task, extraActions, isSubtask = false, isHistoryView = false }: TaskItemProps) {
   const { tasks, deleteTask, acceptTask, uncompleteTask, startEditingTask } = useTasks();
+  const { deleteNotification } = useNotifications();
   const [showSubtasks, setShowSubtasks] = useState(false);
 
   const subtasks = tasks.filter(t => t.parentId === task.id);
   const pendingSubtasks = subtasks.filter(t => !t.completedAt);
   const hasPendingSubtasks = pendingSubtasks.length > 0;
 
+  const handleComplete = () => {
+    acceptTask(task.id);
+    deleteNotification(task.id);
+  }
+
+  const handleDelete = () => {
+    deleteTask(task.id);
+    deleteNotification(task.id);
+  }
 
   const CompleteButton = () => (
-    <Button variant="outline" size="sm" onClick={() => acceptTask(task.id)}>
+    <Button variant="outline" size="sm" onClick={handleComplete}>
       <Check className="h-4 w-4 md:mr-2" />
       <span className="hidden md:inline">Complete</span>
     </Button>
@@ -97,7 +108,7 @@ export function TaskItem({ task, extraActions, isSubtask = false, isHistoryView 
                 <Button variant="ghost" size="icon" onClick={() => startEditingTask(task.id)}>
                 <Edit className="h-4 w-4" />
                 </Button>
-                <Button variant="ghost" size="icon" onClick={() => deleteTask(task.id)}>
+                <Button variant="ghost" size="icon" onClick={handleDelete}>
                 <Trash2 className="h-4 w-4 text-destructive" />
                 </Button>
             </CardFooter>

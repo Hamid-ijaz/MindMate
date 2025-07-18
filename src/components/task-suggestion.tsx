@@ -24,6 +24,7 @@ import { PlusCircle } from "lucide-react";
 import { SubtaskList } from "./subtask-list";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./ui/tooltip";
 import { format } from "date-fns";
+import { useNotifications } from "@/contexts/notification-context";
 
 const getDefaultEnergyLevel = (): EnergyLevel => {
     const timeOfDay = getCurrentTimeOfDay();
@@ -40,6 +41,7 @@ const getDefaultEnergyLevel = (): EnergyLevel => {
 
 export function TaskSuggestion() {
   const { tasks, acceptTask, rejectTask, muteTask, addTask, isLoading: tasksLoading, startEditingTask } = useTasks();
+  const { deleteNotification } = useNotifications();
   const [currentEnergy, setCurrentEnergy] = useState<EnergyLevel | null>(null);
   const [suggestion, setSuggestion] = useState<{ suggestedTask: Task | null, otherTasks: Task[] }>({ suggestedTask: null, otherTasks: [] });
   const [showAffirmation, setShowAffirmation] = useState(false);
@@ -109,6 +111,7 @@ export function TaskSuggestion() {
   const handleAccept = () => {
     if (!suggestion.suggestedTask) return;
     acceptTask(suggestion.suggestedTask.id);
+    deleteNotification(suggestion.suggestedTask.id);
     setShowAffirmation(true);
     setTimeout(() => {
       setShowAffirmation(false);
@@ -128,6 +131,7 @@ export function TaskSuggestion() {
   const handleMute = () => {
     if (!suggestion.suggestedTask) return;
     muteTask(suggestion.suggestedTask.id);
+    deleteNotification(suggestion.suggestedTask.id);
     setShowRejectionPrompt(false);
     toast({
         title: "Task Muted",

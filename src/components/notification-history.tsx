@@ -19,19 +19,13 @@ export function NotificationHistory() {
   const handleNotificationClick = (notificationId: string, taskId?: string) => {
     markAsRead(notificationId);
     if (taskId) {
-      // Find the task's parent to navigate to the correct page
-      router.push('/pending'); // Navigate to a page where the task is visible
-      setTimeout(() => startEditingTask(taskId), 100); // Delay to allow navigation
+      router.push('/pending'); 
+      setTimeout(() => startEditingTask(taskId), 100); 
     }
   }
 
   return (
-    <Popover onOpenChange={(isOpen) => {
-        if (isOpen && unreadCount > 0) {
-            // Optional: Mark as read on open
-            // markAllAsRead(); 
-        }
-    }}>
+    <Popover>
       <PopoverTrigger asChild>
         <Button variant="ghost" size="icon" className="relative">
           <Bell />
