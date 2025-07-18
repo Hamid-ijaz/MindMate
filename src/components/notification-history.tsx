@@ -10,9 +10,10 @@ import { formatDistanceToNow } from "date-fns";
 import { cn } from "@/lib/utils";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./ui/tooltip";
 
 export function NotificationHistory() {
-  const { notifications, unreadCount, markAllAsRead, clearAllNotifications } = useNotifications();
+  const { notifications, unreadCount, markAllAsRead, markAsRead, clearAllNotifications } = useNotifications();
   const router = useRouter();
   const [isClearing, setIsClearing] = useState(false);
 
@@ -44,20 +45,30 @@ export function NotificationHistory() {
       <PopoverContent className="w-80 p-0">
         <div className="flex items-center justify-between p-3 border-b">
             <h3 className="font-semibold">Notifications</h3>
-            <div className="flex items-center gap-2">
-                {unreadCount > 0 && (
-                    <Button variant="link" size="sm" className="h-auto p-0" onClick={markAllAsRead}>
-                        <CheckCheck className="mr-1 h-4 w-4" />
-                        Mark all as read
-                    </Button>
-                )}
-                {notifications.length > 0 && (
-                     <Button variant="link" size="sm" className="h-auto p-0 text-destructive" onClick={handleClearAll} disabled={isClearing}>
-                        {isClearing ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Trash2 className="mr-1 h-4 w-4" />}
-                        Clear All
-                    </Button>
-                )}
-            </div>
+            <TooltipProvider>
+              <div className="flex items-center gap-1">
+                  {unreadCount > 0 && (
+                      <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={markAllAsRead}>
+                                <CheckCheck className="h-4 w-4" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>Mark all as read</TooltipContent>
+                      </Tooltip>
+                  )}
+                  {notifications.length > 0 && (
+                      <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={handleClearAll} disabled={isClearing}>
+                                {isClearing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>Clear all notifications</TooltipContent>
+                      </Tooltip>
+                  )}
+              </div>
+            </TooltipProvider>
         </div>
         <ScrollArea className="h-96">
             {notifications.length === 0 ? (
