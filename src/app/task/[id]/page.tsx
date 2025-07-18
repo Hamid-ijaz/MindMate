@@ -123,7 +123,7 @@ export default function TaskPage() {
             <Card>
                 <CardHeader>
                     <div className="flex justify-between items-start">
-                        <CardTitle className="text-3xl break-all">{task.title}</CardTitle>
+                        <CardTitle className="text-3xl break-words">{task.title}</CardTitle>
                         <div className="flex items-center gap-2">
                              <Badge className={`flex items-center gap-1.5 ${status.color} text-white`}>
                                 <span className={`h-2 w-2 rounded-full ${status.color} ring-2 ring-white`}></span>

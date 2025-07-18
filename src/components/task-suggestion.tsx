@@ -311,7 +311,7 @@ export function TaskSuggestion() {
             </Select>
         </div>
 
-        <CardTitle className="text-2xl pt-2 break-all">{suggestion.suggestedTask.title}</CardTitle>
+        <CardTitle className="text-2xl pt-2 break-words">{suggestion.suggestedTask.title}</CardTitle>
         {suggestion.suggestedTask.description && <CardDescription className="pt-2">{suggestion.suggestedTask.description}</CardDescription>}
       </CardHeader>
       <CardContent>
@@ -418,7 +418,7 @@ export function TaskSuggestion() {
         <AlertDialogContent className="max-w-xl">
             <AlertDialogHeader>
                 <AlertDialogTitle className="flex items-center gap-2"><Wand2 className="text-primary"/>Here's a breakdown</AlertDialogTitle>
-                <AlertDialogDescription className="break-all">
+                <AlertDialogDescription className="break-words">
                    Select which steps you'd like to add as new sub-tasks.
                 </AlertDialogDescription>
             </AlertDialogHeader>
