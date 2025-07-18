@@ -84,7 +84,8 @@ export const taskService = {
         id: doc.id,
         createdAt: data.createdAt?.toMillis() || Date.now(),
         completedAt: data.completedAt?.toMillis(),
-        lastRejectedAt: data.lastRejectedAt?.toMillis()
+        lastRejectedAt: data.lastRejectedAt?.toMillis(),
+        reminderAt: data.reminderAt?.toMillis(),
       } as Task;
     });
   },
@@ -97,6 +98,10 @@ export const taskService = {
       userEmail,
       createdAt: Timestamp.now(), // Use server timestamp
     };
+    
+    if (task.reminderAt) {
+      taskData.reminderAt = Timestamp.fromMillis(task.reminderAt);
+    }
 
     // Remove fields with undefined values to avoid Firestore errors
     Object.keys(taskData).forEach(key => {
@@ -125,6 +130,11 @@ export const taskService = {
       userEmail,
       createdAt: Timestamp.now(),
     };
+    
+    if (parentTask.reminderAt) {
+      parentTask.reminderAt = Timestamp.fromMillis(parentTask.reminderAt);
+    }
+    
      // Remove fields with undefined values to avoid Firestore errors
     Object.keys(parentTask).forEach(key => {
       if (parentTask[key] === undefined || parentTask[key] === null) {
@@ -170,6 +180,9 @@ export const taskService = {
     if (updates.lastRejectedAt !== undefined) {
       updateData.lastRejectedAt = updates.lastRejectedAt ? Timestamp.fromMillis(updates.lastRejectedAt) : null;
     }
+    if (updates.reminderAt !== undefined) {
+      updateData.reminderAt = updates.reminderAt ? Timestamp.fromMillis(updates.reminderAt) : null;
+    }
     
     await updateDoc(taskRef, updateData);
   },
@@ -205,7 +218,8 @@ export const taskService = {
           id: doc.id,
           createdAt: data.createdAt?.toMillis() || Date.now(),
           completedAt: data.completedAt?.toMillis(),
-          lastRejectedAt: data.lastRejectedAt?.toMillis()
+          lastRejectedAt: data.lastRejectedAt?.toMillis(),
+          reminderAt: data.reminderAt?.toMillis()
         } as Task;
       });
       callback(tasks);

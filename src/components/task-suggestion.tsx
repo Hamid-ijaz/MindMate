@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { EnergyLevel, Task, TimeOfDay } from "@/lib/types";
-import { AlertCircle, Check, Sparkles, X, Loader2, Wand2, Edit } from "lucide-react";
+import { AlertCircle, Check, Sparkles, X, Loader2, Wand2, Edit, CalendarIcon } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { getRandomQuote } from "@/lib/motivational-quotes";
 import { MAX_REJECTIONS_BEFORE_PROMPT, REJECTION_HOURS } from "@/lib/constants";
@@ -24,6 +24,7 @@ import { Label } from "./ui/label";
 import { PlusCircle } from "lucide-react";
 import { SubtaskList } from "./subtask-list";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./ui/tooltip";
+import { format } from "date-fns";
 
 const getDefaultEnergyLevel = (): EnergyLevel => {
     const timeOfDay = getCurrentTimeOfDay();
@@ -299,6 +300,12 @@ export function TaskSuggestion() {
             <Badge variant="outline">{suggestion.suggestedTask.duration} min</Badge>
             <Badge variant="outline">{suggestion.suggestedTask.timeOfDay}</Badge>
             {suggestion.suggestedTask.rejectionCount > 0 && <Badge variant="destructive" className="animate-pulse">{suggestion.suggestedTask.rejectionCount}x Skipped</Badge>}
+            {suggestion.suggestedTask.reminderAt && (
+                <Badge variant="outline" className="flex items-center gap-1">
+                    <CalendarIcon className="h-3 w-3" />
+                    {format(new Date(suggestion.suggestedTask.reminderAt), "MMM d, yyyy")}
+                </Badge>
+            )}
         </div>
         <div className="mt-4 flex justify-center items-center gap-4">
              <Button variant="link" onClick={handleRewordClick} disabled={isPending}>

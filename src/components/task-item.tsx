@@ -7,10 +7,11 @@ import { useTasks } from '@/contexts/task-context';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Check, Edit, Trash2, ChevronDown, ChevronUp, RotateCcw } from 'lucide-react';
+import { Check, Edit, Trash2, ChevronDown, ChevronUp, RotateCcw, CalendarIcon } from 'lucide-react';
 import { TaskForm } from './task-form';
 import { SubtaskList } from './subtask-list';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
+import { format } from 'date-fns';
 
 interface TaskItemProps {
   task: Task;
@@ -60,6 +61,12 @@ export function TaskItem({ task, extraActions, isSubtask = false, isHistoryView 
                 <Badge variant="secondary">{task.energyLevel} Energy</Badge>
                 <Badge variant="secondary">{task.duration} min</Badge>
                 <Badge variant="secondary">{task.timeOfDay}</Badge>
+                {task.reminderAt && (
+                   <Badge variant="outline" className="flex items-center gap-1">
+                      <CalendarIcon className="h-3 w-3" />
+                      {format(new Date(task.reminderAt), "MMM d")}
+                   </Badge>
+                )}
             </CardContent>
             <CardFooter className={`flex flex-wrap justify-end gap-2 ${isSubtask ? 'px-3 pb-3 pt-0' : 'p-6 pt-0'}`}>
                 {extraActions}

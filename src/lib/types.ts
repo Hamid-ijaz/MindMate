@@ -28,6 +28,7 @@ export interface Task {
   isMuted: boolean;
   completedAt?: number;
   parentId?: string;
+  reminderAt?: number;
 }
 
 export interface User {

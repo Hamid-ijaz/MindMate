@@ -38,6 +38,11 @@ import { summarizeUrl } from "@/ai/flows/summarize-url-flow";
 import { enhanceTask } from "@/ai/flows/enhance-task-flow";
 import { Loader2, Wand2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
+import { CalendarIcon } from "lucide-react";
+import { Calendar } from "./ui/calendar";
+import { cn } from "@/lib/utils";
+import { format } from "date-fns";
 
 const formSchema = z.object({
   title: z.string().min(3, "Title must be at least 3 characters long."),
@@ -46,6 +51,7 @@ const formSchema = z.object({
   energyLevel: z.enum(energyLevels),
   duration: z.coerce.number().min(1, "Duration is required"),
   timeOfDay: z.enum(timesOfDay),
+  reminderAt: z.date().optional(),
 });
 
 type TaskFormValues = z.infer<typeof formSchema>;
@@ -71,6 +77,7 @@ export function TaskForm({ task, onFinished, parentId, defaultValues: propDefaul
   const defaultValues: Partial<TaskFormValues> = task ? {
     ...task,
     duration: Number(task.duration) as TaskDuration,
+    reminderAt: task.reminderAt ? new Date(task.reminderAt) : undefined,
   } : {
     title: "",
     description: "",
@@ -78,6 +85,7 @@ export function TaskForm({ task, onFinished, parentId, defaultValues: propDefaul
     energyLevel: "Medium",
     duration: taskDurations[1] || 30,
     timeOfDay: "Afternoon",
+    reminderAt: undefined,
     ...propDefaults,
   };
 
@@ -151,10 +159,15 @@ export function TaskForm({ task, onFinished, parentId, defaultValues: propDefaul
   }
 
   const onSubmit = (data: TaskFormValues) => {
+    const taskData = {
+        ...data,
+        reminderAt: data.reminderAt ? data.reminderAt.getTime() : undefined,
+    }
+
     if (task) {
-      updateTask(task.id, data as Partial<Task>);
+      updateTask(task.id, taskData as Partial<Task>);
     } else {
-      addTask({ ...data, parentId } as Omit<Task, 'id' | 'createdAt' | 'rejectionCount' | 'isMuted' | 'completedAt' | 'lastRejectedAt'>);
+      addTask({ ...taskData, parentId } as Omit<Task, 'id' | 'createdAt' | 'rejectionCount' | 'isMuted' | 'completedAt' | 'lastRejectedAt'>);
     }
     onFinished?.();
     if (!task) {
@@ -298,6 +311,47 @@ export function TaskForm({ task, onFinished, parentId, defaultValues: propDefaul
             )}
           />
         </div>
+        <FormField
+            control={form.control}
+            name="reminderAt"
+            render={({ field }) => (
+                <FormItem className="flex flex-col">
+                <FormLabel>Reminder / Due Date (Optional)</FormLabel>
+                <Popover>
+                    <PopoverTrigger asChild>
+                    <FormControl>
+                        <Button
+                        variant={"outline"}
+                        className={cn(
+                            "pl-3 text-left font-normal",
+                            !field.value && "text-muted-foreground"
+                        )}
+                        >
+                        {field.value ? (
+                            format(field.value, "PPP")
+                        ) : (
+                            <span>Pick a date</span>
+                        )}
+                        <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                        </Button>
+                    </FormControl>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                        mode="single"
+                        selected={field.value}
+                        onSelect={field.onChange}
+                        disabled={(date) =>
+                            date < new Date(new Date().setHours(0,0,0,0))
+                        }
+                        initialFocus
+                    />
+                    </PopoverContent>
+                </Popover>
+                <FormMessage />
+                </FormItem>
+            )}
+            />
         <div className="flex justify-end gap-2">
             {onFinished && (
                 <Button variant="ghost" type="button" onClick={onFinished}>Cancel</Button>
@@ -308,5 +362,3 @@ export function TaskForm({ task, onFinished, parentId, defaultValues: propDefaul
     </Form>
   );
 }
-
-    

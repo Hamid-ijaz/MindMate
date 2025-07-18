@@ -129,7 +129,7 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
     const description = taskData.description || '';
     const hasBullets = bulletRegex.test(description);
     
-    let subtasksToCreate: Omit<Task, 'id' | 'createdAt' | 'rejectionCount' | 'isMuted'>[] = [];
+    let subtasksToCreate: Omit<Task, 'id' | 'createdAt' | 'rejectionCount' | 'isMuted' | 'completedAt' | 'lastRejectedAt'>[] = [];
     let parentDescription = description;
 
     if (hasBullets && !taskData.parentId) { // Only process bullets for new parent tasks
@@ -262,7 +262,7 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
     const task = tasks.find(t => t.id === id);
     if (task) {
       const childrenIds = tasks.filter(t => t.parentId === id).map(t => t.id);
-      const updates = { completedAt: null, rejectionCount: 0, lastRejectedAt: null };
+      const updates = { completedAt: null, rejectionCount: 0, lastRejectedAt: null, reminderAt: task.reminderAt };
 
       // Update parent task
       await updateTask(id, updates);
@@ -334,5 +334,3 @@ export const useTasks = (): TaskContextType => {
   }
   return context;
 };
-
-    
