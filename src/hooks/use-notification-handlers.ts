@@ -30,9 +30,16 @@ export function useSetupNotificationHandlers() {
       });
     };
 
-    const intervalId = setInterval(checkReminders, 60 * 1000);
-    checkReminders();
+    // Defer the initial check to avoid updating state during render
+    const initialCheckTimeout = setTimeout(() => {
+      checkReminders();
+    }, 0);
 
-    return () => clearInterval(intervalId);
+    const intervalId = setInterval(checkReminders, 60 * 1000);
+
+    return () => {
+      clearTimeout(initialCheckTimeout);
+      clearInterval(intervalId);
+    };
   }, [tasks, sendNotification, updateTask, acceptTask]);
 }
