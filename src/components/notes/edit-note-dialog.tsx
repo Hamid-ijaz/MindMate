@@ -32,6 +32,7 @@ export function EditNoteDialog({ note, isOpen, onClose }: EditNoteDialogProps) {
     const { toast } = useToast();
     
     const contentRef = useRef<HTMLDivElement>(null);
+    const lastContent = useRef('');
 
     useEffect(() => {
         if (note) {
@@ -39,26 +40,24 @@ export function EditNoteDialog({ note, isOpen, onClose }: EditNoteDialogProps) {
             setColor(note.color || '');
             setImageUrl(note.imageUrl || '');
             setFontSize(note.fontSize || DEFAULT_FONT_SIZE);
-            if (contentRef.current) {
-                contentRef.current.innerHTML = note.content || '';
-            }
+            lastContent.current = note.content || '';
         }
     }, [note]);
 
     const handleClose = () => {
-        if (!note) {
+        if (!note || !contentRef.current) {
             onClose();
             return;
         }
 
-        const currentContent = contentRef.current?.innerHTML || '';
-        const hasChanged = title !== note.title || 
-                           currentContent !== note.content || 
+        const currentContent = lastContent.current;
+        const hasChanged = title !== (note.title || '') ||
+                           currentContent !== (note.content || '') || 
                            color !== (note.color || '') ||
                            imageUrl !== (note.imageUrl || '') ||
                            fontSize !== (note.fontSize || DEFAULT_FONT_SIZE);
                            
-        if (hasChanged) {
+        if (hasChanged && (title.trim() || currentContent.trim())) {
             handleSave(currentContent);
         }
         
@@ -92,6 +91,10 @@ export function EditNoteDialog({ note, isOpen, onClose }: EditNoteDialogProps) {
         }
     }
 
+    const handleContentInput = (e: React.FormEvent<HTMLDivElement>) => {
+        lastContent.current = e.currentTarget.innerHTML;
+    }
+
     return (
         <Dialog open={isOpen} onOpenChange={(open) => !open && handleClose()}>
             <DialogContent 
@@ -121,6 +124,8 @@ export function EditNoteDialog({ note, isOpen, onClose }: EditNoteDialogProps) {
                             ref={contentRef}
                             contentEditable
                             suppressContentEditableWarning={true}
+                            dangerouslySetInnerHTML={{ __html: note?.content || '' }}
+                            onInput={handleContentInput}
                             className="w-full min-h-[200px] border-none focus-visible:ring-0 resize-none bg-transparent p-0 outline-none max-w-none"
                             style={{ fontSize: `${fontSize}px` }}
                         />
