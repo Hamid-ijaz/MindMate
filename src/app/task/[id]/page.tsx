@@ -9,9 +9,11 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { AlertCircle, ArrowLeft, CalendarIcon, Check, Edit, ExternalLink, Loader2, RotateCcw, Trash2, Wand2 } from 'lucide-react';
 import { format, isPast } from 'date-fns';
-import { TaskItem } from '@/components/task-item';
 import { SubtaskList } from '@/components/subtask-list';
 import Link from 'next/link';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { useState } from 'react';
+import { useNotifications } from '@/contexts/notification-context';
 
 function TaskPageSkeleton() {
     return (
@@ -48,11 +50,16 @@ function TaskPageSkeleton() {
 export default function TaskPage() {
     const { id } = useParams();
     const router = useRouter();
-    const { tasks, isLoading, startEditingTask, deleteTask } = useTasks();
+    const { tasks, isLoading, startEditingTask, deleteTask, acceptTask, uncompleteTask } = useTasks();
+    const { deleteNotification } = useNotifications();
+    const [isCompleting, setIsCompleting] = useState(false);
+    const [isDeleting, setIsDeleting] = useState(false);
     
     const taskId = Array.isArray(id) ? id[0] : id;
     const task = tasks.find(t => t.id === taskId);
     const subtasks = tasks.filter(t => t.parentId === taskId);
+    const pendingSubtasks = subtasks.filter(t => !t.completedAt);
+    const hasPendingSubtasks = pendingSubtasks.length > 0;
 
     if (isLoading) {
         return <TaskPageSkeleton />;
@@ -82,9 +89,30 @@ export default function TaskPage() {
     const status = getStatus();
 
     const handleDelete = async () => {
+        setIsDeleting(true);
         await deleteTask(task.id);
+        await deleteNotification(task.id);
+        setIsDeleting(false);
         router.push('/pending');
     }
+
+    const handleComplete = async () => {
+        setIsCompleting(true);
+        await acceptTask(task.id);
+        await deleteNotification(task.id);
+        setIsCompleting(false);
+    }
+    
+    const handleRedo = async () => {
+        await uncompleteTask(task.id);
+    }
+
+    const CompleteButton = () => (
+        <Button onClick={handleComplete} disabled={isCompleting || hasPendingSubtasks}>
+            {isCompleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Check className="mr-2 h-4 w-4" />}
+            Complete
+        </Button>
+    );
 
     return (
         <div className="container mx-auto max-w-2xl py-8 md:py-12 px-4">
@@ -154,16 +182,36 @@ export default function TaskPage() {
                     {subtasks.length > 0 && (
                         <div>
                             <Separator className="my-4" />
-                            <h3 className="text-lg font-semibold mb-2">Sub-tasks ({subtasks.filter(t => !t.completedAt).length} pending)</h3>
+                            <h3 className="text-lg font-semibold mb-2">Sub-tasks ({pendingSubtasks.length} pending)</h3>
                             <SubtaskList parentTask={task} subtasks={subtasks} isHistoryView={!!task.completedAt} />
                         </div>
                     )}
                 </CardContent>
                  <CardFooter className="border-t pt-6 flex flex-col sm:flex-row sm:justify-end gap-2">
                     {task.completedAt ? (
-                        <TaskItem task={task} isHistoryView />
+                         <Button variant="outline" onClick={handleRedo}>
+                            <RotateCcw className="mr-2 h-4 w-4" />
+                            Redo
+                        </Button>
                     ) : (
-                       <TaskItem task={task} />
+                       <div className="flex w-full sm:w-auto justify-end gap-2">
+                         <Button variant="destructive" onClick={handleDelete} disabled={isDeleting}>
+                            {isDeleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Trash2 className="mr-2 h-4 w-4" />}
+                            Delete
+                        </Button>
+                        {hasPendingSubtasks ? (
+                             <TooltipProvider>
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <span tabIndex={0}><CompleteButton /></span>
+                                    </TooltipTrigger>
+                                    <TooltipContent>Complete all sub-tasks first</TooltipContent>
+                                </Tooltip>
+                            </TooltipProvider>
+                        ) : (
+                            <CompleteButton />
+                        )}
+                       </div>
                     )}
                  </CardFooter>
             </Card>
@@ -173,4 +221,3 @@ export default function TaskPage() {
 
 // Dummy separator, replace with actual component if you have one
 const Separator = ({ className }: { className?: string }) => <div className={`h-px bg-border ${className}`} />;
-
