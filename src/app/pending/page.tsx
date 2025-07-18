@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useTransition, useEffect } from 'react';
+import { useState, useTransition, useEffect, useRef } from 'react';
 import { useTasks } from '@/contexts/task-context';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { TaskItem } from '@/components/task-item';
@@ -15,6 +15,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useSearchParams } from 'next/navigation';
 
 interface SuggestedTask {
   title: string;
@@ -49,9 +50,28 @@ export default function PendingTasksPage() {
   const [rewordedSuggestions, setRewordedSuggestions] = useState<SuggestedTask[]>([]);
   const [selectedTasks, setSelectedTasks] = useState<Record<string, boolean>>({});
   const [taskToReword, setTaskToReword] = useState<Task | null>(null);
+  
+  const searchParams = useSearchParams();
+  const taskRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   const rootTasks = tasks.filter(t => !t.parentId);
   const uncompletedTasks = rootTasks.filter(t => !t.completedAt);
+
+  useEffect(() => {
+    const taskId = searchParams.get('taskId');
+    if (taskId && !isLoading) {
+      setTimeout(() => {
+        const el = taskRefs.current[taskId];
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          el.classList.add('animate-pulse', 'bg-primary/10', 'rounded-lg');
+          setTimeout(() => {
+            el.classList.remove('animate-pulse', 'bg-primary/10', 'rounded-lg');
+          }, 2000);
+        }
+      }, 100); 
+    }
+  }, [searchParams, isLoading]);
 
   const handleRewordClick = (task: Task) => {
     setTaskToReword(task);
@@ -138,20 +158,21 @@ export default function PendingTasksPage() {
                 <p className="text-muted-foreground">No pending tasks. Great job!</p>
               ) : (
                 uncompletedTasks.map(task => (
-                  <TaskItem 
-                    key={task.id} 
-                    task={task}
-                    extraActions={
-                      <Button variant="outline" size="sm" onClick={() => handleRewordClick(task)} disabled={isPending && taskToReword?.id === task.id}>
-                          {isPending && taskToReword?.id === task.id ? (
-                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          ) : (
-                              <Wand2 className="h-4 w-4 md:mr-2" />
-                          )}
-                          <span className="hidden md:inline">Divide Task</span>
-                      </Button>
-                    }
-                  />
+                  <div key={task.id} ref={el => taskRefs.current[task.id] = el}>
+                    <TaskItem 
+                      task={task}
+                      extraActions={
+                        <Button variant="outline" size="sm" onClick={() => handleRewordClick(task)} disabled={isPending && taskToReword?.id === task.id}>
+                            {isPending && taskToReword?.id === task.id ? (
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            ) : (
+                                <Wand2 className="h-4 w-4 md:mr-2" />
+                            )}
+                            <span className="hidden md:inline">Divide Task</span>
+                        </Button>
+                      }
+                    />
+                  </div>
                 ))
               )}
             </div>

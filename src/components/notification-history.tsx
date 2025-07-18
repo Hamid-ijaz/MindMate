@@ -18,7 +18,7 @@ export function NotificationHistory() {
   const handleNotificationClick = (notificationId: string, taskId?: string) => {
     markAsRead(notificationId);
     if (taskId) {
-      router.push('/pending'); 
+      router.push(`/pending?taskId=${taskId}`); 
     }
   }
 
