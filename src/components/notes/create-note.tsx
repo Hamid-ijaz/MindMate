@@ -38,10 +38,15 @@ export function CreateNote() {
         return () => {
             document.removeEventListener("mousedown", handleClickOutside);
         };
-    }, [title, isFocused]);
+    }, [title, isFocused, color, imageUrl, fontSize]);
+
+    const sanitizeHtml = (html: string) => {
+        // Remove style attributes containing color properties to allow theme-based coloring.
+        return html.replace(/style="[^"]*color:[^"]*"/g, '');
+    }
 
     const handleSave = async () => {
-        const finalContent = contentRef.current?.innerHTML || '';
+        const finalContent = sanitizeHtml(contentRef.current?.innerHTML || '');
         if (!title.trim() && !finalContent.trim()) {
              setIsFocused(false);
              return;

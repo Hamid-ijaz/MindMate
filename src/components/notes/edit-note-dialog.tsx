@@ -45,13 +45,18 @@ export function EditNoteDialog({ note, isOpen, onClose }: EditNoteDialogProps) {
         }
     }, [note, isOpen]);
 
+    const sanitizeHtml = (html: string) => {
+        // Remove style attributes containing color properties to allow theme-based coloring.
+        return html.replace(/style="[^"]*color:[^"]*"/g, '');
+    }
+
     const handleClose = () => {
         if (!note || !contentRef.current) {
             onClose();
             return;
         }
 
-        const currentContent = lastContent.current;
+        const currentContent = sanitizeHtml(lastContent.current);
         const hasChanged = title !== (note.title || '') ||
                            currentContent !== (note.content || '') || 
                            color !== (note.color || '') ||
