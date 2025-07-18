@@ -86,7 +86,10 @@ export function EditNoteDialog({ note, isOpen, onClose }: EditNoteDialogProps) {
 
     return (
         <Dialog open={isOpen} onOpenChange={(open) => !open && handleClose()}>
-            <DialogContent className="max-w-xl p-0" style={{ backgroundColor: color || 'hsl(var(--card))' }}>
+            <DialogContent 
+                className="max-w-xl p-0 border-2"
+                style={{ borderColor: color || 'hsl(var(--border))' }}
+            >
                 {imageUrl && (
                     <div className="relative w-full h-56">
                         <img src={imageUrl} alt="Note" className="w-full h-full object-cover rounded-t-lg" />

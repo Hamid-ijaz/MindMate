@@ -13,9 +13,9 @@ interface NoteCardProps {
 export function NoteCard({ note, onClick }: NoteCardProps) {
     return (
         <Card 
-            className="break-inside-avoid cursor-pointer hover:shadow-lg transition-shadow border"
+            className="break-inside-avoid cursor-pointer hover:shadow-lg transition-shadow border-2"
             onClick={onClick}
-            style={{ backgroundColor: note.color || 'transparent' }}
+            style={{ borderColor: note.color || 'hsl(var(--border))' }}
         >
             {note.imageUrl && (
                  <div className="relative w-full h-40">

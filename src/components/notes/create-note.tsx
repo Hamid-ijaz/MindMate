@@ -82,7 +82,11 @@ export function CreateNote() {
     }
 
     return (
-        <Card ref={cardRef} className="max-w-xl mx-auto shadow-lg" style={{ backgroundColor: color || 'hsl(var(--card))' }}>
+        <Card 
+            ref={cardRef} 
+            className="max-w-xl mx-auto shadow-lg border-2" 
+            style={{ borderColor: color || 'hsl(var(--border))' }}
+        >
             <CardContent className="p-0">
                  {imageUrl && (
                     <div className="relative w-full h-48">
