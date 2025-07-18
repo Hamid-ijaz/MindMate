@@ -202,7 +202,7 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
   const updateTask = useCallback(async (id: string, updates: Partial<Omit<Task, 'id' | 'createdAt'>>) => {
     try {
       await taskService.updateTask(id, updates);
-      setTasks(prev => prev.map(t => (t.id === id ? { ...t, ...updates } : t)));
+      setTasks(prev => prev.map(t => (t.id === id ? { ...t, ...updates } as Task : t)));
     } catch (error) {
       console.error('Error updating task:', error);
       toast({
@@ -264,11 +264,11 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
     const task = tasks.find(t => t.id === id);
     if (task) {
       const childrenIds = tasks.filter(t => t.parentId === id).map(t => t.id);
-      const updates: Partial<Task> = { 
-        completedAt: undefined, 
+      const updates = { 
+        completedAt: null, 
         rejectionCount: 0, 
-        lastRejectedAt: undefined,
-        notifiedAt: undefined,
+        lastRejectedAt: null,
+        notifiedAt: null,
       };
 
       // Update parent task

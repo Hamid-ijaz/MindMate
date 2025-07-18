@@ -174,14 +174,17 @@ export const taskService = {
     const updateData: any = { ...updates };
     
     // Convert timestamps
-    if (updates.completedAt !== undefined) {
+    if ('completedAt' in updates) {
       updateData.completedAt = updates.completedAt ? Timestamp.fromMillis(updates.completedAt) : null;
     }
-    if (updates.lastRejectedAt !== undefined) {
+    if ('lastRejectedAt' in updates) {
       updateData.lastRejectedAt = updates.lastRejectedAt ? Timestamp.fromMillis(updates.lastRejectedAt) : null;
     }
-    if (updates.reminderAt !== undefined) {
+    if ('reminderAt' in updates) {
       updateData.reminderAt = updates.reminderAt ? Timestamp.fromMillis(updates.reminderAt) : null;
+    }
+     if ('notifiedAt' in updates) {
+      updateData.notifiedAt = updates.notifiedAt ? Timestamp.fromMillis(updates.notifiedAt) : null;
     }
     
     await updateDoc(taskRef, updateData);
