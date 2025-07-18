@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { EnergyLevel, Task, TimeOfDay } from "@/lib/types";
-import { AlertCircle, Check, Sparkles, X, Loader2, Wand2 } from "lucide-react";
+import { AlertCircle, Check, Sparkles, X, Loader2, Wand2, Edit } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { getRandomQuote } from "@/lib/motivational-quotes";
 import { MAX_REJECTIONS_BEFORE_PROMPT, REJECTION_HOURS } from "@/lib/constants";
@@ -39,7 +39,7 @@ const getDefaultEnergyLevel = (): EnergyLevel => {
 };
 
 export function TaskSuggestion() {
-  const { tasks, acceptTask, rejectTask, muteTask, addTask, isLoading: tasksLoading } = useTasks();
+  const { tasks, acceptTask, rejectTask, muteTask, addTask, isLoading: tasksLoading, startEditingTask } = useTasks();
   const [currentEnergy, setCurrentEnergy] = useState<EnergyLevel | null>(null);
   const [suggestion, setSuggestion] = useState<{ suggestedTask: Task | null, otherTasks: Task[] }>({ suggestedTask: null, otherTasks: [] });
   const [showAffirmation, setShowAffirmation] = useState(false);
@@ -300,7 +300,7 @@ export function TaskSuggestion() {
             <Badge variant="outline">{suggestion.suggestedTask.timeOfDay}</Badge>
             {suggestion.suggestedTask.rejectionCount > 0 && <Badge variant="destructive" className="animate-pulse">{suggestion.suggestedTask.rejectionCount}x Skipped</Badge>}
         </div>
-        <div className="mt-4 text-center">
+        <div className="mt-4 flex justify-center items-center gap-4">
              <Button variant="link" onClick={handleRewordClick} disabled={isPending}>
                 {isPending ? (
                     <>
@@ -310,9 +310,13 @@ export function TaskSuggestion() {
                 ) : (
                     <>
                         <Wand2 className="mr-2 h-4 w-4" />
-                        Divide this task
+                        Divide task
                     </>
                 )}
+            </Button>
+            <Button variant="link" onClick={() => startEditingTask(suggestion.suggestedTask!.id)}>
+                <Edit className="mr-2 h-4 w-4" />
+                Edit
             </Button>
         </div>
       </CardContent>
