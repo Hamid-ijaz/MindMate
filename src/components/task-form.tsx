@@ -42,7 +42,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { CalendarIcon } from "lucide-react";
 import { Calendar } from "./ui/calendar";
 import { cn } from "@/lib/utils";
-import { format } from "date-fns";
+import { format, setHours, setMinutes } from "date-fns";
 
 const formSchema = z.object({
   title: z.string().min(3, "Title must be at least 3 characters long."),
@@ -174,6 +174,22 @@ export function TaskForm({ task, onFinished, parentId, defaultValues: propDefaul
       form.reset(defaultValues);
     }
   };
+
+  const reminder = form.watch('reminderAt');
+
+  const handleTimeChange = (type: 'hour' | 'minute', value: string) => {
+    const date = form.getValues('reminderAt');
+    if (!date) return;
+    
+    const numberValue = parseInt(value, 10);
+    let newDate;
+    if (type === 'hour') {
+      newDate = setHours(date, numberValue);
+    } else {
+      newDate = setMinutes(date, numberValue);
+    }
+    form.setValue('reminderAt', newDate, { shouldDirty: true });
+  }
 
   return (
     <Form {...form}>
@@ -328,7 +344,7 @@ export function TaskForm({ task, onFinished, parentId, defaultValues: propDefaul
                         )}
                         >
                         {field.value ? (
-                            format(field.value, "PPP")
+                            format(field.value, "PPP, h:mm a")
                         ) : (
                             <span>Pick a date</span>
                         )}
@@ -340,12 +356,38 @@ export function TaskForm({ task, onFinished, parentId, defaultValues: propDefaul
                     <Calendar
                         mode="single"
                         selected={field.value}
-                        onSelect={field.onChange}
+                        onSelect={(date) => {
+                            const originalDate = field.value || new Date();
+                            const newDate = date || new Date();
+                            newDate.setHours(originalDate.getHours());
+                            newDate.setMinutes(originalDate.getMinutes());
+                            field.onChange(newDate);
+                        }}
                         disabled={(date) =>
                             date < new Date(new Date().setHours(0,0,0,0))
                         }
                         initialFocus
                     />
+                    {reminder && (
+                        <div className="p-3 border-t border-border grid grid-cols-2 gap-2">
+                             <Select onValueChange={(value) => handleTimeChange('hour', value)} value={String(reminder.getHours())}>
+                                <SelectTrigger><SelectValue/></SelectTrigger>
+                                <SelectContent position="popper">
+                                {[...Array(24).keys()].map(hour => (
+                                    <SelectItem key={hour} value={String(hour)}>{String(hour).padStart(2, '0')}</SelectItem>
+                                ))}
+                                </SelectContent>
+                            </Select>
+                            <Select onValueChange={(value) => handleTimeChange('minute', value)} value={String(reminder.getMinutes())}>
+                                <SelectTrigger><SelectValue/></SelectTrigger>
+                                <SelectContent position="popper">
+                                {[...Array(60).keys()].map(minute => (
+                                    <SelectItem key={minute} value={String(minute)}>{String(minute).padStart(2, '0')}</SelectItem>
+                                ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    )}
                     </PopoverContent>
                 </Popover>
                 <FormMessage />

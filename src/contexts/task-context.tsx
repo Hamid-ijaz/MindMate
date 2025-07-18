@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode, useRef } from 'react';
 import type { Task, Accomplishment, TaskCategory, TaskDuration, TimeOfDay } from '@/lib/types';
 import { taskService, accomplishmentService, userSettingsService } from '@/lib/firestore';
 import { useAuth } from './auth-context';
@@ -45,8 +45,9 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
   const [taskDurations, setTaskDurations] = useState<TaskDuration[]>(DEFAULT_DURATIONS);
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
-  const { sendNotification } = useNotifications();
+  const { permission, sendNotification } = useNotifications();
 
+  const notifiedTaskIds = useRef(new Set<string>());
 
   const [isSheetOpen, setIsSheetOpen] = useState(false);
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
@@ -68,6 +69,42 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
       }
     }
   }, [user, authLoading]);
+
+  // Effect for checking reminders
+  useEffect(() => {
+    if (!tasks.length || permission !== 'granted') {
+      return;
+    }
+
+    const checkReminders = () => {
+      const now = Date.now();
+      tasks.forEach(task => {
+        if (
+          !task.completedAt &&
+          task.reminderAt &&
+          task.reminderAt <= now &&
+          !notifiedTaskIds.current.has(task.id)
+        ) {
+          sendNotification(`Reminder: ${task.title}`, {
+            body: task.description || "It's time to get this done!",
+            tag: task.id, // Use task ID as tag to prevent multiple notifications for the same task
+          });
+          notifiedTaskIds.current.add(task.id);
+          // Optionally, update the task in the database to mark it as notified
+          // updateTask(task.id, { notifiedAt: now });
+        }
+      });
+    };
+
+    // Check every minute
+    const intervalId = setInterval(checkReminders, 60 * 1000);
+
+    // Initial check
+    checkReminders();
+
+    return () => clearInterval(intervalId);
+  }, [tasks, permission, sendNotification]);
+
 
   const loadUserData = async () => {
     if (!user?.email) return;
@@ -122,14 +159,14 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [user?.email]);
 
-  const addTask = useCallback(async (taskData: Omit<Task, 'id' | 'createdAt' | 'rejectionCount' | 'isMuted' | 'completedAt' | 'lastRejectedAt'> & { parentId?: string }) => {
+  const addTask = useCallback(async (taskData: Omit<Task, 'id' | 'createdAt' | 'rejectionCount' | 'isMuted' | 'completedAt' | 'lastRejectedAt' | 'notifiedAt'> & { parentId?: string }) => {
     if (!user?.email) return;
 
     const bulletRegex = /(^|\n)\s*[-*+]\s+(.*)/g;
     const description = taskData.description || '';
     const hasBullets = bulletRegex.test(description);
     
-    let subtasksToCreate: Omit<Task, 'id' | 'createdAt' | 'rejectionCount' | 'isMuted' | 'completedAt' | 'lastRejectedAt'>[] = [];
+    let subtasksToCreate: Omit<Task, 'id' | 'createdAt' | 'rejectionCount' | 'isMuted'>[] = [];
     let parentDescription = description;
 
     if (hasBullets && !taskData.parentId) { // Only process bullets for new parent tasks
@@ -179,9 +216,11 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
           ...sub,
           id: childIds[index],
           parentId,
+          rejectionCount: 0,
+          isMuted: false,
           createdAt: now + index + 1, // Ensure unique timestamps
         }));
-        setTasks(prev => [...prev, ...newSubtasks]);
+        setTasks(prev => [...prev, ...newSubtasks as Task[]]);
         toast({
           title: "Task and Subtasks Added!",
           description: `${subtasksToCreate.length} subtasks were created from your description.`
@@ -201,6 +240,9 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
   const updateTask = useCallback(async (id: string, updates: Partial<Omit<Task, 'id' | 'createdAt'>>) => {
     try {
       await taskService.updateTask(id, updates);
+      if (updates.reminderAt) {
+          notifiedTaskIds.current.delete(id);
+      }
       setTasks(prev => prev.map(t => (t.id === id ? { ...t, ...updates } : t)));
     } catch (error) {
       console.error('Error updating task:', error);
@@ -216,6 +258,7 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
     try {
       await taskService.deleteTask(id);
       await taskService.deleteTasksWithParentId(id);
+      notifiedTaskIds.current.delete(id);
       setTasks(prev => prev.filter(t => t.id !== id && t.parentId !== id));
     } catch (error) {
       console.error('Error deleting task:', error);
@@ -239,7 +282,7 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
       });
       return;
     }
-
+    notifiedTaskIds.current.delete(id);
     await updateTask(id, { completedAt: Date.now() });
     sendNotification("Task Completed!", { body: "Great job! Keep up the momentum." });
   }, [tasks, updateTask, toast, sendNotification]);
@@ -262,7 +305,7 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
     const task = tasks.find(t => t.id === id);
     if (task) {
       const childrenIds = tasks.filter(t => t.parentId === id).map(t => t.id);
-      const updates = { completedAt: null, rejectionCount: 0, lastRejectedAt: null, reminderAt: task.reminderAt };
+      const updates = { completedAt: undefined, rejectionCount: 0, lastRejectedAt: undefined, reminderAt: task.reminderAt, notifiedAt: undefined };
 
       // Update parent task
       await updateTask(id, updates);
@@ -274,7 +317,7 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
       
       setTasks(prev => prev.map(t => {
         if (t.id === id || childrenIds.includes(t.id)) {
-          return { ...t, ...updates, completedAt: undefined, lastRejectedAt: undefined };
+          return { ...t, ...updates, completedAt: undefined, lastRejectedAt: undefined, notifiedAt: undefined };
         }
         return t;
       }));

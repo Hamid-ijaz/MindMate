@@ -29,6 +29,7 @@ export interface Task {
   completedAt?: number;
   parentId?: string;
   reminderAt?: number;
+  notifiedAt?: number;
 }
 
 export interface User {

@@ -64,7 +64,7 @@ export function TaskItem({ task, extraActions, isSubtask = false, isHistoryView 
                 {task.reminderAt && (
                    <Badge variant="outline" className="flex items-center gap-1">
                       <CalendarIcon className="h-3 w-3" />
-                      {format(new Date(task.reminderAt), "MMM d")}
+                      {format(new Date(task.reminderAt), "MMM d, h:mm a")}
                    </Badge>
                 )}
             </CardContent>

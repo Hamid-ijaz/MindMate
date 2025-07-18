@@ -13,9 +13,8 @@ import { useToast } from "@/hooks/use-toast";
 import { getRandomQuote } from "@/lib/motivational-quotes";
 import { MAX_REJECTIONS_BEFORE_PROMPT, REJECTION_HOURS } from "@/lib/constants";
 import { AlertDialog, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "./ui/alert-dialog";
-import { ManageTasksSheet } from "./manage-tasks-sheet";
+import { AddTaskButton } from "./manage-tasks-sheet";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "./ui/accordion";
-import { ScrollArea } from "./ui/scroll-area";
 import { rewordTask } from '@/ai/flows/reword-task-flow';
 import { getCurrentTimeOfDay } from "@/lib/utils";
 import { TaskItem } from "@/components/task-item";
@@ -236,7 +235,7 @@ export function TaskSuggestion() {
                 <p className="mt-4 text-xl font-semibold">All clear!</p>
                 <p className="text-muted-foreground mt-2">There are no pending tasks. Enjoy your break or add a new one.</p>
                 <div className="mt-6">
-                    <ManageTasksSheet />
+                    <AddTaskButton />
                 </div>
             </CardContent>
           </Card>
@@ -303,7 +302,7 @@ export function TaskSuggestion() {
             {suggestion.suggestedTask.reminderAt && (
                 <Badge variant="outline" className="flex items-center gap-1">
                     <CalendarIcon className="h-3 w-3" />
-                    {format(new Date(suggestion.suggestedTask.reminderAt), "MMM d, yyyy")}
+                    {format(new Date(suggestion.suggestedTask.reminderAt), "MMM d, h:mm a")}
                 </Badge>
             )}
         </div>
