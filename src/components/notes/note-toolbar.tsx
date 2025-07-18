@@ -30,6 +30,9 @@ export function NoteToolbar({ onSetColor, onSetImageUrl }: NoteToolbarProps) {
     const { toast } = useToast();
 
     const handleFormat = (command: string) => {
+        // This is a legacy API, but simple for this use case.
+        // It's important to prevent the default mousedown event on the button
+        // to avoid the contentEditable div from losing focus.
         document.execCommand(command, false, undefined);
     };
 
