@@ -3,8 +3,19 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { useToast } from '@/hooks/use-toast';
+import { Button } from '@/components/ui/button';
+import { useTasks } from './task-context';
 
 type NotificationPermission = 'default' | 'granted' | 'denied';
+
+interface NotificationOptions {
+    body?: string;
+    tag?: string;
+    data?: any;
+    actions?: {
+        onComplete?: (taskId: string) => void;
+    }
+}
 
 interface NotificationContextType {
   permission: NotificationPermission;
@@ -17,13 +28,46 @@ const NotificationContext = createContext<NotificationContextType | undefined>(u
 export const NotificationProvider = ({ children }: { children: ReactNode }) => {
   const [permission, setPermission] = useState<NotificationPermission>('default');
   const { toast } = useToast();
-
+  
   useEffect(() => {
     // Ensure this runs only on the client
     if (typeof window !== 'undefined' && 'Notification' in window) {
       setPermission(Notification.permission);
     }
   }, []);
+
+  const playNotificationSound = () => {
+    const audio = new Audio('/audio/notification.wav');
+    audio.play().catch(error => console.error("Failed to play notification sound:", error));
+  };
+
+  const sendNotification = useCallback((title: string, options?: NotificationOptions) => {
+    if (typeof window === 'undefined') return;
+
+    playNotificationSound();
+
+    const { dismiss } = toast({
+      title: title,
+      description: options?.body,
+      duration: 30000, // Keep it on screen longer
+      action: (
+        <div className="flex flex-col gap-2">
+            {options?.data?.taskId && options?.actions?.onComplete && (
+                 <Button size="sm" onClick={() => {
+                    options.actions!.onComplete!(options.data.taskId);
+                    dismiss();
+                 }}>
+                    Complete
+                </Button>
+            )}
+            <Button size="sm" variant="outline" onClick={() => dismiss()}>
+                Dismiss
+            </Button>
+        </div>
+      ),
+    });
+  }, [toast]);
+
 
   const requestPermission = useCallback(async () => {
     if (typeof window === 'undefined' || !('Notification' in window)) {
@@ -44,7 +88,7 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
         description: "You'll now receive reminders.",
       });
       // Test notification
-      sendNotification("MindMate", { body: "You're all set up for notifications!" });
+      new Notification("MindMate", { body: "You're all set up for notifications!" });
     } else if (status === 'denied') {
       toast({
         title: "Notifications Blocked",
@@ -53,14 +97,6 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
       });
     }
   }, [toast]);
-
-  const sendNotification = (title: string, options?: NotificationOptions) => {
-    if (typeof window === 'undefined' || !('Notification' in window)) return;
-
-    if (Notification.permission === 'granted') {
-      new Notification(title, { ...options, icon: '/logo.png' });
-    }
-  };
 
   return (
     <NotificationContext.Provider value={{ permission, requestPermission, sendNotification }}>

@@ -6,7 +6,6 @@ import type { Task, Accomplishment, TaskCategory, TaskDuration, TimeOfDay } from
 import { taskService, accomplishmentService, userSettingsService } from '@/lib/firestore';
 import { useAuth } from './auth-context';
 import { useToast } from '@/hooks/use-toast';
-import { useNotifications } from './notification-context';
 
 // Default values for when a user has no settings yet.
 const DEFAULT_CATEGORIES: TaskCategory[] = ['Work', 'Chores', 'Writing', 'Personal', 'Study'];
@@ -22,7 +21,7 @@ interface TaskContextType {
   addTask: (task: Omit<Task, 'id' | 'createdAt' | 'rejectionCount' | 'isMuted' | 'completedAt' | 'lastRejectedAt'> & { parentId?: string }) => void;
   updateTask: (id: string, updates: Partial<Omit<Task, 'id' | 'createdAt'>>) => void;
   deleteTask: (id: string) => void;
-  acceptTask: (id: string) => void;
+  acceptTask: (id: string, options?: { showNotification?: boolean }) => void;
   rejectTask: (id: string) => void;
   muteTask: (id: string) => void;
   uncompleteTask: (id: string) => void;
@@ -45,9 +44,6 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
   const [taskDurations, setTaskDurations] = useState<TaskDuration[]>(DEFAULT_DURATIONS);
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
-  const { permission, sendNotification } = useNotifications();
-
-  const notifiedTaskIds = useRef(new Set<string>());
 
   const [isSheetOpen, setIsSheetOpen] = useState(false);
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
@@ -69,42 +65,6 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
       }
     }
   }, [user, authLoading]);
-
-  // Effect for checking reminders
-  useEffect(() => {
-    if (!tasks.length || permission !== 'granted') {
-      return;
-    }
-
-    const checkReminders = () => {
-      const now = Date.now();
-      tasks.forEach(task => {
-        if (
-          !task.completedAt &&
-          task.reminderAt &&
-          task.reminderAt <= now &&
-          !notifiedTaskIds.current.has(task.id)
-        ) {
-          sendNotification(`Reminder: ${task.title}`, {
-            body: task.description || "It's time to get this done!",
-            tag: task.id, // Use task ID as tag to prevent multiple notifications for the same task
-          });
-          notifiedTaskIds.current.add(task.id);
-          // Optionally, update the task in the database to mark it as notified
-          // updateTask(task.id, { notifiedAt: now });
-        }
-      });
-    };
-
-    // Check every minute
-    const intervalId = setInterval(checkReminders, 60 * 1000);
-
-    // Initial check
-    checkReminders();
-
-    return () => clearInterval(intervalId);
-  }, [tasks, permission, sendNotification]);
-
 
   const loadUserData = async () => {
     if (!user?.email) return;
@@ -209,7 +169,7 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
       // Optimistically update UI
       const now = Date.now();
       const parentTask = { ...parentTaskData, id: parentId, createdAt: now };
-      setTasks(prev => [...prev, parentTask]);
+      setTasks(prev => [...prev, parentTask as Task]);
 
       if (subtasksToCreate.length > 0) {
         const newSubtasks = subtasksToCreate.map((sub, index) => ({
@@ -240,9 +200,6 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
   const updateTask = useCallback(async (id: string, updates: Partial<Omit<Task, 'id' | 'createdAt'>>) => {
     try {
       await taskService.updateTask(id, updates);
-      if (updates.reminderAt) {
-          notifiedTaskIds.current.delete(id);
-      }
       setTasks(prev => prev.map(t => (t.id === id ? { ...t, ...updates } : t)));
     } catch (error) {
       console.error('Error updating task:', error);
@@ -258,7 +215,6 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
     try {
       await taskService.deleteTask(id);
       await taskService.deleteTasksWithParentId(id);
-      notifiedTaskIds.current.delete(id);
       setTasks(prev => prev.filter(t => t.id !== id && t.parentId !== id));
     } catch (error) {
       console.error('Error deleting task:', error);
@@ -282,10 +238,8 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
       });
       return;
     }
-    notifiedTaskIds.current.delete(id);
     await updateTask(id, { completedAt: Date.now() });
-    sendNotification("Task Completed!", { body: "Great job! Keep up the momentum." });
-  }, [tasks, updateTask, toast, sendNotification]);
+  }, [tasks, updateTask, toast]);
 
   const rejectTask = useCallback(async (id: string) => {
     const task = tasks.find(t => t.id === id);
@@ -305,21 +259,24 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
     const task = tasks.find(t => t.id === id);
     if (task) {
       const childrenIds = tasks.filter(t => t.parentId === id).map(t => t.id);
-      const updates = { completedAt: undefined, rejectionCount: 0, lastRejectedAt: undefined };
+      const updates: Partial<Task> = { 
+        completedAt: undefined, 
+        rejectionCount: 0, 
+        lastRejectedAt: undefined,
+        notifiedAt: undefined,
+      };
 
       // Update parent task
       await updateTask(id, updates);
-      notifiedTaskIds.current.delete(id);
       
       // Update children tasks
       for (const childId of childrenIds) {
         await updateTask(childId, updates);
-        notifiedTaskIds.current.delete(childId);
       }
       
       setTasks(prev => prev.map(t => {
         if (t.id === id || childrenIds.includes(t.id)) {
-          return { ...t, ...updates, completedAt: undefined, lastRejectedAt: undefined, notifiedAt: undefined };
+          return { ...t, ...updates };
         }
         return t;
       }));
