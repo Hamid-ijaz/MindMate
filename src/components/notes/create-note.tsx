@@ -3,7 +3,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { useNotes } from '@/contexts/note-context';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
@@ -109,8 +109,11 @@ export function CreateNote() {
                         ref={contentRef}
                         contentEditable
                         onInput={handleContentChange}
-                        className="w-full min-h-[100px] border-none focus-visible:ring-0 resize-none bg-transparent p-2 outline-none text-foreground"
-                        style={{ fontSize: `${fontSize}px` }}
+                        className="w-full min-h-[100px] border-none focus-visible:ring-0 resize-none bg-transparent p-2 outline-none"
+                        style={{ 
+                            fontSize: `${fontSize}px`,
+                            color: 'hsl(var(--foreground))'
+                        }}
                         data-placeholder="Take a note..."
                     />
                 </div>
