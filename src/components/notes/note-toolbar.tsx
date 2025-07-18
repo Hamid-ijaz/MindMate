@@ -30,7 +30,7 @@ export function NoteToolbar({ onSetColor, onSetImageUrl }: NoteToolbarProps) {
     const { toast } = useToast();
 
     const handleFormat = (command: string) => {
-        document.execCommand(command, false);
+        document.execCommand(command, false, undefined);
     };
 
     const handleAddImage = () => {
@@ -42,9 +42,9 @@ export function NoteToolbar({ onSetColor, onSetImageUrl }: NoteToolbarProps) {
 
     return (
         <div className="flex items-center gap-1">
-            <Button variant="ghost" size="icon" onClick={() => handleFormat('bold')}><Bold className="h-4 w-4" /></Button>
-            <Button variant="ghost" size="icon" onClick={() => handleFormat('italic')}><Italic className="h-4 w-4" /></Button>
-            <Button variant="ghost" size="icon" onClick={() => handleFormat('insertUnorderedList')}><List className="h-4 w-4" /></Button>
+            <Button variant="ghost" size="icon" onMouseDown={(e) => e.preventDefault()} onClick={() => handleFormat('bold')}><Bold className="h-4 w-4" /></Button>
+            <Button variant="ghost" size="icon" onMouseDown={(e) => e.preventDefault()} onClick={() => handleFormat('italic')}><Italic className="h-4 w-4" /></Button>
+            <Button variant="ghost" size="icon" onMouseDown={(e) => e.preventDefault()} onClick={() => handleFormat('insertUnorderedList')}><List className="h-4 w-4" /></Button>
 
             <Popover>
                 <PopoverTrigger asChild>
