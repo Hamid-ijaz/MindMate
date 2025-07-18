@@ -7,10 +7,9 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { AlertCircle, ArrowLeft, CalendarIcon, Check, Edit, ExternalLink, Loader2, Repeat, RotateCcw, Trash2, Wand2 } from 'lucide-react';
+import { AlertCircle, ArrowLeft, CalendarIcon, Check, Edit, Loader2, Repeat, RotateCcw, Trash2 } from 'lucide-react';
 import { format, isPast } from 'date-fns';
 import { SubtaskList } from '@/components/subtask-list';
-import Link from 'next/link';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useState } from 'react';
 import { useNotifications } from '@/contexts/notification-context';
@@ -101,9 +100,6 @@ export default function TaskPage() {
         await acceptTask(task.id);
         await deleteNotification(task.id);
         setIsCompleting(false);
-        // If it was a recurring task that just got rescheduled, the original is now complete.
-        // We can stay on this page to view the completed record.
-        // Or we could redirect, for now let's stay.
     }
     
     const handleRedo = async () => {
@@ -111,7 +107,7 @@ export default function TaskPage() {
     }
 
     const CompleteButton = () => (
-        <Button onClick={handleComplete} disabled={isCompleting || hasPendingSubtasks}>
+        <Button onClick={handleComplete} disabled={isCompleting || hasPendingSubtasks} className="w-full sm:w-auto">
             {isCompleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Check className="mr-2 h-4 w-4" />}
             Complete{task.recurrence && task.recurrence.frequency !== 'none' ? ' & Reschedule' : ''}
         </Button>
@@ -125,20 +121,20 @@ export default function TaskPage() {
             </Button>
             <Card>
                 <CardHeader>
-                    <div className="flex justify-between items-start">
-                        <CardTitle className="text-3xl break-word">{task.title}</CardTitle>
-                        <div className="flex items-center gap-2">
-                             <Badge className={`flex items-center gap-1.5 ${status.color} text-white`}>
-                                <span className={`h-2 w-2 rounded-full ${status.color} ring-2 ring-white`}></span>
-                                {status.text}
-                             </Badge>
-                             <Button variant="ghost" size="icon" onClick={() => startEditingTask(task.id)}>
-                                <Edit className="h-5 w-5" />
-                             </Button>
-                        </div>
+                    <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-2">
+                        <CardTitle className="text-2xl sm:text-3xl break-word">{task.title}</CardTitle>
+                        <Button variant="ghost" size="icon" className="order-first sm:order-last self-end sm:self-center" onClick={() => startEditingTask(task.id)}>
+                            <Edit className="h-5 w-5" />
+                        </Button>
+                    </div>
+                     <div className="flex items-center gap-2 pt-2">
+                         <Badge className={`flex items-center gap-1.5 ${status.color} text-white`}>
+                            <span className={`h-2 w-2 rounded-full ${status.color} ring-2 ring-white`}></span>
+                            {status.text}
+                         </Badge>
                     </div>
                     {task.description && (
-                        <CardDescription className="pt-2 text-base">{task.description}</CardDescription>
+                        <CardDescription className="pt-4 text-base">{task.description}</CardDescription>
                     )}
                 </CardHeader>
                 <CardContent className="space-y-6">
@@ -202,13 +198,13 @@ export default function TaskPage() {
                 </CardContent>
                  <CardFooter className="border-t pt-6 flex flex-col sm:flex-row sm:justify-end gap-2">
                     {task.completedAt ? (
-                         <Button variant="outline" onClick={handleRedo}>
+                         <Button variant="outline" onClick={handleRedo} className="w-full sm:w-auto">
                             <RotateCcw className="mr-2 h-4 w-4" />
                             Redo
                         </Button>
                     ) : (
-                       <div className="flex w-full sm:w-auto justify-end gap-2">
-                         <Button variant="destructive" onClick={handleDelete} disabled={isDeleting}>
+                       <div className="flex w-full flex-col sm:flex-row justify-end gap-2">
+                         <Button variant="destructive" onClick={handleDelete} disabled={isDeleting} className="w-full sm:w-auto">
                             {isDeleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Trash2 className="mr-2 h-4 w-4" />}
                             Delete
                         </Button>
@@ -216,7 +212,7 @@ export default function TaskPage() {
                              <TooltipProvider>
                                 <Tooltip>
                                     <TooltipTrigger asChild>
-                                        <span tabIndex={0}><CompleteButton /></span>
+                                        <span tabIndex={0} className="w-full sm:w-auto block"><CompleteButton /></span>
                                     </TooltipTrigger>
                                     <TooltipContent>Complete all sub-tasks first</TooltipContent>
                                 </Tooltip>
