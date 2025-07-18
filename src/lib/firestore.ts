@@ -120,11 +120,17 @@ export const taskService = {
 
     // Create parent task
     const parentRef = doc(tasksRef);
-    const parentTask = {
+    const parentTask: any = {
       ...parentTaskData,
       userEmail,
       createdAt: Timestamp.now(),
     };
+     // Remove fields with undefined values to avoid Firestore errors
+    Object.keys(parentTask).forEach(key => {
+      if (parentTask[key] === undefined || parentTask[key] === null) {
+        delete parentTask[key];
+      }
+    });
     batch.set(parentRef, parentTask);
 
     // Create subtasks
@@ -275,5 +281,3 @@ export const userSettingsService = {
     }, { merge: true });
   }
 };
-
-    
