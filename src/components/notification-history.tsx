@@ -13,14 +13,12 @@ import { useRouter } from "next/navigation";
 
 export function NotificationHistory() {
   const { notifications, unreadCount, markAllAsRead, markAsRead } = useNotifications();
-  const { startEditingTask } = useTasks();
   const router = useRouter();
 
   const handleNotificationClick = (notificationId: string, taskId?: string) => {
     markAsRead(notificationId);
     if (taskId) {
       router.push('/pending'); 
-      setTimeout(() => startEditingTask(taskId), 100); 
     }
   }
 
