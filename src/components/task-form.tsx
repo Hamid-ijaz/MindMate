@@ -182,7 +182,6 @@ export function TaskForm({ task, onFinished, parentId, defaultValues: propDefaul
     if (!date) return;
 
     let currentHour = date.getHours();
-    let currentMinutes = date.getMinutes();
     let newDate;
 
     if (type === 'minute') {
@@ -378,7 +377,7 @@ export function TaskForm({ task, onFinished, parentId, defaultValues: propDefaul
                             field.onChange(newDate);
                         }}
                         disabled={(date) =>
-                            date < new Date(new Date().setHours(0,0,0,0))
+                            date < new Date()
                         }
                         initialFocus
                     />
