@@ -42,7 +42,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { CalendarIcon } from "lucide-react";
 import { Calendar } from "./ui/calendar";
 import { cn } from "@/lib/utils";
-import { format, setHours, setMinutes } from "date-fns";
+import { format, setHours, setMinutes, startOfDay } from "date-fns";
 
 const formSchema = z.object({
   title: z.string().min(3, "Title must be at least 3 characters long."),
@@ -377,7 +377,7 @@ export function TaskForm({ task, onFinished, parentId, defaultValues: propDefaul
                             field.onChange(newDate);
                         }}
                         disabled={(date) =>
-                            date < new Date()
+                            date < startOfDay(new Date())
                         }
                         initialFocus
                     />
