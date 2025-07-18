@@ -177,17 +177,31 @@ export function TaskForm({ task, onFinished, parentId, defaultValues: propDefaul
 
   const reminder = form.watch('reminderAt');
 
-  const handleTimeChange = (type: 'hour' | 'minute', value: string) => {
+  const handleTimeChange = (type: 'hour' | 'minute' | 'ampm', value: string) => {
     const date = form.getValues('reminderAt');
     if (!date) return;
-    
-    const numberValue = parseInt(value, 10);
+
+    let currentHour = date.getHours();
+    let currentMinutes = date.getMinutes();
     let newDate;
-    if (type === 'hour') {
-      newDate = setHours(date, numberValue);
+
+    if (type === 'minute') {
+        newDate = setMinutes(date, parseInt(value, 10));
     } else {
-      newDate = setMinutes(date, numberValue);
+        const isPM = (type === 'ampm' && value === 'PM') || (type !== 'ampm' && currentHour >= 12);
+        let hour12 = type === 'hour' ? parseInt(value, 10) : currentHour % 12;
+        if (hour12 === 0) hour12 = 12; // Handle midnight/noon
+
+        let hour24 = hour12;
+        if (isPM && hour12 < 12) {
+            hour24 += 12;
+        }
+        if (!isPM && hour12 === 12) { // Handle 12 AM
+            hour24 = 0;
+        }
+        newDate = setHours(date, hour24);
     }
+    
     form.setValue('reminderAt', newDate, { shouldDirty: true });
   }
 
@@ -369,12 +383,12 @@ export function TaskForm({ task, onFinished, parentId, defaultValues: propDefaul
                         initialFocus
                     />
                     {reminder && (
-                        <div className="p-3 border-t border-border grid grid-cols-2 gap-2">
-                             <Select onValueChange={(value) => handleTimeChange('hour', value)} value={String(reminder.getHours())}>
+                        <div className="p-3 border-t border-border grid grid-cols-3 gap-2">
+                             <Select onValueChange={(value) => handleTimeChange('hour', value)} value={String(reminder.getHours() % 12 === 0 ? 12 : reminder.getHours() % 12)}>
                                 <SelectTrigger><SelectValue/></SelectTrigger>
                                 <SelectContent position="popper">
-                                {[...Array(24).keys()].map(hour => (
-                                    <SelectItem key={hour} value={String(hour)}>{String(hour).padStart(2, '0')}</SelectItem>
+                                {[...Array(12).keys()].map(hour => (
+                                    <SelectItem key={hour} value={String(hour + 1)}>{String(hour + 1).padStart(2, '0')}</SelectItem>
                                 ))}
                                 </SelectContent>
                             </Select>
@@ -384,6 +398,13 @@ export function TaskForm({ task, onFinished, parentId, defaultValues: propDefaul
                                 {[...Array(60).keys()].map(minute => (
                                     <SelectItem key={minute} value={String(minute)}>{String(minute).padStart(2, '0')}</SelectItem>
                                 ))}
+                                </SelectContent>
+                            </Select>
+                             <Select onValueChange={(value) => handleTimeChange('ampm', value)} value={reminder.getHours() >= 12 ? 'PM' : 'AM'}>
+                                <SelectTrigger><SelectValue/></SelectTrigger>
+                                <SelectContent position="popper">
+                                    <SelectItem value="AM">AM</SelectItem>
+                                    <SelectItem value="PM">PM</SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>
