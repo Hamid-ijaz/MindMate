@@ -426,13 +426,11 @@ function OtherTasksList({ tasks }: { tasks: Task[] }) {
                     </div>
                 </AccordionTrigger>
                 <AccordionContent>
-                    <ScrollArea className="h-64 pr-4">
-                        <div className="space-y-3">
-                            {tasks.map(task => (
-                                <TaskItem key={task.id} task={task} />
-                            ))}
-                        </div>
-                    </ScrollArea>
+                    <div className="space-y-3">
+                        {tasks.map(task => (
+                            <TaskItem key={task.id} task={task} />
+                        ))}
+                    </div>
                 </AccordionContent>
             </AccordionItem>
         </Accordion>
