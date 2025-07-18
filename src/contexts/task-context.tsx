@@ -6,6 +6,7 @@ import type { Task, Accomplishment, TaskCategory, TaskDuration, TimeOfDay } from
 import { taskService, accomplishmentService, userSettingsService } from '@/lib/firestore';
 import { useAuth } from './auth-context';
 import { useToast } from '@/hooks/use-toast';
+import { useNotifications } from './notification-context';
 
 // Default values for when a user has no settings yet.
 const DEFAULT_CATEGORIES: TaskCategory[] = ['Work', 'Chores', 'Writing', 'Personal', 'Study'];
@@ -16,16 +17,16 @@ interface TaskContextType {
   accomplishments: Accomplishment[];
   taskCategories: TaskCategory[];
   taskDurations: TaskDuration[];
-  setTaskCategories: (categories: TaskCategory[]) => void;
-  setTaskDurations: (durations: TaskDuration[]) => void;
-  addTask: (task: Omit<Task, 'id' | 'createdAt' | 'rejectionCount' | 'isMuted' | 'completedAt' | 'lastRejectedAt'> & { parentId?: string }) => void;
-  updateTask: (id: string, updates: Partial<Omit<Task, 'id' | 'createdAt'>>) => void;
-  deleteTask: (id: string) => void;
-  acceptTask: (id: string, options?: { showNotification?: boolean }) => void;
-  rejectTask: (id: string) => void;
-  muteTask: (id: string) => void;
-  uncompleteTask: (id: string) => void;
-  addAccomplishment: (content: string) => void;
+  setTaskCategories: (categories: TaskCategory[]) => Promise<void>;
+  setTaskDurations: (durations: TaskDuration[]) => Promise<void>;
+  addTask: (task: Omit<Task, 'id' | 'createdAt' | 'rejectionCount' | 'isMuted' | 'completedAt' | 'lastRejectedAt'> & { parentId?: string }) => Promise<void>;
+  updateTask: (id: string, updates: Partial<Omit<Task, 'id' | 'createdAt'>>) => Promise<void>;
+  deleteTask: (id: string) => Promise<void>;
+  acceptTask: (id: string, options?: { showNotification?: boolean }) => Promise<void>;
+  rejectTask: (id: string) => Promise<void>;
+  muteTask: (id: string) => Promise<void>;
+  uncompleteTask: (id: string) => Promise<void>;
+  addAccomplishment: (content: string) => Promise<void>;
   isLoading: boolean;
   isSheetOpen: boolean;
   setIsSheetOpen: (isOpen: boolean) => void;

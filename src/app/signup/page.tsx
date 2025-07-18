@@ -13,10 +13,11 @@ import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { CalendarIcon } from "lucide-react";
+import { CalendarIcon, Loader2 } from "lucide-react";
 import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
+import { startOfDay } from "date-fns";
 
 const phoneRegex = new RegExp(
   /^([+]?[\s0-9]+)?(\d{3}|[(]?[0-9]+[)])?([-]?[\s]?[0-9])+$/
@@ -48,6 +49,8 @@ export default function SignupPage() {
       password: "",
     },
   });
+
+  const { isSubmitting } = form.formState;
 
   const onSubmit = async (data: SignupFormValues) => {
     try {
@@ -179,7 +182,7 @@ export default function SignupPage() {
                                 selected={field.value}
                                 onSelect={field.onChange}
                                 disabled={(date) =>
-                                date > new Date() || date < new Date("1900-01-01")
+                                  date > new Date() || date < new Date("1900-01-01")
                                 }
                                 initialFocus
                             />
@@ -205,7 +208,8 @@ export default function SignupPage() {
               />
             </CardContent>
             <CardFooter className="flex flex-col gap-4">
-              <Button type="submit" className="w-full">
+              <Button type="submit" className="w-full" disabled={isSubmitting}>
+                 {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Sign Up
               </Button>
             </CardFooter>

@@ -4,21 +4,29 @@
 import { useNotifications } from "@/contexts/notification-context";
 import { Button } from "./ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
-import { Bell, CheckCheck, Trash2 } from "lucide-react";
+import { Bell, CheckCheck, Trash2, Loader2 } from "lucide-react";
 import { ScrollArea } from "./ui/scroll-area";
 import { formatDistanceToNow } from "date-fns";
 import { cn } from "@/lib/utils";
 import { useRouter } from "next/navigation";
+import { useState } from "react";
 
 export function NotificationHistory() {
   const { notifications, unreadCount, markAllAsRead, markAsRead, clearAllNotifications } = useNotifications();
   const router = useRouter();
+  const [isClearing, setIsClearing] = useState(false);
 
   const handleNotificationClick = (notificationId: string, taskId?: string) => {
     markAsRead(notificationId);
     if (taskId) {
       router.push(`/pending?taskId=${taskId}`); 
     }
+  }
+
+  const handleClearAll = async () => {
+    setIsClearing(true);
+    await clearAllNotifications();
+    setIsClearing(false);
   }
 
   return (
@@ -44,8 +52,8 @@ export function NotificationHistory() {
                     </Button>
                 )}
                 {notifications.length > 0 && (
-                     <Button variant="link" size="sm" className="h-auto p-0 text-destructive" onClick={clearAllNotifications}>
-                        <Trash2 className="mr-1 h-4 w-4" />
+                     <Button variant="link" size="sm" className="h-auto p-0 text-destructive" onClick={handleClearAll} disabled={isClearing}>
+                        {isClearing ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Trash2 className="mr-1 h-4 w-4" />}
                         Clear All
                     </Button>
                 )}

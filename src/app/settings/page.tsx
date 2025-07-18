@@ -11,10 +11,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useToast } from "@/hooks/use-toast";
-import { Trash2, PlusCircle, Bell, BellOff } from "lucide-react";
+import { Trash2, PlusCircle, Bell, BellOff, Loader2 } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useNotifications } from "@/contexts/notification-context";
 
 const profileSchema = z.object({
@@ -78,6 +78,7 @@ export default function SettingsPage() {
   const { toast } = useToast();
   const { taskCategories, setTaskCategories, taskDurations, setTaskDurations, isLoading: tasksLoading } = useTasks();
   const { permission, requestPermission } = useNotifications();
+  const [isRequestingPermission, setIsRequestingPermission] = useState(false);
 
   const isLoading = authLoading || tasksLoading;
 
@@ -98,6 +99,9 @@ export default function SettingsPage() {
       }
   });
   
+  const { isSubmitting: isProfileSubmitting } = profileForm.formState;
+  const { isSubmitting: isTaskSettingsSubmitting } = taskSettingsForm.formState;
+
   useEffect(() => {
     if (!isLoading && user) {
         profileForm.reset({
@@ -142,16 +146,22 @@ export default function SettingsPage() {
     }
   };
 
-  const onTaskSettingsSubmit = (data: z.infer<typeof taskSettingsSchema>) => {
+  const onTaskSettingsSubmit = async (data: z.infer<typeof taskSettingsSchema>) => {
     const newCategories = data.categories.map(c => c.value);
     const newDurations = data.durations.map(d => d.value).sort((a, b) => a - b);
     
-    setTaskCategories(newCategories as [string, ...string[]]);
-    setTaskDurations(newDurations as [number, ...number[]]);
+    await setTaskCategories(newCategories as [string, ...string[]]);
+    await setTaskDurations(newDurations as [number, ...number[]]);
 
     toast({ title: "Task Settings Saved", description: "Your custom categories and durations have been updated." });
   };
   
+  const handleRequestPermission = async () => {
+    setIsRequestingPermission(true);
+    await requestPermission();
+    setIsRequestingPermission(false);
+  }
+
   return (
     <div className="container mx-auto max-w-4xl py-8 md:py-12 px-4">
       <div className="mb-8">
@@ -207,7 +217,10 @@ export default function SettingsPage() {
                       )}
                       />
                       <div className="flex justify-end">
-                      <Button type="submit">Save Profile</Button>
+                      <Button type="submit" disabled={isProfileSubmitting}>
+                         {isProfileSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                         Save Profile
+                      </Button>
                       </div>
                   </form>
                   </Form>
@@ -233,8 +246,8 @@ export default function SettingsPage() {
                   </div>
                 )}
                 {permission === 'default' && (
-                  <Button onClick={requestPermission}>
-                    <Bell className="mr-2 h-4 w-4" />
+                  <Button onClick={handleRequestPermission} disabled={isRequestingPermission}>
+                    {isRequestingPermission ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Bell className="mr-2 h-4 w-4" />}
                     Enable Notifications
                   </Button>
                 )}
@@ -299,7 +312,10 @@ export default function SettingsPage() {
                             </div>
 
                             <div className="flex justify-end">
-                                <Button type="submit">Save Task Settings</Button>
+                                <Button type="submit" disabled={isTaskSettingsSubmitting}>
+                                    {isTaskSettingsSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                    Save Task Settings
+                                </Button>
                             </div>
                         </form>
                     </Form>
@@ -310,5 +326,3 @@ export default function SettingsPage() {
     </div>
   );
 }
-
-    

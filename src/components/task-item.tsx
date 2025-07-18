@@ -7,7 +7,7 @@ import { useTasks } from '@/contexts/task-context';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Check, Edit, Trash2, ChevronDown, ChevronUp, RotateCcw, CalendarIcon } from 'lucide-react';
+import { Check, Edit, Trash2, ChevronDown, ChevronUp, RotateCcw, CalendarIcon, Loader2 } from 'lucide-react';
 import { TaskForm } from './task-form';
 import { SubtaskList } from './subtask-list';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
@@ -25,24 +25,30 @@ export function TaskItem({ task, extraActions, isSubtask = false, isHistoryView 
   const { tasks, deleteTask, acceptTask, uncompleteTask, startEditingTask } = useTasks();
   const { deleteNotification } = useNotifications();
   const [showSubtasks, setShowSubtasks] = useState(false);
+  const [isCompleting, setIsCompleting] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const subtasks = tasks.filter(t => t.parentId === task.id);
   const pendingSubtasks = subtasks.filter(t => !t.completedAt);
   const hasPendingSubtasks = pendingSubtasks.length > 0;
 
-  const handleComplete = () => {
-    acceptTask(task.id);
-    deleteNotification(task.id);
+  const handleComplete = async () => {
+    setIsCompleting(true);
+    await acceptTask(task.id);
+    await deleteNotification(task.id);
+    setIsCompleting(false);
   }
 
-  const handleDelete = () => {
-    deleteTask(task.id);
-    deleteNotification(task.id);
+  const handleDelete = async () => {
+    setIsDeleting(true);
+    await deleteTask(task.id);
+    await deleteNotification(task.id);
+    setIsDeleting(false);
   }
 
   const CompleteButton = () => (
-    <Button variant="outline" size="sm" onClick={handleComplete}>
-      <Check className="h-4 w-4 md:mr-2" />
+    <Button variant="outline" size="sm" onClick={handleComplete} disabled={isCompleting}>
+      {isCompleting ? <Loader2 className="h-4 w-4 animate-spin md:mr-2" /> : <Check className="h-4 w-4 md:mr-2" />}
       <span className="hidden md:inline">Complete</span>
     </Button>
   );
@@ -105,11 +111,11 @@ export function TaskItem({ task, extraActions, isSubtask = false, isHistoryView 
                 
                 {isSubtask && <CompleteButton />}
 
-                <Button variant="ghost" size="icon" onClick={() => startEditingTask(task.id)}>
+                <Button variant="ghost" size="icon" onClick={() => startEditingTask(task.id)} disabled={isDeleting || isCompleting}>
                 <Edit className="h-4 w-4" />
                 </Button>
-                <Button variant="ghost" size="icon" onClick={handleDelete}>
-                <Trash2 className="h-4 w-4 text-destructive" />
+                <Button variant="ghost" size="icon" onClick={handleDelete} disabled={isDeleting || isCompleting}>
+                  {isDeleting ? <Loader2 className="h-4 w-4 animate-spin text-destructive" /> : <Trash2 className="h-4 w-4 text-destructive" />}
                 </Button>
             </CardFooter>
         </>

@@ -49,6 +49,12 @@ export function TaskSuggestion() {
   const [showRewordDialog, setShowRewordDialog] = useState(false);
   const [rewordedSuggestions, setRewordedSuggestions] = useState<{ title: string; description: string }[]>([]);
   const [selectedRewordedTasks, setSelectedRewordedTasks] = useState<Record<string, boolean>>({});
+  
+  const [isAccepting, setIsAccepting] = useState(false);
+  const [isRejecting, setIsRejecting] = useState(false);
+  const [isMuting, setIsMuting] = useState(false);
+  const [isAcceptingReword, setIsAcceptingReword] = useState(false);
+
 
   const [isPending, startTransition] = useTransition();
 
@@ -108,41 +114,49 @@ export function TaskSuggestion() {
     }
   }, [tasks, currentEnergy, tasksLoading]);
   
-  const handleAccept = () => {
+  const handleAccept = async () => {
     if (!suggestion.suggestedTask) return;
-    acceptTask(suggestion.suggestedTask.id);
-    deleteNotification(suggestion.suggestedTask.id);
+    setIsAccepting(true);
+    await acceptTask(suggestion.suggestedTask.id);
+    await deleteNotification(suggestion.suggestedTask.id);
+    setIsAccepting(false);
     setShowAffirmation(true);
     setTimeout(() => {
       setShowAffirmation(false);
     }, 2000);
   };
 
-  const handleReject = () => {
+  const handleReject = async () => {
     if (!suggestion.suggestedTask) return;
+    setIsRejecting(true);
     const nextRejectionCount = (suggestion.suggestedTask.rejectionCount || 0) + 1;
     if (nextRejectionCount >= MAX_REJECTIONS_BEFORE_PROMPT) {
       setShowRejectionPrompt(true);
     } else {
-      rejectTask(suggestion.suggestedTask.id);
+      await rejectTask(suggestion.suggestedTask.id);
     }
+     setIsRejecting(false);
   };
   
-  const handleMute = () => {
+  const handleMute = async () => {
     if (!suggestion.suggestedTask) return;
-    muteTask(suggestion.suggestedTask.id);
-    deleteNotification(suggestion.suggestedTask.id);
+    setIsMuting(true);
+    await muteTask(suggestion.suggestedTask.id);
+    await deleteNotification(suggestion.suggestedTask.id);
     setShowRejectionPrompt(false);
     toast({
         title: "Task Muted",
         description: "We won't suggest this task again for a while.",
     });
+    setIsMuting(false);
   };
   
-  const handleSkipFromDialog = () => {
+  const handleSkipFromDialog = async () => {
      if (!suggestion.suggestedTask) return;
-     rejectTask(suggestion.suggestedTask.id);
+     setIsRejecting(true);
+     await rejectTask(suggestion.suggestedTask.id);
      setShowRejectionPrompt(false);
+     setIsRejecting(false);
   }
 
   const handleRewordClick = () => {
@@ -170,7 +184,7 @@ export function TaskSuggestion() {
     });
   };
 
-  const handleAcceptReword = () => {
+  const handleAcceptReword = async () => {
     if (!suggestion.suggestedTask || rewordedSuggestions.length === 0) return;
 
     const tasksToAdd = rewordedSuggestions.filter(suggestion => selectedRewordedTasks[suggestion.title]);
@@ -184,8 +198,9 @@ export function TaskSuggestion() {
         return;
     }
     
-    tasksToAdd.forEach(s => {
-        addTask({
+    setIsAcceptingReword(true);
+    const addPromises = tasksToAdd.map(s => {
+        return addTask({
             parentId: suggestion.suggestedTask!.id,
             title: s.title,
             description: s.description,
@@ -195,6 +210,9 @@ export function TaskSuggestion() {
             duration: 15,
         });
     });
+
+    await Promise.all(addPromises);
+    setIsAcceptingReword(false);
     
     toast({
       title: `${tasksToAdd.length} New Sub-task(s) Added!`,
@@ -311,7 +329,7 @@ export function TaskSuggestion() {
             )}
         </div>
         <div className="mt-4 flex justify-center items-center gap-4">
-             <Button variant="link" onClick={handleRewordClick} disabled={isPending}>
+             <Button variant="link" onClick={handleRewordClick} disabled={isPending || isAccepting || isRejecting}>
                 {isPending ? (
                     <>
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -324,15 +342,15 @@ export function TaskSuggestion() {
                     </>
                 )}
             </Button>
-            <Button variant="link" onClick={() => startEditingTask(suggestion.suggestedTask!.id)}>
+            <Button variant="link" onClick={() => startEditingTask(suggestion.suggestedTask!.id)} disabled={isPending || isAccepting || isRejecting}>
                 <Edit className="mr-2 h-4 w-4" />
                 Edit
             </Button>
         </div>
       </CardContent>
       <CardFooter className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-6">
-        <Button variant="destructive" size="lg" onClick={handleReject} className="sm:col-span-1">
-          <X className="mr-2 h-5 w-5" /> Not Now
+        <Button variant="destructive" size="lg" onClick={handleReject} className="sm:col-span-1" disabled={isRejecting || isAccepting}>
+          {isRejecting ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <X className="mr-2 h-5 w-5" />} Not Now
         </Button>
         {hasPendingSubtasks ? (
             <TooltipProvider>
@@ -350,8 +368,8 @@ export function TaskSuggestion() {
                 </Tooltip>
             </TooltipProvider>
         ) : (
-            <Button size="lg" className="sm:col-span-2 bg-green-500 hover:bg-green-600 text-white" onClick={handleAccept}>
-                <Check className="mr-2 h-5 w-5" /> Let's Do It
+            <Button size="lg" className="sm:col-span-2 bg-green-500 hover:bg-green-600 text-white" onClick={handleAccept} disabled={isAccepting || isRejecting}>
+                {isAccepting ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <Check className="mr-2 h-5 w-5" />} Let's Do It
             </Button>
         )}
       </CardFooter>
@@ -384,8 +402,14 @@ export function TaskSuggestion() {
             </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                <Button variant="secondary" onClick={handleSkipFromDialog}>Just Skip for Now</Button>
-                <Button variant="destructive" onClick={handleMute}>Don't Ask Again</Button>
+                <Button variant="secondary" onClick={handleSkipFromDialog} disabled={isMuting || isRejecting}>
+                  {isRejecting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  Just Skip for Now
+                </Button>
+                <Button variant="destructive" onClick={handleMute} disabled={isMuting || isRejecting}>
+                  {isMuting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  Don't Ask Again
+                </Button>
             </AlertDialogFooter>
         </AlertDialogContent>
     </AlertDialog>
@@ -416,7 +440,8 @@ export function TaskSuggestion() {
             </div>
             <AlertDialogFooter>
                 <Button variant="ghost" onClick={() => setShowRewordDialog(false)}>Cancel</Button>
-                <Button onClick={handleAcceptReword}>
+                <Button onClick={handleAcceptReword} disabled={isAcceptingReword}>
+                    {isAcceptingReword && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                     <PlusCircle className="mr-2 h-4 w-4" />
                     Add Selected Tasks
                 </Button>
