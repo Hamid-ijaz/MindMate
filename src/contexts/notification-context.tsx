@@ -4,6 +4,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
+import { useTasks } from './task-context';
 
 type NotificationPermission = 'default' | 'granted' | 'denied';
 
@@ -34,6 +35,7 @@ interface NotificationContextType {
   markAllAsRead: () => void;
   markAsRead: (id: string) => void;
   deleteNotification: (id: string) => void;
+  clearAllNotifications: () => void;
 }
 
 const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
@@ -44,6 +46,7 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
   const [permission, setPermission] = useState<NotificationPermission>('default');
   const [notifications, setNotifications] = useState<StoredNotification[]>([]);
   const { toast } = useToast();
+  const { acceptTask } = useTasks();
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -64,7 +67,7 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
   }, [notifications]);
 
   const playNotificationSound = () => {
-    const audio = new Audio('/audio/mixkit-bell-notification-933.wav');
+    const audio = new Audio('https://www.soundjay.com/buttons/sounds/button-7.wav');
     audio.play().catch(error => console.error("Failed to play notification sound:", error));
   };
   
@@ -93,9 +96,9 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
             duration: 30000,
             action: (
             <div className="flex flex-col gap-2">
-                {options.data?.taskId && options.actions?.onComplete && (
+                {options.data?.taskId && (
                     <Button size="sm" onClick={() => {
-                        options.actions!.onComplete!(options.data.taskId);
+                        acceptTask(options.data.taskId);
                         dismiss();
                     }}>
                         Complete
@@ -111,7 +114,7 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
         return [newNotification, ...prev].slice(0, 50);
     });
 
-  }, [toast]);
+  }, [toast, acceptTask]);
 
 
   const requestPermission = useCallback(async () => {
@@ -153,10 +156,14 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
     setNotifications(prev => prev.filter(n => n.id !== id));
   }, []);
 
+  const clearAllNotifications = useCallback(() => {
+    setNotifications([]);
+  }, []);
+
   const unreadCount = notifications.filter(n => !n.isRead).length;
 
   return (
-    <NotificationContext.Provider value={{ permission, requestPermission, sendNotification, notifications, unreadCount, markAllAsRead, markAsRead, deleteNotification }}>
+    <NotificationContext.Provider value={{ permission, requestPermission, sendNotification, notifications, unreadCount, markAllAsRead, markAsRead, deleteNotification, clearAllNotifications }}>
       {children}
     </NotificationContext.Provider>
   );

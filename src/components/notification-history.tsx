@@ -4,15 +4,14 @@
 import { useNotifications } from "@/contexts/notification-context";
 import { Button } from "./ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
-import { Bell, CheckCheck } from "lucide-react";
+import { Bell, CheckCheck, Trash2 } from "lucide-react";
 import { ScrollArea } from "./ui/scroll-area";
 import { formatDistanceToNow } from "date-fns";
 import { cn } from "@/lib/utils";
-import { useTasks } from "@/contexts/task-context";
 import { useRouter } from "next/navigation";
 
 export function NotificationHistory() {
-  const { notifications, unreadCount, markAllAsRead, markAsRead } = useNotifications();
+  const { notifications, unreadCount, markAllAsRead, markAsRead, clearAllNotifications } = useNotifications();
   const router = useRouter();
 
   const handleNotificationClick = (notificationId: string, taskId?: string) => {
@@ -37,12 +36,20 @@ export function NotificationHistory() {
       <PopoverContent className="w-80 p-0">
         <div className="flex items-center justify-between p-3 border-b">
             <h3 className="font-semibold">Notifications</h3>
-            {unreadCount > 0 && (
-                <Button variant="link" size="sm" className="h-auto p-0" onClick={markAllAsRead}>
-                    <CheckCheck className="mr-1 h-4 w-4" />
-                    Mark all as read
-                </Button>
-            )}
+            <div className="flex items-center gap-2">
+                {unreadCount > 0 && (
+                    <Button variant="link" size="sm" className="h-auto p-0" onClick={markAllAsRead}>
+                        <CheckCheck className="mr-1 h-4 w-4" />
+                        Mark all as read
+                    </Button>
+                )}
+                {notifications.length > 0 && (
+                     <Button variant="link" size="sm" className="h-auto p-0 text-destructive" onClick={clearAllNotifications}>
+                        <Trash2 className="mr-1 h-4 w-4" />
+                        Clear All
+                    </Button>
+                )}
+            </div>
         </div>
         <ScrollArea className="h-96">
             {notifications.length === 0 ? (
