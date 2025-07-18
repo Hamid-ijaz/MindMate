@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import type { Note } from '@/lib/types';
 import { useNotes } from '@/contexts/note-context';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, Trash2 } from 'lucide-react';
+import { NoteToolbar } from './note-toolbar';
 
 interface EditNoteDialogProps {
     note: Note | null;
@@ -19,21 +20,34 @@ interface EditNoteDialogProps {
 export function EditNoteDialog({ note, isOpen, onClose }: EditNoteDialogProps) {
     const [title, setTitle] = useState('');
     const [content, setContent] = useState('');
+    const [color, setColor] = useState('');
+    const [imageUrl, setImageUrl] = useState('');
     const [isSaving, setIsSaving] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
     const { updateNote, deleteNote } = useNotes();
     const { toast } = useToast();
+    const contentRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
         if (note) {
             setTitle(note.title);
             setContent(note.content);
+            if(contentRef.current) contentRef.current.innerHTML = note.content;
+            setColor(note.color || '');
+            setImageUrl(note.imageUrl || '');
         }
     }, [note]);
     
     const handleClose = () => {
-        if (note && (title !== note.title || content !== note.content)) {
-            handleSave();
+        if (note) {
+            const currentContent = contentRef.current?.innerHTML || '';
+            const hasChanged = title !== note.title || 
+                               currentContent !== note.content || 
+                               color !== (note.color || '') ||
+                               imageUrl !== (note.imageUrl || '');
+            if (hasChanged) {
+                handleSave();
+            }
         }
         onClose();
     }
@@ -42,7 +56,8 @@ export function EditNoteDialog({ note, isOpen, onClose }: EditNoteDialogProps) {
         if (!note) return;
         setIsSaving(true);
         try {
-            await updateNote(note.id, { title, content });
+            const updatedContent = contentRef.current?.innerHTML || '';
+            await updateNote(note.id, { title, content: updatedContent, color, imageUrl });
             toast({ title: "Note updated" });
         } catch (e) {
             toast({ title: "Error", description: "Failed to save note.", variant: "destructive" });
@@ -64,33 +79,49 @@ export function EditNoteDialog({ note, isOpen, onClose }: EditNoteDialogProps) {
             setIsDeleting(false);
         }
     }
+    
+    const handleContentChange = (e: React.FormEvent<HTMLDivElement>) => {
+        setContent(e.currentTarget.innerHTML);
+    }
 
     return (
         <Dialog open={isOpen} onOpenChange={(open) => !open && handleClose()}>
-            <DialogContent className="max-w-xl">
-                <DialogHeader>
+            <DialogContent className="max-w-xl p-0" style={{ backgroundColor: color || 'hsl(var(--card))' }}>
+                {imageUrl && (
+                    <div className="relative w-full h-56">
+                        <img src={imageUrl} alt="Note" className="w-full h-full object-cover rounded-t-lg" />
+                    </div>
+                )}
+                <DialogHeader className="p-6 pb-0">
                     <DialogTitle>
                          <Input
                             placeholder="Title"
                             value={title}
                             onChange={(e) => setTitle(e.target.value)}
-                            className="border-none focus-visible:ring-0 text-xl font-bold px-0"
+                            className="border-none focus-visible:ring-0 text-xl font-bold px-0 bg-transparent"
                         />
                     </DialogTitle>
                 </DialogHeader>
-                <div className="py-4">
-                    <textarea
-                        placeholder="Take a note..."
-                        value={content}
-                        onChange={(e) => setContent(e.target.value)}
+                <div className="px-6">
+                    <div
+                        ref={contentRef}
+                        contentEditable
+                        onInput={handleContentChange}
+                        dangerouslySetInnerHTML={{ __html: content }}
                         className="w-full min-h-[200px] border-none focus-visible:ring-0 resize-none bg-transparent p-0 text-base outline-none"
                     />
                 </div>
-                <DialogFooter className="justify-between">
-                     <Button variant="ghost" size="icon" onClick={handleDelete} disabled={isDeleting}>
-                        {isDeleting ? <Loader2 className="animate-spin" /> : <Trash2 className="text-destructive" />}
-                    </Button>
-                    <Button onClick={handleClose} disabled={isSaving}>
+                <DialogFooter className="justify-between items-center p-3 border-t">
+                     <div className="flex items-center">
+                        <NoteToolbar
+                            onSetColor={setColor}
+                            onSetImageUrl={setImageUrl}
+                        />
+                        <Button variant="ghost" size="icon" onClick={handleDelete} disabled={isDeleting}>
+                            {isDeleting ? <Loader2 className="animate-spin" /> : <Trash2 className="text-destructive h-5 w-5" />}
+                        </Button>
+                     </div>
+                    <Button variant="ghost" onClick={handleClose} disabled={isSaving}>
                         {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                         Close
                     </Button>

@@ -105,4 +105,11 @@
   .dark .rdp-caption_dropdowns .rdp-vhidden {
     @apply hidden;
   }
+  
+  [contenteditable][data-placeholder]:empty:before {
+    content: attr(data-placeholder);
+    pointer-events: none;
+    display: block; /* For Firefox */
+    @apply text-muted-foreground;
+  }
 }

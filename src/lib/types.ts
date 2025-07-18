@@ -61,9 +61,9 @@ export interface Note {
     title: string;
     content: string; // Will store HTML content for rich text
     imageUrl?: string;
+    color?: string; // e.g., hex code for background color
     createdAt: number;
     updatedAt: number;
-    color?: string; // e.g., hex code for background color
 }
 
 // Schema for the rewordTask AI flow
