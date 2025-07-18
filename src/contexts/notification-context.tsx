@@ -34,8 +34,8 @@ interface NotificationContextType {
   unreadCount: number;
   markAllAsRead: () => void;
   markAsRead: (id: string) => void;
-  deleteNotification: (id: string) => void;
-  clearAllNotifications: () => void;
+  deleteNotification: (id: string) => Promise<void>;
+  clearAllNotifications: () => Promise<void>;
 }
 
 const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
@@ -99,6 +99,7 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
                 {options.data?.taskId && (
                     <Button size="sm" onClick={() => {
                         acceptTask(options.data.taskId);
+                        deleteNotification(options.data.taskId);
                         dismiss();
                     }}>
                         Complete
@@ -152,11 +153,11 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
     setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
   }, []);
 
-  const deleteNotification = useCallback((id: string) => {
-    setNotifications(prev => prev.filter(n => n.id !== id));
+  const deleteNotification = useCallback(async (id: string) => {
+    setNotifications(prev => prev.filter(n => n.id !== id && n.data?.taskId !== id));
   }, []);
 
-  const clearAllNotifications = useCallback(() => {
+  const clearAllNotifications = useCallback(async () => {
     setNotifications([]);
   }, []);
 
