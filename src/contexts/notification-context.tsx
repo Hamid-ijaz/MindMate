@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode, useRef } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 
@@ -42,6 +42,7 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
   const [permission, setPermission] = useState<NotificationPermission>('default');
   const [notifications, setNotifications] = useState<StoredNotification[]>([]);
   const { toast } = useToast();
+  const displayedNotificationsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -60,6 +61,27 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
         localStorage.setItem(NOTIFICATION_STORAGE_KEY, JSON.stringify(notifications));
     }
   }, [notifications]);
+
+  // This effect safely triggers toasts when new notifications are added.
+  useEffect(() => {
+    notifications.forEach(notif => {
+      // Check if this notification has already been displayed
+      if (!displayedNotificationsRef.current.has(notif.id)) {
+        const { dismiss } = toast({
+          title: notif.title,
+          description: notif.body,
+          duration: 30000,
+          action: (
+            <Button size="sm" onClick={() => dismiss()}>
+              Dismiss
+            </Button>
+          ),
+        });
+        // Mark as displayed
+        displayedNotificationsRef.current.add(notif.id);
+      }
+    });
+  }, [notifications, toast]);
 
   const playNotificationSound = () => {
     const audio = new Audio('https://www.soundjay.com/buttons/sounds/button-7.wav');
@@ -85,25 +107,10 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
             data: options.data
         };
         
-        const { dismiss } = toast({
-            title: title,
-            description: options.body,
-            duration: 30000,
-            action: (
-            <div className="flex flex-col gap-2">
-                <Button size="sm" onClick={() => {
-                    dismiss();
-                }}>
-                    Dismiss
-                </Button>
-            </div>
-            ),
-        });
-
         return [newNotification, ...prev].slice(0, 50);
     });
 
-  }, [toast]);
+  }, []);
 
 
   const requestPermission = useCallback(async () => {
