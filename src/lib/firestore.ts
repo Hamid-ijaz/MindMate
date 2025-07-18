@@ -137,7 +137,7 @@ export const taskService = {
     const childIds: string[] = [];
     subtasks.forEach(subtaskData => {
       const childRef = doc(tasksRef);
-      const childTask = {
+      const childTask: any = {
         ...subtaskData,
         parentId: parentRef.id,
         userEmail,
@@ -145,6 +145,11 @@ export const taskService = {
         rejectionCount: 0,
         isMuted: false,
       };
+      Object.keys(childTask).forEach(key => {
+        if (childTask[key] === undefined || childTask[key] === null) {
+          delete childTask[key];
+        }
+      });
       batch.set(childRef, childTask);
       childIds.push(childRef.id);
     });

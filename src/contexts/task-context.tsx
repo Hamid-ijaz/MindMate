@@ -155,8 +155,6 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
         energyLevel: 'Low', // Default to low energy
         duration: 15, // Default to 15 mins
         timeOfDay: taskData.timeOfDay,
-        completedAt: undefined,
-        lastRejectedAt: undefined,
       }));
     }
 
