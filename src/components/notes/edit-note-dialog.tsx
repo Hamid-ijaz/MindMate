@@ -32,15 +32,17 @@ export function EditNoteDialog({ note, isOpen, onClose }: EditNoteDialogProps) {
     const contentRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
-        if (note) {
+        if (note && isOpen) {
             setTitle(note.title);
             setContent(note.content);
-            if(contentRef.current) contentRef.current.innerHTML = note.content;
+            if(contentRef.current) {
+                contentRef.current.innerHTML = note.content;
+            }
             setColor(note.color || '');
             setImageUrl(note.imageUrl || '');
             setFontSize(note.fontSize || DEFAULT_FONT_SIZE);
         }
-    }, [note]);
+    }, [note, isOpen]);
     
     const handleClose = () => {
         if (note) {
@@ -86,7 +88,8 @@ export function EditNoteDialog({ note, isOpen, onClose }: EditNoteDialogProps) {
     }
     
     const handleContentChange = (e: React.FormEvent<HTMLDivElement>) => {
-        setContent(e.currentTarget.innerHTML);
+        // We don't need to set state here anymore as the save happens on close
+        // This prevents the re-render that causes the cursor jump
     }
 
     return (
@@ -118,7 +121,6 @@ export function EditNoteDialog({ note, isOpen, onClose }: EditNoteDialogProps) {
                             ref={contentRef}
                             contentEditable
                             onInput={handleContentChange}
-                            dangerouslySetInnerHTML={{ __html: content }}
                             className="w-full min-h-[200px] border-none focus-visible:ring-0 resize-none bg-transparent p-0 outline-none max-w-none"
                             style={{ fontSize: `${fontSize}px` }}
                         />
