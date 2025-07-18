@@ -80,8 +80,11 @@ const serializeTaskForFirestore = (task: any) => {
     }
     // Remove fields with undefined values to avoid Firestore errors
     Object.keys(data).forEach(key => {
-      if (data[key] === undefined || data[key] === null) {
+      if (data[key] === undefined) {
         delete data[key];
+      }
+      if (key === 'recurrence' && data.recurrence && data.recurrence.endDate === undefined) {
+        delete data.recurrence.endDate;
       }
     });
     return data;
