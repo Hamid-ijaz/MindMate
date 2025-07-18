@@ -4,12 +4,12 @@
 import { useTasks } from '@/contexts/task-context';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { format } from 'date-fns';
+import { format, isToday, isYesterday, startOfDay } from 'date-fns';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
 import { RotateCcw, ChevronDown, ChevronUp, CornerDownRight } from 'lucide-react';
 import { SubtaskList } from '@/components/subtask-list';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import type { Task } from '@/lib/types';
 import Link from 'next/link';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -37,18 +37,33 @@ function HistorySkeleton() {
   );
 }
 
+const getGroupTitle = (date: Date): string => {
+    if (isToday(date)) return "Today";
+    if (isYesterday(date)) return "Yesterday";
+    return `On ${format(date, 'EEEE, MMMM d')}`;
+};
+
 export default function HistoryPage() {
   const { tasks, uncompleteTask, isLoading } = useTasks();
   const [expandedTasks, setExpandedTasks] = useState<Record<string, boolean>>({});
 
-  const allCompletedTasks = tasks.filter(t => t.completedAt).sort((a, b) => b.completedAt! - a.completedAt!);
-  
-  const completedRootTasks = allCompletedTasks.filter(t => !t.parentId);
-  const completedOrphanedSubtasks = allCompletedTasks.filter(t => {
-    if (!t.parentId) return false;
-    const parent = tasks.find(p => p.id === t.parentId);
-    return parent && !parent.completedAt;
-  });
+  const allCompletedTasks = useMemo(() => {
+    return tasks.filter(t => t.completedAt).sort((a, b) => b.completedAt! - a.completedAt!);
+  }, [tasks]);
+
+  const groupedTasks = useMemo(() => {
+    const groups: Record<string, Task[]> = {};
+    allCompletedTasks.forEach(task => {
+        if (!task.completedAt) return;
+        const completionDate = new Date(task.completedAt);
+        const groupTitle = getGroupTitle(completionDate);
+        if (!groups[groupTitle]) {
+            groups[groupTitle] = [];
+        }
+        groups[groupTitle].push(task);
+    });
+    return groups;
+  }, [allCompletedTasks]);
 
   const getSubtasks = (parentId: string) => {
     return tasks.filter(t => t.parentId === parentId && t.completedAt);
@@ -76,10 +91,10 @@ export default function HistoryPage() {
                 Part of: <Link href="/pending" className="font-semibold hover:underline ml-1">{parentTask.title}</Link>
              </CardDescription>
           )}
-          <CardTitle className="text-xl line-through break-words">{task.title}</CardTitle>
+          <CardTitle className="text-xl line-through break-word">{task.title}</CardTitle>
           {task.completedAt && (
               <CardDescription>
-              Completed on: {format(new Date(task.completedAt), "MMMM d, yyyy 'at' h:mm a")}
+              Completed at {format(new Date(task.completedAt), "h:mm a")}
               </CardDescription>
           )}
         </CardHeader>
@@ -116,33 +131,37 @@ export default function HistoryPage() {
         <p className="mt-2 text-muted-foreground">Review your accomplished tasks.</p>
       </div>
       
-      <div className="space-y-12">
-        <div>
-            <h2 className="text-2xl font-semibold mb-4">History ({isLoading ? '...' : allCompletedTasks.length})</h2>
-            <ScrollArea className="h-[calc(100vh-16rem)] md:h-[calc(100vh-20rem)] pr-4">
-                 <div className="space-y-4">
-                {isLoading ? (
-                  <HistorySkeleton />
-                ) : allCompletedTasks.length === 0 ? (
-                    <p className="text-muted-foreground">You haven't completed any tasks yet.</p>
-                ) : (
-                    allCompletedTasks.map(task => {
-                       // Only render root tasks or orphaned subtasks directly
-                       // Subtasks of completed parents are rendered recursively
-                       if (!task.parentId) {
-                         return renderTaskCard(task);
-                       }
-                       const parent = getParentTask(task.parentId);
-                       if (parent && !parent.completedAt) {
-                         return renderTaskCard(task);
-                       }
-                       return null;
-                    })
-                )}
+      <ScrollArea className="h-[calc(100vh-16rem)] md:h-[calc(100vh-20rem)] pr-4">
+           <div className="space-y-12">
+          {isLoading ? (
+            <HistorySkeleton />
+          ) : Object.keys(groupedTasks).length === 0 ? (
+              <p className="text-muted-foreground">You haven't completed any tasks yet.</p>
+          ) : (
+            Object.entries(groupedTasks).map(([groupTitle, tasksInGroup]) => (
+              <div key={groupTitle}>
+                <h2 className="text-2xl font-semibold mb-4">{groupTitle}</h2>
+                <div className="space-y-4">
+                  {tasksInGroup.map(task => {
+                      // Only render root tasks or orphaned subtasks directly
+                      // Subtasks of completed parents are rendered recursively within the parent
+                      if (!task.parentId) {
+                        return renderTaskCard(task);
+                      }
+                      const parent = getParentTask(task.parentId!);
+                      if (parent && !parent.completedAt) {
+                        return renderTaskCard(task); // Render orphaned subtask
+                      }
+                      // If parent is also completed, it will be rendered by the parent's `renderTaskCard`
+                      // so we don't render it here to avoid duplication.
+                      return null;
+                  })}
                 </div>
-            </ScrollArea>
-        </div>
-      </div>
+              </div>
+            ))
+          )}
+          </div>
+      </ScrollArea>
     </div>
   );
 }
