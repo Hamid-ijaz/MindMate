@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { EnergyLevel, Task, TimeOfDay } from "@/lib/types";
-import { AlertCircle, Check, Sparkles, X, Loader2, Wand2, Edit, CalendarIcon } from "lucide-react";
+import { AlertCircle, Check, Sparkles, X, Loader2, Wand2, Edit, CalendarIcon, Repeat } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { getRandomQuote } from "@/lib/motivational-quotes";
 import { MAX_REJECTIONS_BEFORE_PROMPT, REJECTION_HOURS } from "@/lib/constants";
@@ -311,7 +311,7 @@ export function TaskSuggestion() {
             </Select>
         </div>
 
-        <CardTitle className="text-2xl pt-2 break-words">{suggestion.suggestedTask.title}</CardTitle>
+        <CardTitle className="text-2xl pt-2 break-word">{suggestion.suggestedTask.title}</CardTitle>
         {suggestion.suggestedTask.description && <CardDescription className="pt-2">{suggestion.suggestedTask.description}</CardDescription>}
       </CardHeader>
       <CardContent>
@@ -326,6 +326,21 @@ export function TaskSuggestion() {
                     <CalendarIcon className="h-3 w-3" />
                     {format(new Date(suggestion.suggestedTask.reminderAt), "MMM d, h:mm a")}
                 </Badge>
+            )}
+            {suggestion.suggestedTask.recurrence && suggestion.suggestedTask.recurrence.frequency !== 'none' && (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                       <Badge variant="outline" className="flex items-center gap-1 cursor-default capitalize">
+                          <Repeat className="h-3 w-3" />
+                          {suggestion.suggestedTask.recurrence.frequency}
+                       </Badge>
+                    </TooltipTrigger>
+                     <TooltipContent>
+                        {suggestion.suggestedTask.recurrence.endDate ? `Repeats ${suggestion.suggestedTask.recurrence.frequency} until ${format(new Date(suggestion.suggestedTask.recurrence.endDate), "MMM d, yyyy")}` : `Repeats ${suggestion.suggestedTask.recurrence.frequency}`}
+                     </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
             )}
         </div>
         <div className="mt-4 flex justify-center items-center gap-4">
@@ -418,7 +433,7 @@ export function TaskSuggestion() {
         <AlertDialogContent className="max-w-xl">
             <AlertDialogHeader>
                 <AlertDialogTitle className="flex items-center gap-2"><Wand2 className="text-primary"/>Here's a breakdown</AlertDialogTitle>
-                <AlertDialogDescription className="break-words">
+                <AlertDialogDescription className="break-word">
                    Select which steps you'd like to add as new sub-tasks.
                 </AlertDialogDescription>
             </AlertDialogHeader>

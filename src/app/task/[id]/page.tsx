@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { AlertCircle, ArrowLeft, CalendarIcon, Check, Edit, ExternalLink, Loader2, RotateCcw, Trash2, Wand2 } from 'lucide-react';
+import { AlertCircle, ArrowLeft, CalendarIcon, Check, Edit, ExternalLink, Loader2, Repeat, RotateCcw, Trash2, Wand2 } from 'lucide-react';
 import { format, isPast } from 'date-fns';
 import { SubtaskList } from '@/components/subtask-list';
 import Link from 'next/link';
@@ -101,6 +101,9 @@ export default function TaskPage() {
         await acceptTask(task.id);
         await deleteNotification(task.id);
         setIsCompleting(false);
+        // If it was a recurring task that just got rescheduled, the original is now complete.
+        // We can stay on this page to view the completed record.
+        // Or we could redirect, for now let's stay.
     }
     
     const handleRedo = async () => {
@@ -110,7 +113,7 @@ export default function TaskPage() {
     const CompleteButton = () => (
         <Button onClick={handleComplete} disabled={isCompleting || hasPendingSubtasks}>
             {isCompleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Check className="mr-2 h-4 w-4" />}
-            Complete
+            Complete{task.recurrence && task.recurrence.frequency !== 'none' ? ' & Reschedule' : ''}
         </Button>
     );
 
@@ -123,7 +126,7 @@ export default function TaskPage() {
             <Card>
                 <CardHeader>
                     <div className="flex justify-between items-start">
-                        <CardTitle className="text-3xl break-words">{task.title}</CardTitle>
+                        <CardTitle className="text-3xl break-word">{task.title}</CardTitle>
                         <div className="flex items-center gap-2">
                              <Badge className={`flex items-center gap-1.5 ${status.color} text-white`}>
                                 <span className={`h-2 w-2 rounded-full ${status.color} ring-2 ring-white`}></span>
@@ -175,6 +178,16 @@ export default function TaskPage() {
                                     <Check className="h-4 w-4 text-green-500" />
                                     {format(new Date(task.completedAt), "MMM d, yyyy 'at' h:mm a")}
                                 </p>
+                            </div>
+                        )}
+                        {task.recurrence && task.recurrence.frequency !== 'none' && (
+                            <div className="space-y-1">
+                                <p className="text-muted-foreground">Recurrence</p>
+                                <p className="font-semibold flex items-center gap-1.5 capitalize">
+                                    <Repeat className="h-4 w-4" />
+                                    {task.recurrence.frequency}
+                                </p>
+                                {task.recurrence.endDate && <p className="text-xs text-muted-foreground">until {format(new Date(task.recurrence.endDate), 'PPP')}</p>}
                             </div>
                         )}
                     </div>

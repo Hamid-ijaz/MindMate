@@ -27,11 +27,11 @@ import {
 import {
   timesOfDay,
   Task,
-  TaskCategory,
   EnergyLevel,
   TaskDuration,
-  TimeOfDay,
   energyLevels,
+  recurrenceFrequencies,
+  RecurrenceFrequency,
 } from "@/lib/types";
 import { useState, useTransition, useEffect } from "react";
 import { summarizeUrl } from "@/ai/flows/summarize-url-flow";
@@ -43,6 +43,7 @@ import { CalendarIcon } from "lucide-react";
 import { Calendar } from "./ui/calendar";
 import { cn } from "@/lib/utils";
 import { format, setHours, setMinutes, startOfDay } from "date-fns";
+import { Separator } from "./ui/separator";
 
 const formSchema = z.object({
   title: z.string().min(3, "Title must be at least 3 characters long."),
@@ -52,7 +53,21 @@ const formSchema = z.object({
   duration: z.coerce.number().min(1, "Duration is required"),
   timeOfDay: z.enum(timesOfDay),
   reminderAt: z.date().optional(),
+  recurrence: z.object({
+      frequency: z.enum(['none', 'daily', 'weekly', 'monthly']),
+      endDate: z.date().optional(),
+  }).optional(),
+}).refine(data => {
+    // If recurrence is set and not 'none', endDate must be after reminderAt if both exist.
+    if (data.recurrence && data.recurrence.frequency !== 'none' && data.reminderAt && data.recurrence.endDate) {
+        return data.recurrence.endDate >= data.reminderAt;
+    }
+    return true;
+}, {
+    message: "Recurrence end date must be on or after the reminder date.",
+    path: ["recurrence", "endDate"],
 });
+
 
 type TaskFormValues = z.infer<typeof formSchema>;
 
@@ -78,6 +93,10 @@ export function TaskForm({ task, onFinished, parentId, defaultValues: propDefaul
     ...task,
     duration: Number(task.duration) as TaskDuration,
     reminderAt: task.reminderAt ? new Date(task.reminderAt) : undefined,
+    recurrence: task.recurrence ? {
+        ...task.recurrence,
+        endDate: task.recurrence.endDate ? new Date(task.recurrence.endDate) : undefined,
+    } : { frequency: 'none' },
   } : {
     title: "",
     description: "",
@@ -86,6 +105,7 @@ export function TaskForm({ task, onFinished, parentId, defaultValues: propDefaul
     duration: taskDurations[1] || 30,
     timeOfDay: "Afternoon",
     reminderAt: undefined,
+    recurrence: { frequency: 'none', endDate: undefined },
     ...propDefaults,
   };
 
@@ -162,6 +182,10 @@ export function TaskForm({ task, onFinished, parentId, defaultValues: propDefaul
     const taskData = {
         ...data,
         reminderAt: data.reminderAt ? data.reminderAt.getTime() : undefined,
+        recurrence: data.recurrence && data.recurrence.frequency !== 'none' ? {
+            ...data.recurrence,
+            endDate: data.recurrence.endDate ? data.recurrence.endDate.getTime() : undefined,
+        } : undefined,
     }
 
     if (task) {
@@ -176,6 +200,7 @@ export function TaskForm({ task, onFinished, parentId, defaultValues: propDefaul
   };
 
   const reminder = form.watch('reminderAt');
+  const recurrenceFrequency = form.watch('recurrence.frequency');
 
   const handleTimeChange = (type: 'hour' | 'minute' | 'ampm', value: string) => {
     const date = form.getValues('reminderAt');
@@ -414,7 +439,77 @@ export function TaskForm({ task, onFinished, parentId, defaultValues: propDefaul
                 </FormItem>
             )}
             />
-        <div className="flex justify-end gap-2">
+
+        <Separator />
+        
+        <div className="space-y-4">
+            <div>
+                <h3 className="text-lg font-medium">Recurrence</h3>
+                <p className="text-sm text-muted-foreground">Set this task to repeat on a schedule.</p>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <FormField
+                    control={form.control}
+                    name="recurrence.frequency"
+                    render={({ field }) => (
+                    <FormItem>
+                        <FormLabel>Frequency</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value}>
+                            <FormControl>
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Never" />
+                                </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                                {recurrenceFrequencies.map(freq => (
+                                    <SelectItem key={freq} value={freq} className="capitalize">{freq}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                        <FormMessage />
+                    </FormItem>
+                    )}
+                />
+                <FormField
+                    control={form.control}
+                    name="recurrence.endDate"
+                    render={({ field }) => (
+                    <FormItem className="flex flex-col">
+                        <FormLabel>End Date (Optional)</FormLabel>
+                        <Popover>
+                            <PopoverTrigger asChild>
+                                <FormControl>
+                                    <Button
+                                        variant={"outline"}
+                                        className={cn(
+                                            "pl-3 text-left font-normal",
+                                            !field.value && "text-muted-foreground"
+                                        )}
+                                        disabled={!recurrenceFrequency || recurrenceFrequency === 'none'}
+                                    >
+                                        {field.value ? format(field.value, "PPP") : <span>No end date</span>}
+                                        <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                                    </Button>
+                                </FormControl>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-0" align="start">
+                                <Calendar
+                                    mode="single"
+                                    selected={field.value}
+                                    onSelect={field.onChange}
+                                    disabled={date => date < (reminder || startOfDay(new Date()))}
+                                    initialFocus
+                                />
+                            </PopoverContent>
+                        </Popover>
+                        <FormMessage />
+                    </FormItem>
+                    )}
+                />
+            </div>
+        </div>
+
+        <div className="flex justify-end gap-2 pt-4">
             {onFinished && (
                 <Button variant="ghost" type="button" onClick={onFinished}>Cancel</Button>
             )}

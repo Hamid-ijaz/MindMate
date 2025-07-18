@@ -7,7 +7,7 @@ import { useTasks } from '@/contexts/task-context';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Check, Edit, Trash2, ChevronDown, ChevronUp, RotateCcw, CalendarIcon, Loader2, ExternalLink } from 'lucide-react';
+import { Check, Edit, Trash2, ChevronDown, ChevronUp, RotateCcw, CalendarIcon, Loader2, ExternalLink, Repeat } from 'lucide-react';
 import { TaskForm } from './task-form';
 import { SubtaskList } from './subtask-list';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
@@ -121,7 +121,7 @@ export function TaskItem({ task, extraActions, isSubtask = false, isHistoryView 
   return (
     <Card className={isSubtask ? "border-l-4 border-primary/20" : ""}>
       <div className={isSubtask ? "p-3" : "p-6"}>
-        <CardTitle className={`${isSubtask ? "font-semibold text-base" : "text-lg"} ${task.completedAt ? "line-through text-muted-foreground" : ""} break-words`}>{task.title}</CardTitle>
+        <CardTitle className={`${isSubtask ? "font-semibold text-base" : "text-lg"} ${task.completedAt ? "line-through text-muted-foreground" : ""} break-word`}>{task.title}</CardTitle>
         {task.description && <CardDescription className="pt-1">{task.description}</CardDescription>}
         {task.completedAt && isHistoryView && (
             <CardDescription className="text-xs pt-1">
@@ -141,6 +141,21 @@ export function TaskItem({ task, extraActions, isSubtask = false, isHistoryView 
                       <CalendarIcon className="h-3 w-3" />
                       {format(new Date(task.reminderAt), "MMM d, h:mm a")}
                    </Badge>
+                )}
+                {task.recurrence && task.recurrence.frequency !== 'none' && (
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                         <Badge variant="outline" className="flex items-center gap-1 cursor-default capitalize">
+                            <Repeat className="h-3 w-3" />
+                            {task.recurrence.frequency}
+                         </Badge>
+                      </TooltipTrigger>
+                       <TooltipContent>
+                          {task.recurrence.endDate ? `Repeats ${task.recurrence.frequency} until ${format(new Date(task.recurrence.endDate), "MMM d, yyyy")}` : `Repeats ${task.recurrence.frequency}`}
+                       </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
                 )}
             </CardContent>
             <CardFooter className={`flex flex-wrap justify-end gap-2 ${isSubtask ? 'px-3 pb-3 pt-0' : 'p-6 pt-0'}`}>

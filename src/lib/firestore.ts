@@ -70,6 +70,40 @@ export const userService = {
   }
 };
 
+const serializeTaskForFirestore = (task: any) => {
+    const data: any = { ...task };
+    if (data.reminderAt) {
+      data.reminderAt = Timestamp.fromMillis(data.reminderAt);
+    }
+    if (data.recurrence?.endDate) {
+      data.recurrence.endDate = Timestamp.fromMillis(data.recurrence.endDate);
+    }
+    // Remove fields with undefined values to avoid Firestore errors
+    Object.keys(data).forEach(key => {
+      if (data[key] === undefined || data[key] === null) {
+        delete data[key];
+      }
+    });
+    return data;
+}
+
+const deserializeTaskFromFirestore = (docSnap: any) => {
+    const data = docSnap.data();
+    return {
+      ...data,
+      id: docSnap.id,
+      createdAt: data.createdAt?.toMillis() || Date.now(),
+      completedAt: data.completedAt?.toMillis(),
+      lastRejectedAt: data.lastRejectedAt?.toMillis(),
+      reminderAt: data.reminderAt?.toMillis(),
+      recurrence: data.recurrence ? {
+          ...data.recurrence,
+          endDate: data.recurrence.endDate?.toMillis(),
+      } : undefined,
+    } as Task;
+}
+
+
 // Task operations
 export const taskService = {
   async getTasks(userEmail: string): Promise<Task[]> {
@@ -77,41 +111,20 @@ export const taskService = {
     const q = query(tasksRef, where('userEmail', '==', userEmail), orderBy('createdAt', 'desc'));
     const querySnapshot = await getDocs(q);
     
-    return querySnapshot.docs.map(doc => {
-      const data = doc.data();
-      return {
-        ...data,
-        id: doc.id,
-        createdAt: data.createdAt?.toMillis() || Date.now(),
-        completedAt: data.completedAt?.toMillis(),
-        lastRejectedAt: data.lastRejectedAt?.toMillis(),
-        reminderAt: data.reminderAt?.toMillis(),
-      } as Task;
-    });
+    return querySnapshot.docs.map(deserializeTaskFromFirestore);
   },
 
   async addTask(userEmail: string, task: Omit<Task, 'id'>): Promise<string> {
     const tasksRef = collection(db, COLLECTIONS.TASKS);
-    // Build taskData, omitting undefined fields (especially parentId)
+    // Build taskData, omitting undefined fields
     const taskData: any = {
       ...task,
       userEmail,
       createdAt: Timestamp.now(), // Use server timestamp
     };
     
-    if (task.reminderAt) {
-      taskData.reminderAt = Timestamp.fromMillis(task.reminderAt);
-    }
-
-    // Remove fields with undefined values to avoid Firestore errors
-    Object.keys(taskData).forEach(key => {
-      if (taskData[key] === undefined || taskData[key] === null) {
-        delete taskData[key];
-      }
-    });
-
     const docRef = doc(tasksRef);
-    await setDoc(docRef, taskData);
+    await setDoc(docRef, serializeTaskForFirestore(taskData));
     return docRef.id;
   },
 
@@ -130,18 +143,7 @@ export const taskService = {
       userEmail,
       createdAt: Timestamp.now(),
     };
-    
-    if (parentTask.reminderAt) {
-      parentTask.reminderAt = Timestamp.fromMillis(parentTask.reminderAt);
-    }
-    
-     // Remove fields with undefined values to avoid Firestore errors
-    Object.keys(parentTask).forEach(key => {
-      if (parentTask[key] === undefined || parentTask[key] === null) {
-        delete parentTask[key];
-      }
-    });
-    batch.set(parentRef, parentTask);
+    batch.set(parentRef, serializeTaskForFirestore(parentTask));
 
     // Create subtasks
     const childIds: string[] = [];
@@ -155,12 +157,7 @@ export const taskService = {
         rejectionCount: 0,
         isMuted: false,
       };
-      Object.keys(childTask).forEach(key => {
-        if (childTask[key] === undefined || childTask[key] === null) {
-          delete childTask[key];
-        }
-      });
-      batch.set(childRef, childTask);
+      batch.set(childRef, serializeTaskForFirestore(childTask));
       childIds.push(childRef.id);
     });
 
@@ -186,6 +183,9 @@ export const taskService = {
      if ('notifiedAt' in updates) {
       updateData.notifiedAt = updates.notifiedAt ? Timestamp.fromMillis(updates.notifiedAt) : null;
     }
+    if (updates.recurrence && 'endDate' in updates.recurrence) {
+        updateData.recurrence.endDate = updates.recurrence.endDate ? Timestamp.fromMillis(updates.recurrence.endDate) : null;
+    }
     
     await updateDoc(taskRef, updateData);
   },
@@ -208,23 +208,35 @@ export const taskService = {
     await batch.commit();
   },
 
+  async completeAndReschedule(oldTaskId: string, userEmail: string, newTaskData: Omit<Task, 'id' | 'createdAt'>): Promise<string> {
+    const batch = writeBatch(db);
+    const tasksRef = collection(db, COLLECTIONS.TASKS);
+
+    // 1. Mark old task as complete
+    const oldTaskRef = doc(tasksRef, oldTaskId);
+    batch.update(oldTaskRef, { completedAt: Timestamp.now() });
+
+    // 2. Create new task
+    const newTaskRef = doc(tasksRef);
+    const taskForDb = {
+        ...newTaskData,
+        userEmail,
+        createdAt: Timestamp.now(),
+    };
+    batch.set(newTaskRef, serializeTaskForFirestore(taskForDb));
+    
+    await batch.commit();
+    return newTaskRef.id;
+  },
+
+
   // Real-time subscription for tasks
   subscribeToTasks(userEmail: string, callback: (tasks: Task[]) => void): () => void {
     const tasksRef = collection(db, COLLECTIONS.TASKS);
     const q = query(tasksRef, where('userEmail', '==', userEmail), orderBy('createdAt', 'desc'));
     
     return onSnapshot(q, (querySnapshot) => {
-      const tasks = querySnapshot.docs.map(doc => {
-        const data = doc.data();
-        return {
-          ...data,
-          id: doc.id,
-          createdAt: data.createdAt?.toMillis() || Date.now(),
-          completedAt: data.completedAt?.toMillis(),
-          lastRejectedAt: data.lastRejectedAt?.toMillis(),
-          reminderAt: data.reminderAt?.toMillis()
-        } as Task;
-      });
+      const tasks = querySnapshot.docs.map(deserializeTaskFromFirestore);
       callback(tasks);
     });
   }

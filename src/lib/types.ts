@@ -14,6 +14,9 @@ export const taskDurations: [TaskDuration, ...TaskDuration[]] = [15, 30, 60, 90]
 export type TimeOfDay = 'Morning' | 'Afternoon' | 'Evening';
 export const timesOfDay: [TimeOfDay, ...TimeOfDay[]] = ['Morning', 'Afternoon', 'Evening'];
 
+export type RecurrenceFrequency = 'none' | 'daily' | 'weekly' | 'monthly';
+export const recurrenceFrequencies: RecurrenceFrequency[] = ['none', 'daily', 'weekly', 'monthly'];
+
 export interface Task {
   id: string;
   title: string;
@@ -30,6 +33,10 @@ export interface Task {
   parentId?: string;
   reminderAt?: number;
   notifiedAt?: number;
+  recurrence?: {
+    frequency: RecurrenceFrequency;
+    endDate?: number;
+  };
 }
 
 export interface User {

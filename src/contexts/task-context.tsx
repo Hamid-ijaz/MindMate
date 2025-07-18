@@ -7,6 +7,7 @@ import { taskService, accomplishmentService, userSettingsService } from '@/lib/f
 import { useAuth } from './auth-context';
 import { useToast } from '@/hooks/use-toast';
 import { useNotifications } from './notification-context';
+import { addDays, addMonths, addWeeks } from 'date-fns';
 
 // Default values for when a user has no settings yet.
 const DEFAULT_CATEGORIES: TaskCategory[] = ['Work', 'Chores', 'Writing', 'Personal', 'Study'];
@@ -230,7 +231,7 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
   
   const acceptTask = useCallback(async (id: string) => {
     const task = tasks.find(t => t.id === id);
-    if (!task) return;
+    if (!task || !user?.email) return;
 
     const subtasks = tasks.filter(t => t.parentId === id);
     const pendingSubtasks = subtasks.filter(t => !t.completedAt);
@@ -243,8 +244,70 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
       });
       return;
     }
-    await updateTask(id, { completedAt: Date.now() });
-  }, [tasks, updateTask, toast]);
+    
+    // Handle recurrence
+    if (task.recurrence && task.recurrence.frequency !== 'none') {
+        const now = new Date();
+        if (task.recurrence.endDate && now.getTime() > task.recurrence.endDate) {
+            // End date is passed, just complete the task without rescheduling
+             await updateTask(id, { completedAt: Date.now() });
+             return;
+        }
+
+        const reminderDate = task.reminderAt ? new Date(task.reminderAt) : new Date();
+        let nextReminderDate;
+
+        switch (task.recurrence.frequency) {
+            case 'daily':
+                nextReminderDate = addDays(reminderDate, 1);
+                break;
+            case 'weekly':
+                nextReminderDate = addWeeks(reminderDate, 1);
+                break;
+            case 'monthly':
+                nextReminderDate = addMonths(reminderDate, 1);
+                break;
+            default:
+                nextReminderDate = reminderDate;
+        }
+        
+        // If next date is past the end date, complete without rescheduling
+        if (task.recurrence.endDate && nextReminderDate.getTime() > task.recurrence.endDate) {
+            await updateTask(id, { completedAt: Date.now() });
+            return;
+        }
+
+        // Create the new recurring task
+        const newTaskData = {
+            ...task,
+            reminderAt: nextReminderDate.getTime(),
+            completedAt: undefined,
+            notifiedAt: undefined,
+            rejectionCount: 0,
+            lastRejectedAt: undefined,
+        };
+        // Omit fields that should not be copied
+        delete (newTaskData as Partial<Task>).id;
+        delete (newTaskData as Partial<Task>).completedAt;
+        
+        // Batch operation: complete old task, add new one
+        await taskService.completeAndReschedule(task.id, user.email, newTaskData);
+
+        // UI update
+        setTasks(prev => {
+            const completed = prev.map(t => t.id === id ? { ...t, completedAt: Date.now() } as Task : t);
+            // In a real scenario, we'd get the new ID back from the service, but for now we'll just optimistically add.
+            // A better way would be for completeAndReschedule to return the new task.
+            // For now, let's just refetch to get the latest data. This is simpler but less performant.
+            loadUserData();
+            return completed;
+        });
+
+    } else {
+        // Not a recurring task
+        await updateTask(id, { completedAt: Date.now() });
+    }
+  }, [tasks, updateTask, toast, user?.email]);
 
   const rejectTask = useCallback(async (id: string) => {
     const task = tasks.find(t => t.id === id);
