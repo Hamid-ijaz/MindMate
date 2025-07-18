@@ -6,6 +6,7 @@ import type { Task, Accomplishment, TaskCategory, TaskDuration, TimeOfDay } from
 import { taskService, accomplishmentService, userSettingsService } from '@/lib/firestore';
 import { useAuth } from './auth-context';
 import { useToast } from '@/hooks/use-toast';
+import { useNotifications } from './notification-context';
 
 // Default values for when a user has no settings yet.
 const DEFAULT_CATEGORIES: TaskCategory[] = ['Work', 'Chores', 'Writing', 'Personal', 'Study'];
@@ -44,6 +45,8 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
   const [taskDurations, setTaskDurations] = useState<TaskDuration[]>(DEFAULT_DURATIONS);
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
+  const { sendNotification } = useNotifications();
+
 
   const [isSheetOpen, setIsSheetOpen] = useState(false);
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
@@ -122,19 +125,73 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
   const addTask = useCallback(async (taskData: Omit<Task, 'id' | 'createdAt' | 'rejectionCount' | 'isMuted' | 'completedAt' | 'lastRejectedAt'> & { parentId?: string }) => {
     if (!user?.email) return;
 
-    const newTask: Task = {
-      ...taskData,
-      id: new Date().toISOString() + Math.random(),
-      createdAt: Date.now(),
-      rejectionCount: 0,
-      isMuted: false,
-    };
+    const bulletRegex = /(^|\n)\s*[-*+]\s+(.*)/g;
+    const description = taskData.description || '';
+    const hasBullets = bulletRegex.test(description);
+    
+    let subtasksToCreate: Omit<Task, 'id' | 'createdAt' | 'rejectionCount' | 'isMuted'>[] = [];
+    let parentDescription = description;
 
+    if (hasBullets && !taskData.parentId) { // Only process bullets for new parent tasks
+      const lines = description.split('\n');
+      const bullets: string[] = [];
+      const remainingLines: string[] = [];
+
+      lines.forEach(line => {
+        const match = /^\s*[-*+]\s+(.*)/.exec(line);
+        if (match) {
+          bullets.push(match[1]);
+        } else {
+          remainingLines.push(line);
+        }
+      });
+      
+      parentDescription = remainingLines.join('\n').trim();
+
+      subtasksToCreate = bullets.map(title => ({
+        title: title.trim(),
+        description: '', // Subtasks from bullets have no description initially
+        category: taskData.category,
+        energyLevel: 'Low', // Default to low energy
+        duration: 15, // Default to 15 mins
+        timeOfDay: taskData.timeOfDay,
+        completedAt: undefined,
+        lastRejectedAt: undefined,
+      }));
+    }
+
+    const parentTaskData: Omit<Task, 'id' | 'createdAt'> = {
+        ...taskData,
+        description: parentDescription,
+        rejectionCount: 0,
+        isMuted: false,
+    };
+    
     try {
-      const taskId = await taskService.addTask(user.email, newTask);
-      setTasks(prev => [...prev, { ...newTask, id: taskId }]);
+      // Use the batch addTask service
+      const { parentId, childIds } = await taskService.addTaskWithSubtasks(user.email, parentTaskData, subtasksToCreate);
+
+      // Optimistically update UI
+      const now = Date.now();
+      const parentTask = { ...parentTaskData, id: parentId, createdAt: now };
+      setTasks(prev => [...prev, parentTask]);
+
+      if (subtasksToCreate.length > 0) {
+        const newSubtasks = subtasksToCreate.map((sub, index) => ({
+          ...sub,
+          id: childIds[index],
+          parentId,
+          createdAt: now + index + 1, // Ensure unique timestamps
+        }));
+        setTasks(prev => [...prev, ...newSubtasks]);
+        toast({
+          title: "Task and Subtasks Added!",
+          description: `${subtasksToCreate.length} subtasks were created from your description.`
+        });
+      }
+
     } catch (error) {
-      console.error('Error adding task:', error);
+      console.error('Error adding task with subtasks:', error);
       toast({
         title: "Error",
         description: "Failed to add task. Please try again.",
@@ -186,7 +243,8 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
     }
 
     await updateTask(id, { completedAt: Date.now() });
-  }, [tasks, updateTask, toast]);
+    sendNotification("Task Completed!", { body: "Great job! Keep up the momentum." });
+  }, [tasks, updateTask, toast, sendNotification]);
 
   const rejectTask = useCallback(async (id: string) => {
     const task = tasks.find(t => t.id === id);
@@ -278,3 +336,5 @@ export const useTasks = (): TaskContextType => {
   }
   return context;
 };
+
+    

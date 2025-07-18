@@ -1,3 +1,4 @@
+
 import { 
   collection, 
   doc, 
@@ -94,19 +95,57 @@ export const taskService = {
     const taskData: any = {
       ...task,
       userEmail,
-      createdAt: Timestamp.fromMillis(task.createdAt),
-      completedAt: task.completedAt ? Timestamp.fromMillis(task.completedAt) : null,
-      lastRejectedAt: task.lastRejectedAt ? Timestamp.fromMillis(task.lastRejectedAt) : null
+      createdAt: Timestamp.now(), // Use server timestamp
     };
-    // Remove fields with undefined values
+
+    // Remove fields with undefined values to avoid Firestore errors
     Object.keys(taskData).forEach(key => {
-      if (taskData[key] === undefined) {
+      if (taskData[key] === undefined || taskData[key] === null) {
         delete taskData[key];
       }
     });
+
     const docRef = doc(tasksRef);
     await setDoc(docRef, taskData);
     return docRef.id;
+  },
+
+  async addTaskWithSubtasks(
+    userEmail: string, 
+    parentTaskData: Omit<Task, 'id' | 'createdAt'>, 
+    subtasks: Omit<Task, 'id' | 'createdAt' | 'rejectionCount' | 'isMuted'>[]
+  ): Promise<{ parentId: string, childIds: string[] }> {
+    const batch = writeBatch(db);
+    const tasksRef = collection(db, COLLECTIONS.TASKS);
+
+    // Create parent task
+    const parentRef = doc(tasksRef);
+    const parentTask = {
+      ...parentTaskData,
+      userEmail,
+      createdAt: Timestamp.now(),
+    };
+    batch.set(parentRef, parentTask);
+
+    // Create subtasks
+    const childIds: string[] = [];
+    subtasks.forEach(subtaskData => {
+      const childRef = doc(tasksRef);
+      const childTask = {
+        ...subtaskData,
+        parentId: parentRef.id,
+        userEmail,
+        createdAt: Timestamp.now(),
+        rejectionCount: 0,
+        isMuted: false,
+      };
+      batch.set(childRef, childTask);
+      childIds.push(childRef.id);
+    });
+
+    await batch.commit();
+
+    return { parentId: parentRef.id, childIds };
   },
 
   async updateTask(taskId: string, updates: Partial<Omit<Task, 'id' | 'userEmail'>>): Promise<void> {
@@ -236,3 +275,5 @@ export const userSettingsService = {
     }, { merge: true });
   }
 };
+
+    

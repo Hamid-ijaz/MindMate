@@ -199,6 +199,11 @@ export function TaskForm({ task, onFinished, parentId, defaultValues: propDefaul
                     </div>
                 )}
                </div>
+               {!parentId && (
+                <FormDescription>
+                  Use bullet points (e.g., `- item`) to auto-create sub-tasks.
+                </FormDescription>
+               )}
               <FormMessage />
             </FormItem>
           )}
@@ -303,3 +308,5 @@ export function TaskForm({ task, onFinished, parentId, defaultValues: propDefaul
     </Form>
   );
 }
+
+    
