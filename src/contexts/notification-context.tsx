@@ -4,7 +4,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
-import { useTasks } from './task-context';
 
 type NotificationPermission = 'default' | 'granted' | 'denied';
 
@@ -21,9 +20,6 @@ interface NotificationOptions {
     body?: string;
     tag?: string;
     data?: any;
-    actions?: {
-        onComplete?: (taskId: string) => void;
-    }
 }
 
 interface NotificationContextType {
@@ -46,7 +42,6 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
   const [permission, setPermission] = useState<NotificationPermission>('default');
   const [notifications, setNotifications] = useState<StoredNotification[]>([]);
   const { toast } = useToast();
-  const { acceptTask } = useTasks();
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -98,16 +93,14 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
             <div className="flex flex-col gap-2">
                 {options.data?.taskId && (
                     <Button size="sm" onClick={() => {
-                        acceptTask(options.data.taskId);
+                        // We remove the direct action to prevent circular dependency issues
+                        // The user can click the notification to go to the page and complete it there
                         deleteNotification(options.data.taskId);
                         dismiss();
                     }}>
-                        Complete
+                        Dismiss
                     </Button>
                 )}
-                <Button size="sm" variant="outline" onClick={() => dismiss()}>
-                    Dismiss
-                </Button>
             </div>
             ),
         });
@@ -115,7 +108,7 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
         return [newNotification, ...prev].slice(0, 50);
     });
 
-  }, [toast, acceptTask]);
+  }, [toast]);
 
 
   const requestPermission = useCallback(async () => {
