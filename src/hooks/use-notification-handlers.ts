@@ -8,7 +8,6 @@ import { useNotifications } from '@/contexts/notification-context';
 export function useSetupNotificationHandlers() {
   const { tasks, updateTask, acceptTask } = useTasks();
   const { sendNotification } = useNotifications();
-  const notifiedTaskIds = useRef(new Set<string>());
 
   useEffect(() => {
     const checkReminders = () => {
@@ -18,8 +17,7 @@ export function useSetupNotificationHandlers() {
           !task.completedAt &&
           task.reminderAt &&
           task.reminderAt <= now &&
-          !notifiedTaskIds.current.has(task.id) &&
-          !task.notifiedAt // Also check the persistent flag
+          !task.notifiedAt // Rely solely on the persistent flag from the database
         ) {
           sendNotification(`Reminder: ${task.title}`, {
             body: task.description || "It's time to get this done!",
@@ -27,14 +25,14 @@ export function useSetupNotificationHandlers() {
             data: { taskId: task.id },
             actions: { onComplete: acceptTask }
           });
-          notifiedTaskIds.current.add(task.id);
+          // Update the task in the database to mark it as notified
           updateTask(task.id, { notifiedAt: now });
         }
       });
     };
 
     const intervalId = setInterval(checkReminders, 60 * 1000);
-    checkReminders(); // Initial check
+    checkReminders(); // Initial check on app load
 
     return () => clearInterval(intervalId);
   }, [tasks, sendNotification, updateTask, acceptTask]);
