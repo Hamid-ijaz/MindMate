@@ -2,7 +2,7 @@
 "use client";
 
 import type { Note } from '@/lib/types';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardTitle } from '@/components/ui/card';
 import Image from 'next/image';
 
 interface NoteCardProps {
@@ -30,7 +30,7 @@ export function NoteCard({ note, onClick }: NoteCardProps) {
                 {note.title && <CardTitle className="text-lg font-semibold mb-2">{note.title}</CardTitle>}
                 {note.content && (
                     <div 
-                        className="max-h-60 overflow-hidden"
+                        className="max-h-60 overflow-hidden text-foreground"
                         style={{ fontSize: note.fontSize ? `${note.fontSize}px` : 'inherit' }}
                         dangerouslySetInnerHTML={{ __html: note.content }}
                     />

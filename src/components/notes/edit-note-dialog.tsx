@@ -41,6 +41,9 @@ export function EditNoteDialog({ note, isOpen, onClose }: EditNoteDialogProps) {
             setImageUrl(note.imageUrl || '');
             setFontSize(note.fontSize || DEFAULT_FONT_SIZE);
             lastContent.current = note.content || '';
+             if (contentRef.current) {
+                contentRef.current.innerHTML = note.content || '';
+            }
         }
     }, [note]);
 
@@ -126,7 +129,7 @@ export function EditNoteDialog({ note, isOpen, onClose }: EditNoteDialogProps) {
                             suppressContentEditableWarning={true}
                             dangerouslySetInnerHTML={{ __html: note?.content || '' }}
                             onInput={handleContentInput}
-                            className="w-full min-h-[200px] border-none focus-visible:ring-0 resize-none bg-transparent p-0 outline-none max-w-none"
+                            className="w-full min-h-[200px] border-none focus-visible:ring-0 resize-none bg-transparent p-0 outline-none max-w-none text-foreground"
                             style={{ fontSize: `${fontSize}px` }}
                         />
                     </div>

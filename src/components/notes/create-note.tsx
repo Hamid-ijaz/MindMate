@@ -109,7 +109,7 @@ export function CreateNote() {
                         ref={contentRef}
                         contentEditable
                         onInput={handleContentChange}
-                        className="w-full min-h-[100px] border-none focus-visible:ring-0 resize-none bg-transparent p-2 outline-none"
+                        className="w-full min-h-[100px] border-none focus-visible:ring-0 resize-none bg-transparent p-2 outline-none text-foreground"
                         style={{ fontSize: `${fontSize}px` }}
                         data-placeholder="Take a note..."
                     />
