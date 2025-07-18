@@ -91,16 +91,11 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
             duration: 30000,
             action: (
             <div className="flex flex-col gap-2">
-                {options.data?.taskId && (
-                    <Button size="sm" onClick={() => {
-                        // We remove the direct action to prevent circular dependency issues
-                        // The user can click the notification to go to the page and complete it there
-                        deleteNotification(options.data.taskId);
-                        dismiss();
-                    }}>
-                        Dismiss
-                    </Button>
-                )}
+                <Button size="sm" onClick={() => {
+                    dismiss();
+                }}>
+                    Dismiss
+                </Button>
             </div>
             ),
         });
