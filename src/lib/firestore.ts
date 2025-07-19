@@ -175,21 +175,31 @@ export const taskService = {
     const taskRef = doc(db, COLLECTIONS.TASKS, taskId);
     const updateData: any = { ...updates };
     
+    // Remove undefined fields before processing
+    Object.keys(updateData).forEach(key => {
+        if (updateData[key] === undefined) {
+            delete updateData[key];
+        }
+    });
+
     // Convert timestamps
-    if ('completedAt' in updates && updates.completedAt) {
-      updateData.completedAt = Timestamp.fromMillis(updates.completedAt);
+    if ('completedAt' in updateData && updateData.completedAt) {
+      updateData.completedAt = Timestamp.fromMillis(updateData.completedAt);
     }
-    if ('lastRejectedAt' in updates && updates.lastRejectedAt) {
-      updateData.lastRejectedAt = Timestamp.fromMillis(updates.lastRejectedAt);
+    if ('lastRejectedAt' in updateData && updateData.lastRejectedAt) {
+      updateData.lastRejectedAt = Timestamp.fromMillis(updateData.lastRejectedAt);
     }
-    if ('reminderAt' in updates && updates.reminderAt) {
-      updateData.reminderAt = Timestamp.fromMillis(updates.reminderAt);
+    if ('reminderAt' in updateData && updateData.reminderAt) {
+      updateData.reminderAt = Timestamp.fromMillis(updateData.reminderAt);
     }
-     if ('notifiedAt' in updates && updates.notifiedAt) {
-      updateData.notifiedAt = Timestamp.fromMillis(updates.notifiedAt);
+     if ('notifiedAt' in updateData && updateData.notifiedAt) {
+      updateData.notifiedAt = Timestamp.fromMillis(updateData.notifiedAt);
     }
-    if (updates.recurrence && 'endDate' in updates.recurrence && updates.recurrence.endDate) {
-        updateData.recurrence.endDate = Timestamp.fromMillis(updates.recurrence.endDate);
+    if (updateData.recurrence && 'endDate' in updateData.recurrence && updateData.recurrence.endDate) {
+        updateData.recurrence.endDate = Timestamp.fromMillis(updateData.recurrence.endDate);
+    } else if (updateData.recurrence && 'endDate' in updateData.recurrence) {
+        // Handle removal of endDate
+        delete updateData.recurrence.endDate;
     }
     
     await updateDoc(taskRef, updateData);
