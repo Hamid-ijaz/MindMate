@@ -27,6 +27,7 @@ import { format } from "date-fns";
 import { useNotifications } from "@/contexts/notification-context";
 import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious, type CarouselApi } from "@/components/ui/carousel";
 import Link from "next/link";
+import { useCompletionAudio } from '@/hooks/use-completion-audio';
 
 const getDefaultEnergyLevel = (): EnergyLevel => {
     const timeOfDay = getCurrentTimeOfDay();
@@ -44,6 +45,7 @@ const getDefaultEnergyLevel = (): EnergyLevel => {
 export function TaskSuggestion() {
   const { tasks, acceptTask, rejectTask, muteTask, addTask, isLoading: tasksLoading, startEditingTask } = useTasks();
   const { deleteNotification } = useNotifications();
+  const { handleTaskCompletion } = useCompletionAudio();
   const [currentEnergy, setCurrentEnergy] = useState<EnergyLevel | null>(null);
   const [showAffirmation, setShowAffirmation] = useState(false);
   const [showRejectionPrompt, setShowRejectionPrompt] = useState(false);
@@ -127,7 +129,9 @@ export function TaskSuggestion() {
   const handleAccept = async () => {
     if (!currentTask) return;
     setIsAccepting(true);
-    await acceptTask(currentTask.id);
+    await acceptTask(currentTask.id, {
+      onComplete: () => handleTaskCompletion(null) // No button ref in this context, but still play sound
+    });
     await deleteNotification(currentTask.id);
     setIsAccepting(false);
     setShowAffirmation(true);

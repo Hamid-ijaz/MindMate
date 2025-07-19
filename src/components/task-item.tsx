@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import type { Task } from '@/lib/types';
 import { useTasks } from '@/contexts/task-context';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -15,6 +15,7 @@ import { format } from 'date-fns';
 import { useNotifications } from '@/contexts/notification-context';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { useCompletionAudio } from '@/hooks/use-completion-audio';
 
 
 interface TaskItemProps {
@@ -27,10 +28,12 @@ interface TaskItemProps {
 export function TaskItem({ task, extraActions, isSubtask = false, isHistoryView = false }: TaskItemProps) {
   const { tasks, deleteTask, acceptTask, uncompleteTask, startEditingTask } = useTasks();
   const { deleteNotification } = useNotifications();
+  const { handleTaskCompletion } = useCompletionAudio();
   const [showSubtasks, setShowSubtasks] = useState(false);
   const [isCompleting, setIsCompleting] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const router = useRouter();
+  const completeButtonRef = useRef<HTMLButtonElement>(null);
 
   const subtasks = tasks.filter(t => t.parentId === task.id);
   const pendingSubtasks = subtasks.filter(t => !t.completedAt);
@@ -38,7 +41,9 @@ export function TaskItem({ task, extraActions, isSubtask = false, isHistoryView 
 
   const handleComplete = async () => {
     setIsCompleting(true);
-    await acceptTask(task.id);
+    await acceptTask(task.id, {
+      onComplete: () => handleTaskCompletion(completeButtonRef.current)
+    });
     await deleteNotification(task.id);
     setIsCompleting(false);
   }
@@ -57,12 +62,12 @@ export function TaskItem({ task, extraActions, isSubtask = false, isHistoryView 
     }
   }
 
-  const CompleteButton = () => (
-    <Button variant="outline" size="sm" onClick={handleComplete} disabled={isCompleting}>
+  const CompleteButton = useCallback(() => (
+    <Button ref={completeButtonRef} variant="outline" size="sm" onClick={handleComplete} disabled={isCompleting}>
       {isCompleting ? <Loader2 className="h-4 w-4 animate-spin md:mr-2" /> : <Check className="h-4 w-4 md:mr-2" />}
       <span className="hidden md:inline">Complete</span>
     </Button>
-  );
+  ), [isCompleting, handleComplete]);
 
   const RedoButton = () => (
      <Button variant="ghost" size="sm" onClick={handleUncomplete}>

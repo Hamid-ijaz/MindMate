@@ -23,7 +23,7 @@ interface TaskContextType {
   addTask: (task: Omit<Task, 'id' | 'createdAt' | 'rejectionCount' | 'isMuted' | 'completedAt' | 'lastRejectedAt'> & { parentId?: string }) => Promise<void>;
   updateTask: (id: string, updates: Partial<Omit<Task, 'id' | 'createdAt'>>) => Promise<void>;
   deleteTask: (id: string) => Promise<void>;
-  acceptTask: (id: string, options?: { showNotification?: boolean }) => Promise<void>;
+  acceptTask: (id: string, options?: { showNotification?: boolean; onComplete?: () => void }) => Promise<void>;
   rejectTask: (id: string) => Promise<void>;
   muteTask: (id: string) => Promise<void>;
   uncompleteTask: (id: string) => Promise<void>;
@@ -229,7 +229,7 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [toast]);
   
-  const acceptTask = useCallback(async (id: string) => {
+  const acceptTask = useCallback(async (id: string, options?: { showNotification?: boolean; onComplete?: () => void }) => {
     const task = tasks.find(t => t.id === id);
     if (!task || !user?.email) return;
 
@@ -249,9 +249,10 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
     if (task.recurrence && task.recurrence.frequency !== 'none') {
         const now = new Date();
         if (task.recurrence.endDate && now.getTime() > task.recurrence.endDate) {
-            // End date is passed, just complete the task without rescheduling
-             await updateTask(id, { completedAt: Date.now() });
-             return;
+                    // End date is passed, just complete the task without rescheduling
+         await updateTask(id, { completedAt: Date.now() });
+         options?.onComplete?.();
+         return;
         }
 
         const reminderDate = task.reminderAt ? new Date(task.reminderAt) : new Date();
@@ -274,6 +275,7 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
         // If next date is past the end date, complete without rescheduling
         if (task.recurrence.endDate && nextReminderDate.getTime() > task.recurrence.endDate) {
             await updateTask(id, { completedAt: Date.now() });
+            options?.onComplete?.();
             return;
         }
 
@@ -302,10 +304,13 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
             loadUserData();
             return completed;
         });
+        
+        options?.onComplete?.();
 
     } else {
         // Not a recurring task
         await updateTask(id, { completedAt: Date.now() });
+        options?.onComplete?.();
     }
   }, [tasks, updateTask, toast, user?.email]);
 

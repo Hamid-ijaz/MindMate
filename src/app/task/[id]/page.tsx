@@ -11,8 +11,9 @@ import { AlertCircle, ArrowLeft, CalendarIcon, Check, Edit, Loader2, Repeat, Rot
 import { format, isPast } from 'date-fns';
 import { SubtaskList } from '@/components/subtask-list';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useNotifications } from '@/contexts/notification-context';
+import { useCompletionAudio } from '@/hooks/use-completion-audio';
 
 function TaskPageSkeleton() {
     return (
@@ -51,8 +52,10 @@ export default function TaskPage() {
     const router = useRouter();
     const { tasks, isLoading, startEditingTask, deleteTask, acceptTask, uncompleteTask } = useTasks();
     const { deleteNotification } = useNotifications();
+    const { handleTaskCompletion } = useCompletionAudio();
     const [isCompleting, setIsCompleting] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
+    const completeButtonRef = useRef<HTMLButtonElement>(null);
     
     const taskId = Array.isArray(id) ? id[0] : id;
     const task = tasks.find(t => t.id === taskId);
@@ -97,7 +100,9 @@ export default function TaskPage() {
 
     const handleComplete = async () => {
         setIsCompleting(true);
-        await acceptTask(task.id);
+        await acceptTask(task.id, {
+            onComplete: () => handleTaskCompletion(completeButtonRef.current)
+        });
         await deleteNotification(task.id);
         setIsCompleting(false);
     }
@@ -107,7 +112,7 @@ export default function TaskPage() {
     }
 
     const CompleteButton = () => (
-        <Button onClick={handleComplete} disabled={isCompleting || hasPendingSubtasks} className="w-full sm:w-auto">
+        <Button ref={completeButtonRef} onClick={handleComplete} disabled={isCompleting || hasPendingSubtasks} className="w-full sm:w-auto">
             {isCompleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Check className="mr-2 h-4 w-4" />}
             Complete{task.recurrence && task.recurrence.frequency !== 'none' ? ' & Reschedule' : ''}
         </Button>
