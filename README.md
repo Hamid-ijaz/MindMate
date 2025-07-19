@@ -135,7 +135,7 @@ If you have a suggestion that would make this better, please fork the repo and c
 
 This project is maintained by **Hamid Ijaz**.
 
--   **GitHub**: [@hamidijaz](https://github.com/hamidijaz)
+-   **GitHub**: [@hamidijaz](https://github.com/Hamid-ijaz)
 -   **LinkedIn**: [Hamid Ijaz](https://www.linkedin.com/in/hamid-ijaz/)
 
 ## 📄 License
