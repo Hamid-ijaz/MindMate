@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useTransition, useEffect, useRef } from 'react';
+import { useState, useTransition, useEffect, useRef, Suspense } from 'react';
 import { useTasks } from '@/contexts/task-context';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { TaskItem } from '@/components/task-item';
@@ -43,7 +43,7 @@ function PendingTasksSkeleton() {
   )
 }
 
-export default function PendingTasksPage() {
+function PendingTasksContent() {
   const { tasks, addTask, isLoading } = useTasks();
   const { toast } = useToast();
   const [isRewording, startRewordTransition] = useTransition();
@@ -217,5 +217,13 @@ export default function PendingTasksPage() {
             </AlertDialogContent>
         </AlertDialog>
     </div>
+  );
+}
+
+export default function PendingTasksPage() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <PendingTasksContent />
+    </Suspense>
   );
 }
