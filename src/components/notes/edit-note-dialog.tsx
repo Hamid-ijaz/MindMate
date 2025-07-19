@@ -32,18 +32,15 @@ export function EditNoteDialog({ note, isOpen, onClose }: EditNoteDialogProps) {
     const { toast } = useToast();
     
     const contentRef = useRef<HTMLDivElement>(null);
-    const lastContent = useRef('');
 
     useEffect(() => {
-        if (note && contentRef.current) {
+        if (note) {
             setTitle(note.title || '');
             setColor(note.color || '');
             setImageUrl(note.imageUrl || '');
             setFontSize(note.fontSize || DEFAULT_FONT_SIZE);
-            contentRef.current.innerHTML = note.content || '';
-            lastContent.current = note.content || '';
         }
-    }, [note, isOpen]);
+    }, [note]);
 
     const sanitizeHtml = (html: string) => {
         const doc = new DOMParser().parseFromString(html, 'text/html');
@@ -87,7 +84,7 @@ export function EditNoteDialog({ note, isOpen, onClose }: EditNoteDialogProps) {
             return;
         }
 
-        const currentContent = sanitizeHtml(lastContent.current);
+        const currentContent = sanitizeHtml(contentRef.current.innerHTML);
         const hasChanged = title !== (note.title || '') ||
                            currentContent !== (note.content || '') || 
                            color !== (note.color || '') ||
@@ -128,10 +125,6 @@ export function EditNoteDialog({ note, isOpen, onClose }: EditNoteDialogProps) {
         }
     }
 
-    const handleContentInput = (e: React.FormEvent<HTMLDivElement>) => {
-        lastContent.current = e.currentTarget.innerHTML;
-    }
-
     return (
         <Dialog open={isOpen} onOpenChange={(open) => !open && handleClose()}>
             <DialogContent 
@@ -160,7 +153,8 @@ export function EditNoteDialog({ note, isOpen, onClose }: EditNoteDialogProps) {
                         <div
                             ref={contentRef}
                             suppressContentEditableWarning={true}
-                            onInput={handleContentInput}
+                            contentEditable
+                            dangerouslySetInnerHTML={{ __html: note?.content || '' }}
                             className="w-full min-h-[200px] border-none focus-visible:ring-0 resize-none bg-transparent p-0 outline-none max-w-none"
                             style={{ 
                                 fontSize: `${fontSize}px`,
