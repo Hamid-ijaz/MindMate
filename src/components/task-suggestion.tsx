@@ -28,6 +28,7 @@ import { useNotifications } from "@/contexts/notification-context";
 import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious, type CarouselApi } from "@/components/ui/carousel";
 import Link from "next/link";
 import { useCompletionAudio } from '@/hooks/use-completion-audio';
+import { useAuth } from "@/contexts/auth-context";
 
 const getDefaultEnergyLevel = (): EnergyLevel => {
     const timeOfDay = getCurrentTimeOfDay();
@@ -46,6 +47,7 @@ export function TaskSuggestion() {
   const { tasks, acceptTask, rejectTask, muteTask, addTask, isLoading: tasksLoading, startEditingTask } = useTasks();
   const { deleteNotification } = useNotifications();
   const { handleTaskCompletion } = useCompletionAudio();
+  const { user } = useAuth();
   const [currentEnergy, setCurrentEnergy] = useState<EnergyLevel | null>(null);
   const [showAffirmation, setShowAffirmation] = useState(false);
   const [showRejectionPrompt, setShowRejectionPrompt] = useState(false);
@@ -222,6 +224,7 @@ export function TaskSuggestion() {
             timeOfDay: currentTask.timeOfDay,
             energyLevel: 'Low',
             duration: 15,
+            userEmail: user?.email || '', // Add missing userEmail
         });
     });
 

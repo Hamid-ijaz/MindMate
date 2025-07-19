@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode, useRef } from 'react';
@@ -20,7 +19,7 @@ interface TaskContextType {
   taskDurations: TaskDuration[];
   setTaskCategories: (categories: TaskCategory[]) => Promise<void>;
   setTaskDurations: (durations: TaskDuration[]) => Promise<void>;
-  addTask: (task: Omit<Task, 'id' | 'createdAt' | 'rejectionCount' | 'isMuted' | 'completedAt' | 'lastRejectedAt'> & { parentId?: string }) => Promise<void>;
+  addTask: (task: Omit<Task, 'id' | 'createdAt' | 'rejectionCount' | 'isMuted' | 'completedAt' | 'lastRejectedAt' | 'notifiedAt'> & { parentId?: string }) => Promise<void>;
   updateTask: (id: string, updates: Partial<Omit<Task, 'id' | 'createdAt'>>) => Promise<void>;
   deleteTask: (id: string) => Promise<void>;
   acceptTask: (id: string, options?: { showNotification?: boolean; onComplete?: () => void }) => Promise<void>;
@@ -155,6 +154,7 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
         energyLevel: 'Low', // Default to low energy
         duration: 15, // Default to 15 mins
         timeOfDay: taskData.timeOfDay,
+        userEmail: user.email, // Add missing userEmail
       }));
     }
 

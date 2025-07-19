@@ -67,7 +67,7 @@ export function TaskItem({ task, extraActions, isSubtask = false, isHistoryView 
       {isCompleting ? <Loader2 className="h-4 w-4 animate-spin md:mr-2" /> : <Check className="h-4 w-4 md:mr-2" />}
       <span className="hidden md:inline">Complete</span>
     </Button>
-  ), [isCompleting, handleComplete]);
+  ), [isCompleting, handleComplete, completeButtonRef]);
 
   const RedoButton = () => (
      <Button variant="ghost" size="sm" onClick={handleUncomplete}>
@@ -78,7 +78,7 @@ export function TaskItem({ task, extraActions, isSubtask = false, isHistoryView 
 
   // If we are on the task detail page, we don't need to render the full card again.
   // We just provide the action buttons. This logic is a bit of a hack.
-  const isOnTaskPage = router.pathname?.includes('/task/');
+  const isOnTaskPage = typeof window !== 'undefined' && window.location.pathname?.includes('/task/');
 
   if (isOnTaskPage && !isHistoryView) {
      return (

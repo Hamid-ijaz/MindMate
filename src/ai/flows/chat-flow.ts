@@ -17,7 +17,7 @@ const TaskSchema = z.object({
   id: z.string(),
   title: z.string(),
   description: z.string().optional(),
-  category: z.enum(['Work', 'Chores', 'Writing', 'Personal', 'Study']),
+  category: z.string(), // Changed from enum to string to match TaskCategory type
   energyLevel: z.enum(['Low', 'Medium', 'High']),
   duration: z.number(),
   timeOfDay: z.enum(['Morning', 'Afternoon', 'Evening']),

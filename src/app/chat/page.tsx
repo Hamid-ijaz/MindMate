@@ -12,6 +12,7 @@ import { chat } from '@/ai/flows/chat-flow';
 import type { Task } from '@/lib/types';
 import { Send, Loader2, PlusCircle, Check } from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { useAuth } from '@/contexts/auth-context';
 
 
 interface SuggestedTask {
@@ -28,6 +29,7 @@ interface Message {
 export default function ChatPage() {
     const { tasks, addTask, isLoading: tasksLoading } = useTasks();
     const { toast } = useToast();
+    const { user } = useAuth();
     const [messages, setMessages] = useState<Message[]>([
         { role: 'assistant', content: "Hello! I'm MindMate. How can I help you plan your day? You can ask me to break down a large task into smaller ones!" }
     ]);
@@ -54,6 +56,7 @@ export default function ChatPage() {
             energyLevel: 'Low', // Default energy level
             duration: 15, // Default duration
             timeOfDay: 'Afternoon', // Default time of day
+            userEmail: user?.email || '', // Add missing userEmail
         });
         setAddedTasks(prev => [...prev, task.title]);
         toast({

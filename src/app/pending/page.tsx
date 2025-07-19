@@ -16,6 +16,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useSearchParams } from 'next/navigation';
+import { useAuth } from '@/contexts/auth-context';
 
 interface SuggestedTask {
   title: string;
@@ -53,6 +54,7 @@ export default function PendingTasksPage() {
   
   const searchParams = useSearchParams();
   const taskRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const { user } = useAuth();
 
   const rootTasks = tasks.filter(t => !t.parentId);
   const uncompletedTasks = rootTasks.filter(t => !t.completedAt);
@@ -125,6 +127,7 @@ export default function PendingTasksPage() {
             timeOfDay: taskToReword.timeOfDay,
             energyLevel: 'Low',
             duration: 15,
+            userEmail: user?.email || '', // Add missing userEmail
         });
     });
     
@@ -158,7 +161,7 @@ export default function PendingTasksPage() {
                 <p className="text-muted-foreground">No pending tasks. Great job!</p>
               ) : (
                 uncompletedTasks.map(task => (
-                  <div key={task.id} ref={el => taskRefs.current[task.id] = el}>
+                  <div key={task.id} ref={el => { taskRefs.current[task.id] = el; }}>
                     <TaskItem 
                       task={task}
                       extraActions={
