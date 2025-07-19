@@ -49,14 +49,37 @@ export function EditNoteDialog({ note, isOpen, onClose }: EditNoteDialogProps) {
         const doc = new DOMParser().parseFromString(html, 'text/html');
         doc.querySelectorAll('[style]').forEach(el => {
             const element = el as HTMLElement;
-            element.style.color = '';
-            element.style.backgroundColor = '';
+            // More specific regex to only remove color and background-color
+            if (element.style.color) element.style.color = '';
+            if (element.style.backgroundColor) element.style.backgroundColor = '';
+            
             if (!element.getAttribute('style')?.trim().replace(/;/g, '')) {
                 element.removeAttribute('style');
             }
         });
         return doc.body.innerHTML;
     };
+
+     const handlePaste = (e: ClipboardEvent) => {
+        e.preventDefault();
+        const pastedHtml = e.clipboardData?.getData('text/html');
+        const pastedText = e.clipboardData?.getData('text/plain');
+
+        if (pastedHtml) {
+            const sanitizedHtml = sanitizeHtml(pastedHtml);
+            document.execCommand('insertHTML', false, sanitizedHtml);
+        } else if (pastedText) {
+            document.execCommand('insertText', false, pastedText);
+        }
+    }
+
+     useEffect(() => {
+        const editor = contentRef.current;
+        if (editor) {
+            editor.addEventListener('paste', handlePaste);
+            return () => editor.removeEventListener('paste', handlePaste);
+        }
+    }, [isOpen]); // Re-attach if dialog re-opens
 
     const handleClose = () => {
         if (!note || !contentRef.current) {
@@ -112,13 +135,13 @@ export function EditNoteDialog({ note, isOpen, onClose }: EditNoteDialogProps) {
     return (
         <Dialog open={isOpen} onOpenChange={(open) => !open && handleClose()}>
             <DialogContent 
-                className="max-w-xl p-0 border-2 flex flex-col max-h-[90vh]"
+                className="p-0 border-2 flex flex-col h-screen md:h-auto md:max-h-[90vh] md:max-w-xl md:rounded-lg"
                 style={{ borderColor: color || 'hsl(var(--border))' }}
                 showCloseButton={false}
             >
                 {imageUrl && (
                     <div className="relative w-full h-56 flex-shrink-0">
-                        <img src={imageUrl} alt="Note" className="w-full h-full object-cover rounded-t-lg" />
+                        <img src={imageUrl} alt="Note" className="w-full h-full object-cover md:rounded-t-lg" />
                     </div>
                 )}
                 <div className="flex-grow overflow-y-auto">
@@ -136,9 +159,7 @@ export function EditNoteDialog({ note, isOpen, onClose }: EditNoteDialogProps) {
                     <div className="px-6">
                         <div
                             ref={contentRef}
-                            contentEditable
                             suppressContentEditableWarning={true}
-                            dangerouslySetInnerHTML={{ __html: note?.content || '' }}
                             onInput={handleContentInput}
                             className="w-full min-h-[200px] border-none focus-visible:ring-0 resize-none bg-transparent p-0 outline-none max-w-none"
                             style={{ 
