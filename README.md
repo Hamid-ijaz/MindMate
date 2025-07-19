@@ -2,7 +2,7 @@
 # 🧠 MindMate
 
 <p align="center">
-  <img src="https://mindmate.hamidijaz.dev/favicon.svg" alt="MindMate Logo" width="120">
+  <img src="https://mindmate.hamidijaz.dev/logo.png" alt="MindMate Logo" width="120">
 </p>
 
 <h3 align="center">An intelligent task companion to help you focus and reduce overwhelm.</h3>
