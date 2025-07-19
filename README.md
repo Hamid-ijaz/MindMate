@@ -1,14 +1,14 @@
 
-# 🧠 Mindful Tasks
+# 🧠 MindMate
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/hamidijaz/mindful-tasks/main/public/logo.png" alt="Mindful Tasks Logo" width="120">
+  <img src="https://mindmate.hamidijaz.dev/favicon.svg" alt="MindMate Logo" width="120">
 </p>
 
 <h3 align="center">An intelligent task companion to help you focus and reduce overwhelm.</h3>
 
 <p align="center">
-  <img alt="GitHub" src="https://img.shields.io/github/license/hamidijaz/mindful-tasks?style=for-the-badge">
+  <img alt="GitHub" src="https://img.shields.io/github/license/hamidijaz/MindMate?style=for-the-badge">
   <img alt="Next.js" src="https://img.shields.io/badge/Next.js-000000?style=for-the-badge&logo=nextdotjs&logoColor=white">
   <img alt="Firebase" src="https://img.shields.io/badge/Firebase-FFCA28?style=for-the-badge&logo=firebase&logoColor=black">
   <img alt="Genkit" src="https://img.shields.io/badge/Genkit-4285F4?style=for-the-badge&logo=google&logoColor=white">
@@ -17,9 +17,9 @@
 
 ---
 
-**Mindful Tasks** is not just another to-do list. It's an intelligent task management app designed to help you focus and combat procrastination. By combining a clean, calming user interface with powerful AI features, it makes planning your day feel effortless. Instead of showing a long, overwhelming list, it suggests one task at a time based on your current energy level.
+**MindMate** is not just another to-do list. It's an intelligent task management app designed to help you focus and combat procrastination. By combining a clean, calming user interface with powerful AI features, it makes planning your day feel effortless. Instead of showing a long, overwhelming list, it suggests one task at a time based on your current energy level.
 
-If a task feels too big, its AI can break it down into smaller, more manageable steps. With features like smart reminders, a conversational AI check-in, and a rich note-taking system, Mindful Tasks helps you stay organized, motivated, and in control.
+If a task feels too big, its AI can break it down into smaller, more manageable steps. With features like smart reminders, a conversational AI check-in, and a rich note-taking system, MindMate helps you stay organized, motivated, and in control.
 
 ## ✨ Key Features
 
@@ -73,8 +73,8 @@ To get a local copy up and running, follow these simple steps.
 
 1.  **Clone the repository:**
     ```sh
-    git clone https://github.com/hamidijaz/mindful-tasks.git
-    cd mindful-tasks
+    git clone https://github.com/hamidijaz/MindMate.git
+    cd MindMate
     ```
 
 2.  **Install NPM packages:**
