@@ -38,8 +38,8 @@ export function ThemeProvider({
   children,
   defaultMode = "system",
   defaultTheme = "theme-default",
-  modeStorageKey = "vite-ui-mode",
-  themeStorageKey = "vite-ui-theme",
+  modeStorageKey = "mindmate-ui-mode",
+  themeStorageKey = "mindmate-ui-theme",
   enableSystem = true,
   ...props
 }: ThemeProviderProps) {
@@ -52,6 +52,31 @@ export function ThemeProvider({
     if (typeof window === "undefined") return defaultTheme;
     return (localStorage.getItem(themeStorageKey) as Theme) || defaultTheme
   })
+
+  // Initialize theme on mount
+  React.useEffect(() => {
+    const root = window.document.documentElement
+    
+    // Clear any existing theme classes
+    root.classList.remove("light", "dark", ...THEME_CLASSES)
+    
+    // Apply theme class first
+    if (theme) {
+      root.classList.add(theme);
+    }
+
+    // Then apply mode class
+    if (mode === "system") {
+      const systemMode = window.matchMedia("(prefers-color-scheme: dark)")
+        .matches
+        ? "dark"
+        : "light"
+
+      root.classList.add(systemMode)
+    } else {
+        root.classList.add(mode)
+    }
+  }, []); // Run only on mount
 
   React.useEffect(() => {
     const root = window.document.documentElement
