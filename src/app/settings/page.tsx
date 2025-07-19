@@ -1,21 +1,22 @@
 
 "use client";
 
-import { useForm, useFieldArray } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import * as z from "zod";
-import { useAuth } from "@/contexts/auth-context";
-import { useTasks } from "@/contexts/task-context";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { useToast } from "@/hooks/use-toast";
-import { Trash2, PlusCircle, Bell, BellOff, Loader2 } from "lucide-react";
+import { useState, useEffect } from 'react';
+import { useForm, useFieldArray } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import { useAuth } from '@/contexts/auth-context';
+import { useTasks } from '@/contexts/task-context';
+import { useNotifications } from '@/contexts/notification-context';
+import { useToast } from '@/hooks/use-toast';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from '@/components/ui/form';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Trash2, Plus, Bell, BellOff } from 'lucide-react';
 import { Separator } from "@/components/ui/separator";
-import { Skeleton } from "@/components/ui/skeleton";
-import { useEffect, useState } from "react";
-import { useNotifications } from "@/contexts/notification-context";
+import { Loader2 } from "lucide-react";
 
 const profileSchema = z.object({
   firstName: z.string().min(2, "First name is required"),
@@ -282,7 +283,7 @@ export default function SettingsPage() {
                                     />
                                 ))}
                                 <Button type="button" variant="outline" size="sm" onClick={() => appendCategory({ value: '' })}>
-                                    <PlusCircle className="mr-2"/> Add Category
+                                    <Plus className="mr-2"/> Add Category
                                 </Button>
                             </div>
                             
@@ -307,7 +308,7 @@ export default function SettingsPage() {
                                     />
                                 ))}
                                 <Button type="button" variant="outline" size="sm" onClick={() => appendDuration({ value: 0 })}>
-                                    <PlusCircle className="mr-2"/> Add Duration
+                                    <Plus className="mr-2"/> Add Duration
                                 </Button>
                             </div>
 

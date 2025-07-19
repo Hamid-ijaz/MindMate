@@ -1,6 +1,4 @@
 
-"use client";
-
 import './globals.css';
 import { AuthProvider } from '@/contexts/auth-context';
 import { TaskProvider } from '@/contexts/task-context';
@@ -10,13 +8,48 @@ import { ThemeProvider } from '@/contexts/theme-context';
 import { ManageTasksSheet } from '@/components/manage-tasks-sheet';
 import { MobileNav } from '@/components/mobile-nav';
 import { NotificationProvider } from '@/contexts/notification-context';
-import { useSetupNotificationHandlers } from '@/hooks/use-notification-handlers';
 import { NoteProvider } from '@/contexts/note-context';
 import { ErrorBoundary } from '@/components/error-boundary';
+import { ClientWrapper } from '@/components/client-wrapper';
+import { Metadata } from 'next';
+
+// Metadata for SEO and browser tab
+export const metadata: Metadata = {
+  title: 'MindMate - AI-Powered Task Management',
+  description: 'Your intelligent task companion that adapts to your energy and helps you stay productive.',
+  keywords: ['task management', 'productivity', 'AI', 'mindmate', 'todo'],
+  authors: [{ name: 'MindMate Team' }],
+  creator: 'MindMate',
+  publisher: 'MindMate',
+  robots: 'index, follow',
+  openGraph: {
+    title: 'MindMate - AI-Powered Task Management',
+    description: 'Your intelligent task companion that adapts to your energy and helps you stay productive.',
+    type: 'website',
+    locale: 'en_US',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'MindMate - AI-Powered Task Management',
+    description: 'Your intelligent task companion that adapts to your energy and helps you stay productive.',
+  },
+  icons: {
+    icon: [
+      { url: '/favicon.svg', type: 'image/svg+xml' },
+      { url: '/favicon.ico', type: 'image/x-icon' }
+    ],
+    shortcut: '/favicon.ico',
+    apple: '/apple-icon.png',
+  },
+  manifest: '/site.webmanifest',
+};
 
 function AppInitializer({ children }: { children: React.ReactNode }) {
-  useSetupNotificationHandlers();
-  return <>{children}</>;
+  return (
+    <ClientWrapper>
+      {children}
+    </ClientWrapper>
+  );
 }
 
 export default function RootLayout({
@@ -35,8 +68,8 @@ export default function RootLayout({
             __html: `
               (function() {
                 function getTheme() {
-                  const theme = window.localStorage.getItem('vite-ui-theme') || 'theme-default';
-                  const mode = window.localStorage.getItem('vite-ui-mode') || 'system';
+                  const theme = window.localStorage.getItem('mindmate-ui-theme') || 'theme-default';
+                  const mode = window.localStorage.getItem('mindmate-ui-mode') || 'system';
                   
                   document.documentElement.classList.add(theme);
 
