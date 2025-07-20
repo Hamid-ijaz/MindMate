@@ -5,8 +5,8 @@ import { z } from "zod";
 export type TaskCategory = string; 
 export const taskCategories: [TaskCategory, ...TaskCategory[]] = ['Work', 'Chores', 'Writing', 'Personal', 'Study']; // Default values
 
-export type EnergyLevel = 'Low' | 'Medium' | 'High';
-export const energyLevels: [EnergyLevel, ...EnergyLevel[]] = ['Low', 'Medium', 'High'];
+export type Priority = 'Low' | 'Medium' | 'High' | 'Critical';
+export const priorities: [Priority, ...Priority[]] = ['Low', 'Medium', 'High', 'Critical'];
 
 export type TaskDuration = number;
 export const taskDurations: [TaskDuration, ...TaskDuration[]] = [15, 30, 60, 90]; // Default values
@@ -23,7 +23,7 @@ export interface Task {
   title: string;
   description?: string;
   category: TaskCategory;
-  energyLevel: EnergyLevel;
+  priority: Priority;
   duration: TaskDuration;
   timeOfDay: TimeOfDay;
   createdAt: number;

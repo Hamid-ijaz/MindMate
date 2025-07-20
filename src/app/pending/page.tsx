@@ -3,7 +3,7 @@
 
 import { useState, useTransition, useEffect, useRef, Suspense } from 'react';
 import { useTasks } from '@/contexts/task-context';
-import { ScrollArea } from '@/components/ui/scroll-area';
+// ...existing code...
 import { TaskItem } from '@/components/task-item';
 import { Button } from '@/components/ui/button';
 import { Wand2, Loader2, PlusCircle } from 'lucide-react';
@@ -125,7 +125,7 @@ function PendingTasksContent() {
             description: suggestion.description,
             category: taskToReword.category,
             timeOfDay: taskToReword.timeOfDay,
-            energyLevel: 'Low',
+            priority: 'Low',
             duration: 15,
             userEmail: user?.email || '', // Add missing userEmail
         });
@@ -153,33 +153,31 @@ function PendingTasksContent() {
       <div className="space-y-12">
         <div>
           <h2 className="text-2xl font-semibold mb-4">To-Do ({isLoading ? '...' : uncompletedTasks.length})</h2>
-          <ScrollArea className="h-[calc(100vh-16rem)] md:h-[calc(100vh-20rem)] pr-4">
-            <div className="space-y-4">
-              {isLoading ? (
-                <PendingTasksSkeleton />
-              ) : uncompletedTasks.length === 0 ? (
-                <p className="text-muted-foreground">No pending tasks. Great job!</p>
-              ) : (
-                uncompletedTasks.map(task => (
-                  <div key={task.id} ref={el => { taskRefs.current[task.id] = el; }}>
-                    <TaskItem 
-                      task={task}
-                      extraActions={
-                        <Button variant="outline" size="sm" onClick={() => handleRewordClick(task)} disabled={isRewording && taskToReword?.id === task.id}>
-                            {isRewording && taskToReword?.id === task.id ? (
-                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            ) : (
-                                <Wand2 className="h-4 w-4 md:mr-2" />
-                            )}
-                            <span className="hidden md:inline">Divide Task</span>
-                        </Button>
-                      }
-                    />
-                  </div>
-                ))
-              )}
-            </div>
-          </ScrollArea>
+          <div className="space-y-4">
+            {isLoading ? (
+              <PendingTasksSkeleton />
+            ) : uncompletedTasks.length === 0 ? (
+              <p className="text-muted-foreground">No pending tasks. Great job!</p>
+            ) : (
+              uncompletedTasks.map(task => (
+                <div key={task.id} ref={el => { taskRefs.current[task.id] = el; }}>
+                  <TaskItem 
+                    task={task}
+                    extraActions={
+                      <Button variant="outline" size="sm" onClick={() => handleRewordClick(task)} disabled={isRewording && taskToReword?.id === task.id}>
+                          {isRewording && taskToReword?.id === task.id ? (
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          ) : (
+                              <Wand2 className="h-4 w-4 md:mr-2" />
+                          )}
+                          <span className="hidden md:inline">Divide Task</span>
+                      </Button>
+                    }
+                  />
+                </div>
+              ))
+            )}
+          </div>
         </div>
       </div>
 

@@ -151,7 +151,7 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
         title: title.trim(),
         description: '', // Subtasks from bullets have no description initially
         category: taskData.category,
-        energyLevel: 'Low', // Default to low energy
+        priority: 'Low', // Default to low priority
         duration: 15, // Default to 15 mins
         timeOfDay: taskData.timeOfDay,
         userEmail: user.email, // Add missing userEmail

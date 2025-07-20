@@ -13,10 +13,11 @@ export function getCurrentTimeOfDay(): 'Morning' | 'Afternoon' | 'Evening' | 'Ni
   return 'Night';
 }
 
-export function getDefaultEnergyLevel(): 'Low' | 'Medium' | 'High' {
+export function getDefaultPriority(): 'Low' | 'Medium' | 'High' | 'Critical' {
   const hour = new Date().getHours();
   if (hour >= 6 && hour < 12) return 'High';
-  if (hour >= 12 && hour < 18) return 'Medium';
+  if (hour >= 12 && hour < 18) return 'Critical';
+  if (hour >= 18 && hour < 22) return 'Medium';
   return 'Low';
 }
 

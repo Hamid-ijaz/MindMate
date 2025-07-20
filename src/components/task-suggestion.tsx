@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import type { EnergyLevel, Task, TimeOfDay } from "@/lib/types";
+import type { Priority, Task, TimeOfDay } from "@/lib/types";
 import { AlertCircle, Check, Sparkles, X, Loader2, Wand2, Edit, CalendarIcon, Repeat, ExternalLink, ChevronLeft, ChevronRight } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { getRandomQuote } from "@/lib/motivational-quotes";
@@ -16,7 +16,7 @@ import { AlertDialog, AlertDialogContent, AlertDialogDescription, AlertDialogFoo
 import { AddTaskButton } from "./manage-tasks-sheet";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "./ui/accordion";
 import { rewordTask } from '@/ai/flows/reword-task-flow';
-import { getCurrentTimeOfDay } from "@/lib/utils";
+import { getCurrentTimeOfDay, getDefaultPriority } from "@/lib/utils";
 import { TaskItem } from "@/components/task-item";
 import { Checkbox } from "./ui/checkbox";
 import { Label } from "./ui/label";
@@ -30,25 +30,25 @@ import Link from "next/link";
 import { useCompletionAudio } from '@/hooks/use-completion-audio';
 import { useAuth } from "@/contexts/auth-context";
 
-const getDefaultEnergyLevel = (): EnergyLevel => {
-    const timeOfDay = getCurrentTimeOfDay();
-    switch (timeOfDay) {
-        case "Morning":
-        case "Evening":
-            return "Low";
-        case "Afternoon":
-            return "Medium";
-        default:
-            return "Medium";
-    }
-};
 
 export function TaskSuggestion() {
-  const { tasks, acceptTask, rejectTask, muteTask, addTask, isLoading: tasksLoading, startEditingTask } = useTasks();
-  const { deleteNotification } = useNotifications();
+    const { tasks, acceptTask, rejectTask, muteTask, addTask, isLoading: tasksLoading, startEditingTask } = useTasks();
+    const { deleteNotification } = useNotifications();
   const { handleTaskCompletion } = useCompletionAudio();
   const { user } = useAuth();
-  const [currentEnergy, setCurrentEnergy] = useState<EnergyLevel | null>(null);
+  const [currentPriority, setCurrentPriority] = useState<Priority>('Medium');
+
+  // Set default priority to highest available when tasks change
+  useEffect(() => {
+    const uncompletedTasks = tasks.filter(t => !t.completedAt && !t.isMuted && !t.parentId);
+    const priorityOrderArr: Priority[] = ['Critical', 'High', 'Medium', 'Low'];
+    for (let i = 0; i < priorityOrderArr.length; i++) {
+      if (uncompletedTasks.some(task => task.priority === priorityOrderArr[i])) {
+        setCurrentPriority(priorityOrderArr[i]);
+        break;
+      }
+    }
+  }, [tasks]);
   const [showAffirmation, setShowAffirmation] = useState(false);
   const [showRejectionPrompt, setShowRejectionPrompt] = useState(false);
   const [showRewordDialog, setShowRewordDialog] = useState(false);
@@ -65,12 +65,12 @@ export function TaskSuggestion() {
 
   const [isPending, startTransition] = useTransition();
 
+  // Always default to 'Medium' on mount
+  
+  // ...existing code...
+  // ...existing code...
   useEffect(() => {
-    setCurrentEnergy(getDefaultEnergyLevel());
-  }, []);
-
-  useEffect(() => {
-    if (!api) return;
+      if (!api) return;
 
     const handleSelect = () => {
         setCurrentSlide(api.selectedScrollSnap());
@@ -86,28 +86,24 @@ export function TaskSuggestion() {
   const { toast } = useToast();
 
   const possibleTasks = useMemo(() => {
-    if (!currentEnergy) return [];
-    
+    if (!currentPriority) return [];
     const uncompletedTasks = tasks.filter(t => !t.completedAt && !t.isMuted && !t.parentId);
     const now = Date.now();
     const rejectionTimeout = REJECTION_HOURS * 60 * 60 * 1000;
 
-    let filtered = uncompletedTasks.filter(task => {
-        const isEnergyMatch = task.energyLevel === currentEnergy;
-        const recentlyRejected = task.lastRejectedAt && (now - task.lastRejectedAt < rejectionTimeout);
-        return isEnergyMatch && !recentlyRejected;
+    // Strictly filter by selected priority only
+    let filtered: Task[] = uncompletedTasks.filter(task => {
+      const isPriorityMatch = task.priority === currentPriority;
+      const recentlyRejected = task.lastRejectedAt && (now - task.lastRejectedAt < rejectionTimeout);
+      return isPriorityMatch && !recentlyRejected;
     });
 
-    if (filtered.length === 0) {
-        // Fallback: try to find any task if no perfect match, ignore energy level but still respect muted/rejected status
-        filtered = uncompletedTasks.filter(t => {
-            const recentlyRejected = t.lastRejectedAt && (now - t.lastRejectedAt < rejectionTimeout);
-            return !recentlyRejected;
-        });
-    }
-
-    // Sort the tasks to have a consistent order
+    // Sort by priority (Critical > High > Medium > Low), then by rejectionCount, then by duration
+    const priorityOrder = { 'Critical': 0, 'High': 1, 'Medium': 2, 'Low': 3 };
     filtered.sort((a, b) => {
+        if (priorityOrder[a.priority] !== priorityOrder[b.priority]) {
+            return priorityOrder[a.priority] - priorityOrder[b.priority];
+        }
         if (a.rejectionCount !== b.rejectionCount) {
             return (a.rejectionCount || 0) - (b.rejectionCount || 0);
         }
@@ -115,8 +111,17 @@ export function TaskSuggestion() {
     });
 
     return filtered;
+  }, [tasks, currentPriority]);
 
-  }, [tasks, currentEnergy]);
+  // Reset carousel slide when possibleTasks change
+  useEffect(() => {
+    setCurrentSlide(0);
+  }, [possibleTasks.length]);
+
+  // Reset carousel slide when possibleTasks change
+  useEffect(() => {
+    setCurrentSlide(0);
+  }, [possibleTasks.length]);
 
 
   const otherVisibleTasks = useMemo(() => {
@@ -222,7 +227,7 @@ export function TaskSuggestion() {
             description: s.description,
             category: currentTask.category,
             timeOfDay: currentTask.timeOfDay,
-            energyLevel: 'Low',
+            priority: 'Low',
             duration: 15,
             userEmail: user?.email || '', // Add missing userEmail
         });
@@ -245,7 +250,7 @@ export function TaskSuggestion() {
     setSelectedRewordedTasks(prev => ({...prev, [title]: !prev[title]}));
   };
 
-  if (tasksLoading || !currentEnergy) {
+  if (tasksLoading || !currentPriority) {
     return <Card className="w-full max-w-lg mx-auto animate-pulse"><div className="h-80" /></Card>;
   }
   
@@ -281,29 +286,35 @@ export function TaskSuggestion() {
 
   if (possibleTasks.length === 0) {
     return (
-        <div className="w-full max-w-lg mx-auto">
-             <Card>
-                <CardContent className="p-6 text-center flex flex-col items-center justify-center h-80">
-                    <AlertCircle className="w-16 h-16 text-primary" />
-                    <p className="mt-4 text-xl font-semibold">No matching tasks</p>
-                    <p className="text-muted-foreground mt-2">No tasks match your current energy level. Try a different energy level or see other available tasks below.</p>
-                     <div className="mt-4">
-                        <Select onValueChange={(value: EnergyLevel) => setCurrentEnergy(value)} value={currentEnergy || undefined}>
-                            <SelectTrigger className="w-auto">
-                                <SelectValue placeholder="Energy..." />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="Low">Low Energy</SelectItem>
-                                <SelectItem value="Medium">Medium Energy</SelectItem>
-                                <SelectItem value="High">High Energy</SelectItem>
-                            </SelectContent>
-                        </Select>
-                     </div>
-                </CardContent>
-            </Card>
-           {otherVisibleTasks && otherVisibleTasks.length > 0 && <OtherTasksList tasks={otherVisibleTasks} />}
-        </div>
-    )
+      <div className="w-full max-w-lg mx-auto">
+        <Card>
+          <CardContent className="p-6 flex flex-col items-center justify-center h-80">
+            <div className="flex justify-between items-center w-full mb-4">
+              <span className="flex items-center gap-2">
+                <AlertCircle className="w-6 h-6 text-primary" />
+                <span className="text-xl font-semibold">No matching tasks</span>
+              </span>
+              <Select
+                onValueChange={(value: string) => setCurrentPriority(value as Priority)}
+                value={currentPriority}
+              >
+                <SelectTrigger className="w-auto">
+                  <SelectValue placeholder="Priority..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Critical">Critical Priority</SelectItem>
+                  <SelectItem value="High">High Priority</SelectItem>
+                  <SelectItem value="Medium">Medium Priority</SelectItem>
+                  <SelectItem value="Low">Low Priority</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <p className="text-muted-foreground mt-2 text-center">No tasks match your current priority. Try a different priority or see other available tasks below.</p>
+          </CardContent>
+        </Card>
+        {otherVisibleTasks && otherVisibleTasks.length > 0 && <OtherTasksList tasks={otherVisibleTasks} />}
+      </div>
+    );
   }
 
   const subtasksOfSuggested = currentTask ? tasks.filter(t => t.parentId === currentTask.id && !t.completedAt) : [];
@@ -319,14 +330,18 @@ export function TaskSuggestion() {
                             <CardHeader>
                                 <div className="flex justify-between items-center pb-2">
                                     <CardDescription className="text-lg font-medium text-primary">Ready for this one?</CardDescription>
-                                    <Select onValueChange={(value: EnergyLevel) => setCurrentEnergy(value)} value={currentEnergy}>
+                                    <Select
+                                      onValueChange={(value: string) => setCurrentPriority(value as Priority)}
+                                      value={currentPriority}
+                                    >
                                         <SelectTrigger className="w-auto text-xs h-8 px-2">
-                                            <SelectValue placeholder="Energy..." />
+                                            <SelectValue placeholder="Priority..." />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            <SelectItem value="Low">Low Energy</SelectItem>
-                                            <SelectItem value="Medium">Medium Energy</SelectItem>
-                                            <SelectItem value="High">High Energy</SelectItem>
+                                            <SelectItem value="Critical">Critical Priority</SelectItem>
+                                            <SelectItem value="High">High Priority</SelectItem>
+                                            <SelectItem value="Medium">Medium Priority</SelectItem>
+                                            <SelectItem value="Low">Low Priority</SelectItem>
                                         </SelectContent>
                                     </Select>
                                 </div>
@@ -337,7 +352,7 @@ export function TaskSuggestion() {
                             <CardContent>
                                 <div className="flex flex-wrap gap-2">
                                     <Badge variant="outline">{task.category}</Badge>
-                                    <Badge variant="outline">{task.energyLevel} Energy</Badge>
+                                    <Badge variant="outline" color={task.priority === 'Critical' ? 'destructive' : task.priority === 'High' ? 'warning' : task.priority === 'Medium' ? 'primary' : 'secondary'}>{task.priority} Priority</Badge>
                                     <Badge variant="outline">{task.duration} min</Badge>
                                     <Badge variant="outline">{task.timeOfDay}</Badge>
                                     {task.rejectionCount > 0 && <Badge variant="destructive" className="animate-pulse">{task.rejectionCount}x Skipped</Badge>}

@@ -5,7 +5,7 @@ import { useTasks } from '@/contexts/task-context';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { format, isToday, isYesterday, startOfDay } from 'date-fns';
-import { ScrollArea } from '@/components/ui/scroll-area';
+// ...existing code...
 import { Button } from '@/components/ui/button';
 import { RotateCcw, ChevronDown, ChevronUp, CornerDownRight } from 'lucide-react';
 import { SubtaskList } from '@/components/subtask-list';
@@ -100,7 +100,7 @@ export default function HistoryPage() {
         </CardHeader>
         <CardContent className="flex flex-wrap gap-2">
             <Badge variant="outline">{task.category}</Badge>
-            <Badge variant="outline">{task.energyLevel} Energy</Badge>
+            <Badge variant={task.priority === 'Critical' ? 'destructive' : task.priority === 'High' ? 'default' : task.priority === 'Medium' ? 'outline' : 'secondary'}>{task.priority} Priority</Badge>
             <Badge variant="outline">{task.duration} min</Badge>
         </CardContent>
         <CardFooter className="justify-end gap-2">
@@ -131,37 +131,35 @@ export default function HistoryPage() {
         <p className="mt-2 text-muted-foreground">Review your accomplished tasks.</p>
       </div>
       
-      <ScrollArea className="h-[calc(100vh-16rem)] md:h-[calc(100vh-20rem)] pr-4">
-           <div className="space-y-12">
-          {isLoading ? (
-            <HistorySkeleton />
-          ) : Object.keys(groupedTasks).length === 0 ? (
-              <p className="text-muted-foreground">You haven't completed any tasks yet.</p>
-          ) : (
-            Object.entries(groupedTasks).map(([groupTitle, tasksInGroup]) => (
-              <div key={groupTitle}>
-                <h2 className="text-2xl font-semibold mb-4">{groupTitle}</h2>
-                <div className="space-y-4">
-                  {tasksInGroup.map(task => {
-                      // Only render root tasks or orphaned subtasks directly
-                      // Subtasks of completed parents are rendered recursively within the parent
-                      if (!task.parentId) {
-                        return renderTaskCard(task);
-                      }
-                      const parent = getParentTask(task.parentId!);
-                      if (parent && !parent.completedAt) {
-                        return renderTaskCard(task); // Render orphaned subtask
-                      }
-                      // If parent is also completed, it will be rendered by the parent's `renderTaskCard`
-                      // so we don't render it here to avoid duplication.
-                      return null;
-                  })}
-                </div>
+      <div className="space-y-12">
+        {isLoading ? (
+          <HistorySkeleton />
+        ) : Object.keys(groupedTasks).length === 0 ? (
+            <p className="text-muted-foreground">You haven't completed any tasks yet.</p>
+        ) : (
+          Object.entries(groupedTasks).map(([groupTitle, tasksInGroup]) => (
+            <div key={groupTitle}>
+              <h2 className="text-2xl font-semibold mb-4">{groupTitle}</h2>
+              <div className="space-y-4">
+                {tasksInGroup.map(task => {
+                    // Only render root tasks or orphaned subtasks directly
+                    // Subtasks of completed parents are rendered recursively within the parent
+                    if (!task.parentId) {
+                      return renderTaskCard(task);
+                    }
+                    const parent = getParentTask(task.parentId!);
+                    if (parent && !parent.completedAt) {
+                      return renderTaskCard(task); // Render orphaned subtask
+                    }
+                    // If parent is also completed, it will be rendered by the parent's `renderTaskCard`
+                    // so we don't render it here to avoid duplication.
+                    return null;
+                })}
               </div>
-            ))
-          )}
-          </div>
-      </ScrollArea>
+            </div>
+          ))
+        )}
+      </div>
     </div>
   );
 }

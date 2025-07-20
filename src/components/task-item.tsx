@@ -138,7 +138,7 @@ export function TaskItem({ task, extraActions, isSubtask = false, isHistoryView 
         <>
             <CardContent className={`flex flex-wrap gap-2 ${isSubtask ? 'px-3 pt-0 pb-2' : 'p-6 pt-0'}`}>
                 <Badge variant="secondary">{task.category}</Badge>
-                <Badge variant="secondary">{task.energyLevel} Energy</Badge>
+                <Badge variant={task.priority === 'Critical' ? 'destructive' : task.priority === 'High' ? 'default' : task.priority === 'Medium' ? 'outline' : 'secondary'}>{task.priority} Priority</Badge>
                 <Badge variant="secondary">{task.duration} min</Badge>
                 <Badge variant="secondary">{task.timeOfDay}</Badge>
                 {task.reminderAt && (

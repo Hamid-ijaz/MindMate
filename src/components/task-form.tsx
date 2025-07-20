@@ -24,15 +24,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  timesOfDay,
-  Task,
-  EnergyLevel,
-  TaskDuration,
-  energyLevels,
-  recurrenceFrequencies,
-  RecurrenceFrequency,
-} from "@/lib/types";
+import { timesOfDay, Task, Priority, TaskDuration, priorities, recurrenceFrequencies, RecurrenceFrequency } from "@/lib/types";
+import { getDefaultPriority } from "@/lib/utils";
+// ...existing code...
 import { useState, useTransition, useEffect } from "react";
 import { summarizeUrl } from "@/ai/flows/summarize-url-flow";
 import { enhanceTask } from "@/ai/flows/enhance-task-flow";
@@ -49,7 +43,7 @@ const formSchema = z.object({
   title: z.string().min(3, "Title must be at least 3 characters long."),
   description: z.string().optional(),
   category: z.string().min(1, "Category is required."),
-  energyLevel: z.enum(energyLevels),
+  priority: z.enum(priorities),
   duration: z.coerce.number().min(1, "Duration is required"),
   timeOfDay: z.enum(timesOfDay),
   reminderAt: z.date().optional(),
@@ -101,7 +95,7 @@ export function TaskForm({ task, onFinished, parentId, defaultValues: propDefaul
     title: "",
     description: "",
     category: taskCategories[0] || "",
-    energyLevel: "Medium",
+    priority: typeof getDefaultPriority === 'function' ? getDefaultPriority() : "Medium",
     duration: taskDurations[1] || 30,
     timeOfDay: "Afternoon",
     reminderAt: undefined,
@@ -156,12 +150,12 @@ export function TaskForm({ task, onFinished, parentId, defaultValues: propDefaul
     startEnhanceTransition(async () => {
         try {
             const result = await enhanceTask({ title });
-            form.setValue("title", result.rephrasedTitle);
-            form.setValue("description", result.description);
-            form.setValue("category", result.category);
-            form.setValue("energyLevel", result.energyLevel);
-            form.setValue("duration", result.duration as TaskDuration);
-            form.setValue("timeOfDay", result.timeOfDay);
+            form.setValue("title", typeof result.rephrasedTitle === 'string' ? result.rephrasedTitle : "");
+            form.setValue("description", typeof result.description === 'string' ? result.description : "");
+            form.setValue("category", typeof result.category === 'string' ? result.category : "");
+            form.setValue("priority", priorities.includes(result.priority) ? result.priority : "Medium");
+            form.setValue("duration", typeof result.duration === 'number' ? result.duration : 30);
+            form.setValue("timeOfDay", timesOfDay.includes(result.timeOfDay) ? result.timeOfDay : "Afternoon");
 
             toast({
                 title: "Task Enhanced!",
@@ -300,18 +294,18 @@ export function TaskForm({ task, onFinished, parentId, defaultValues: propDefaul
           />
           <FormField
             control={form.control}
-            name="energyLevel"
+            name="priority"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Energy Level</FormLabel>
+                <FormLabel>Priority</FormLabel>
                 <Select onValueChange={field.onChange} value={field.value}>
                   <FormControl>
                     <SelectTrigger>
-                      <SelectValue placeholder="How much energy does this require?" />
+                      <SelectValue placeholder="How urgent is this task?" />
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
-                    {energyLevels.map((level) => (
+                    {priorities.map((level) => (
                       <SelectItem key={level} value={level}>{level}</SelectItem>
                     ))}
                   </SelectContent>

@@ -1,5 +1,5 @@
-
 "use client";
+// ...existing code...
 
 import { useParams, useRouter } from 'next/navigation';
 import { useTasks } from '@/contexts/task-context';
@@ -50,7 +50,7 @@ function TaskPageSkeleton() {
 export default function TaskPage() {
     const { id } = useParams();
     const router = useRouter();
-    const { tasks, isLoading, startEditingTask, deleteTask, acceptTask, uncompleteTask } = useTasks();
+    const { tasks, isLoading, startEditingTask, deleteTask, acceptTask, uncompleteTask, updateTask } = useTasks();
     const { deleteNotification } = useNotifications();
     const { handleTaskCompletion } = useCompletionAudio();
     const [isCompleting, setIsCompleting] = useState(false);
@@ -149,8 +149,8 @@ export default function TaskPage() {
                             <p className="font-semibold">{task.category}</p>
                         </div>
                         <div className="space-y-1">
-                            <p className="text-muted-foreground">Energy</p>
-                            <p className="font-semibold">{task.energyLevel}</p>
+                            <p className="text-muted-foreground">Priority</p>
+                            <p className="font-semibold">{task.priority}</p>
                         </div>
                         <div className="space-y-1">
                             <p className="text-muted-foreground">Duration</p>
