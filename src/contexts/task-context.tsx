@@ -14,6 +14,7 @@ const DEFAULT_DURATIONS: TaskDuration[] = [15, 30, 60, 90];
 
 interface TaskContextType {
   tasks: Task[];
+  notes: Note[];
   accomplishments: Accomplishment[];
   taskCategories: TaskCategory[];
   taskDurations: TaskDuration[];
@@ -40,6 +41,7 @@ const TaskContext = createContext<TaskContextType | undefined>(undefined);
 export const TaskProvider = ({ children }: { children: ReactNode }) => {
   const { user, loading: authLoading } = useAuth();
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [notes, setNotes] = useState<Note[]>([]);
   const [accomplishments, setAccomplishments] = useState<Accomplishment[]>([]);
   const [taskCategories, setTaskCategories] = useState<TaskCategory[]>(DEFAULT_CATEGORIES);
   const [taskDurations, setTaskDurations] = useState<TaskDuration[]>(DEFAULT_DURATIONS);
@@ -83,7 +85,11 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
       // Load tasks
       const userTasks = await taskService.getTasks(user.email);
       setTasks(userTasks);
-
+      // Load notes
+      if (taskService.getNotes) {
+        const userNotes = await taskService.getNotes(user.email);
+        setNotes(userNotes);
+      }
       // Load accomplishments  
       const userAccomplishments = await accomplishmentService.getAccomplishments(user.email);
       setAccomplishments(userAccomplishments);

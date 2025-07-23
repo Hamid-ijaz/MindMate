@@ -32,6 +32,8 @@ interface NotificationContextType {
   markAsRead: (id: string) => void;
   deleteNotification: (id: string) => Promise<void>;
   clearAllNotifications: () => Promise<void>;
+  snoozeNotification?: (id: string, minutes: number) => void;
+  setRecurringNotification?: (id: string, recurring: string) => void;
 }
 
 const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
@@ -39,6 +41,15 @@ const NotificationContext = createContext<NotificationContextType | undefined>(u
 const NOTIFICATION_STORAGE_KEY = 'mindmate-notifications';
 
 export const NotificationProvider = ({ children }: { children: ReactNode }) => {
+  // Snooze notification by updating reminderAt
+  const snoozeNotification = useCallback((id: string, minutes: number) => {
+    setNotifications(prev => prev.map(n => n.id === id ? { ...n, reminderAt: Date.now() + minutes * 60000 } : n));
+  }, []);
+
+  // Set recurring notification
+  const setRecurringNotification = useCallback((id: string, recurring: string) => {
+    setNotifications(prev => prev.map(n => n.id === id ? { ...n, recurring } : n));
+  }, []);
   const [permission, setPermission] = useState<NotificationPermission>('default');
   const [notifications, setNotifications] = useState<StoredNotification[]>([]);
   const { toast } = useToast();
@@ -159,7 +170,7 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
   const unreadCount = notifications.filter(n => !n.isRead).length;
 
   return (
-    <NotificationContext.Provider value={{ permission, requestPermission, sendNotification, notifications, unreadCount, markAllAsRead, markAsRead, deleteNotification, clearAllNotifications }}>
+    <NotificationContext.Provider value={{ permission, requestPermission, sendNotification, notifications, unreadCount, markAllAsRead, markAsRead, deleteNotification, clearAllNotifications, snoozeNotification, setRecurringNotification }}>
       {children}
     </NotificationContext.Provider>
   );
