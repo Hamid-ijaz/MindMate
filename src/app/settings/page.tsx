@@ -2,6 +2,7 @@
 "use client";
 
 import { useState, useEffect } from 'react';
+import { motion } from 'framer-motion';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -17,6 +18,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Trash2, Plus, Bell, BellOff } from 'lucide-react';
 import { Separator } from "@/components/ui/separator";
 import { Loader2 } from "lucide-react";
+import { pageVariants, cardVariants, staggerContainer } from '@/lib/animations';
 
 const profileSchema = z.object({
   firstName: z.string().min(2, "First name is required"),
@@ -164,21 +166,33 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="container mx-auto max-w-4xl py-8 md:py-12 px-4">
-      <div className="mb-8">
+    <motion.div 
+      className="container mx-auto max-w-4xl py-8 md:py-12 px-4"
+      variants={pageVariants}
+      initial="initial"
+      animate="animate"
+      exit="exit"
+    >
+      <motion.div className="mb-8" variants={cardVariants}>
         <h1 className="text-3xl font-bold tracking-tighter sm:text-4xl">Settings</h1>
         <p className="mt-2 text-muted-foreground">Manage your account and application settings.</p>
-      </div>
+      </motion.div>
 
       {isLoading ? (
         <SettingsSkeleton />
       ) : (
-        <div className="grid gap-8">
-            <Card>
-              <CardHeader>
-                  <CardTitle>My Profile</CardTitle>
-                  <CardDescription>Update your personal information.</CardDescription>
-              </CardHeader>
+        <motion.div 
+          className="grid gap-8"
+          variants={staggerContainer}
+          initial="initial"
+          animate="animate"
+        >
+            <motion.div variants={cardVariants}>
+              <Card>
+                <CardHeader>
+                    <CardTitle>My Profile</CardTitle>
+                    <CardDescription>Update your personal information.</CardDescription>
+                </CardHeader>
               <CardContent>
                   <Form {...profileForm}>
                   <form onSubmit={profileForm.handleSubmit(onProfileSubmit)} className="space-y-4">
@@ -227,7 +241,9 @@ export default function SettingsPage() {
                   </Form>
               </CardContent>
             </Card>
+            </motion.div>
             
+            <motion.div variants={cardVariants}>
             <Card>
               <CardHeader>
                 <CardTitle>Notifications</CardTitle>
@@ -254,7 +270,9 @@ export default function SettingsPage() {
                 )}
               </CardContent>
             </Card>
+            </motion.div>
 
+            <motion.div variants={cardVariants}>
             <Card>
                 <CardHeader>
                     <CardTitle>Task Settings</CardTitle>
@@ -322,8 +340,9 @@ export default function SettingsPage() {
                     </Form>
                 </CardContent>
             </Card>
-        </div>
+            </motion.div>
+        </motion.div>
       )}
-    </div>
+    </motion.div>
   );
 }

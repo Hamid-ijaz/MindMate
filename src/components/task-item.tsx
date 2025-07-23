@@ -199,8 +199,9 @@ export function TaskItem({ task, extraActions, isSubtask = false, isHistoryView 
                 </Button>
                 )}
                 
-                {!hasPendingSubtasks && !isSubtask && <CompleteButton />}
-                {hasPendingSubtasks && !isSubtask && (
+                {/* Only show complete button for uncompleted tasks */}
+                {!task.completedAt && !hasPendingSubtasks && !isSubtask && <CompleteButton />}
+                {!task.completedAt && hasPendingSubtasks && !isSubtask && (
                   <TooltipProvider>
                     <Tooltip>
                       <TooltipTrigger asChild>
@@ -213,7 +214,15 @@ export function TaskItem({ task, extraActions, isSubtask = false, isHistoryView 
                   </TooltipProvider>
                 )}
                 
-                {isSubtask && <CompleteButton />}
+                {!task.completedAt && isSubtask && <CompleteButton />}
+
+                {/* Show redo button for completed tasks */}
+                {task.completedAt && (
+                  <Button variant="ghost" size="sm" onClick={handleUncomplete}>
+                    <RotateCcw className="h-4 w-4 md:mr-2" />
+                    <span className="hidden md:inline">Redo</span>
+                  </Button>
+                )}
 
                 <Button variant="ghost" size="icon" onClick={() => startEditingTask(task.id)} disabled={isDeleting || isCompleting}>
                 <Edit className="h-4 w-4" />

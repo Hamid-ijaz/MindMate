@@ -16,7 +16,7 @@ import { AlertDialog, AlertDialogContent, AlertDialogDescription, AlertDialogFoo
 import { AddTaskButton } from "./manage-tasks-sheet";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "./ui/accordion";
 import { rewordTask } from '@/ai/flows/reword-task-flow';
-import { getCurrentTimeOfDay, getDefaultPriority } from "@/lib/utils";
+import { getCurrentTimeOfDay, getDefaultPriority, cn } from "@/lib/utils";
 import { TaskItem } from "@/components/task-item";
 import { Checkbox } from "./ui/checkbox";
 import { Label } from "./ui/label";
@@ -29,6 +29,8 @@ import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious
 import Link from "next/link";
 import { useCompletionAudio } from '@/hooks/use-completion-audio';
 import { useAuth } from "@/contexts/auth-context";
+import { motion, AnimatePresence } from "framer-motion";
+import { slideInFromTop, carouselSlide, staggerContainer, staggerItem, cardHover } from "@/lib/animations";
 
 
 export function TaskSuggestion() {
@@ -321,30 +323,78 @@ export function TaskSuggestion() {
   const hasPendingSubtasks = subtasksOfSuggested.length > 0;
 
   return (
-    <div className="w-full">
-      <Carousel setApi={setApi} className="w-full" opts={{ loop: possibleTasks.length > 1 }}>
-            <CarouselContent>
-                {possibleTasks.map((task, index) => (
-                    <CarouselItem key={task.id}>
-                         <Card className="shadow-lg">
-                            <CardHeader>
-                                <div className="flex justify-between items-center pb-2">
-                                    <CardDescription className="text-lg font-medium text-primary">Ready for this one?</CardDescription>
-                                    <Select
-                                      onValueChange={(value: string) => setCurrentPriority(value as Priority)}
-                                      value={currentPriority}
-                                    >
-                                        <SelectTrigger className="w-auto text-xs h-8 px-2">
-                                            <SelectValue placeholder="Priority..." />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="Critical">Critical Priority</SelectItem>
-                                            <SelectItem value="High">High Priority</SelectItem>
-                                            <SelectItem value="Medium">Medium Priority</SelectItem>
-                                            <SelectItem value="Low">Low Priority</SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                </div>
+    <div className="w-full space-y-6">
+      {/* Modern Priority Selector */}
+      <motion.div 
+        variants={slideInFromTop}
+        initial="initial"
+        animate="animate"
+        className="flex justify-center"
+      >
+        <Card className="inline-flex p-1 bg-gradient-to-r from-primary/5 to-accent/5 border-primary/20">
+          <div className="flex gap-1">
+            {(['Critical', 'High', 'Medium', 'Low'] as Priority[]).map((priority) => {
+              const count = tasks.filter(t => !t.completedAt && !t.isMuted && !t.parentId && t.priority === priority).length;
+              return (
+                <Button
+                  key={priority}
+                  variant={currentPriority === priority ? "default" : "ghost"}
+                  size="sm"
+                  onClick={() => setCurrentPriority(priority)}
+                  className={cn(
+                    "relative h-9 px-4 transition-all duration-300",
+                    currentPriority === priority && "shadow-lg scale-105"
+                  )}
+                  disabled={count === 0}
+                >
+                  <span className="flex items-center gap-2">
+                    <div className={cn(
+                      "w-2 h-2 rounded-full",
+                      priority === 'Critical' && "bg-red-500",
+                      priority === 'High' && "bg-orange-500", 
+                      priority === 'Medium' && "bg-yellow-500",
+                      priority === 'Low' && "bg-green-500"
+                    )} />
+                    {priority}
+                  </span>
+                  {count > 0 && (
+                    <Badge 
+                      variant="secondary" 
+                      className="ml-2 h-5 min-w-5 text-xs p-0 flex items-center justify-center"
+                    >
+                      {count}
+                    </Badge>
+                  )}
+                </Button>
+              );
+            })}
+          </div>
+        </Card>
+      </motion.div>
+
+      {/* Fixed Height Carousel Container */}
+      <div className="relative">
+        <Carousel setApi={setApi} className="w-full" opts={{ loop: possibleTasks.length > 1 }}>
+          <CarouselContent>
+            {possibleTasks.map((task, index) => (
+              <CarouselItem key={task.id}>
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ delay: index * 0.1 }}
+                  className="min-h-[400px]" // Fixed minimum height
+                >
+                  <Card className="shadow-xl border-2 hover:border-primary/30 transition-all duration-300 h-full">
+                    <CardHeader className="pb-4">
+                      <div className="flex justify-between items-start pb-3">
+                        <CardDescription className="text-lg font-medium text-primary flex items-center gap-2">
+                          <Sparkles className="w-5 h-5" />
+                          Ready for this one?
+                        </CardDescription>
+                        <Badge variant="outline" className="shrink-0">
+                          {index + 1} of {possibleTasks.length}
+                        </Badge>
+                      </div>
 
                                 {/* Make title clickable if it's a URL */}
                                 {(() => {
@@ -462,16 +512,20 @@ export function TaskSuggestion() {
                                 </CardContent>
                             )}
                             </Card>
+                </motion.div>
                     </CarouselItem>
                 ))}
             </CarouselContent>
+            
+            {/* Fixed Position Navigation Buttons - Always centered vertically */}
             {possibleTasks.length > 1 && (
-                <>
-                    <CarouselPrevious className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-8 sm:-translate-x-12" />
-                    <CarouselNext className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-8 sm:translate-x-12" />
-                </>
+              <>
+                <CarouselPrevious className="absolute left-4 top-1/2 -translate-y-1/2 z-10 h-12 w-12 border-2 border-primary/20 bg-background/80 backdrop-blur-sm hover:bg-primary hover:text-primary-foreground shadow-lg transition-all duration-200 hover:scale-110" />
+                <CarouselNext className="absolute right-4 top-1/2 -translate-y-1/2 z-10 h-12 w-12 border-2 border-primary/20 bg-background/80 backdrop-blur-sm hover:bg-primary hover:text-primary-foreground shadow-lg transition-all duration-200 hover:scale-110" />
+              </>
             )}
         </Carousel>
+      </div>
     
 
     {otherVisibleTasks && otherVisibleTasks.length > 0 && <OtherTasksList tasks={otherVisibleTasks} />}

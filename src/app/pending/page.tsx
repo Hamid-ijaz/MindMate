@@ -17,6 +17,7 @@ import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useSearchParams } from 'next/navigation';
 import { useAuth } from '@/contexts/auth-context';
+import { motion, AnimatePresence } from 'framer-motion';
 
 interface SuggestedTask {
   title: string;
@@ -144,41 +145,72 @@ function PendingTasksContent() {
 
 
   return (
-    <div className="container mx-auto max-w-4xl py-8 md:py-16 px-4">
-      <div className="mb-8">
+    <motion.div 
+      className="container mx-auto max-w-4xl py-8 md:py-16 px-4"
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5 }}
+    >
+      <motion.div 
+        className="mb-8"
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.1, duration: 0.5 }}
+      >
         <h1 className="text-3xl font-bold tracking-tighter sm:text-4xl">Pending Tasks</h1>
         <p className="mt-2 text-muted-foreground">Here's what's on your plate. You can do it!</p>
-      </div>
+      </motion.div>
       
       <div className="space-y-12">
-        <div>
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2, duration: 0.5 }}
+        >
           <h2 className="text-2xl font-semibold mb-4">To-Do ({isLoading ? '...' : uncompletedTasks.length})</h2>
           <div className="space-y-4">
             {isLoading ? (
               <PendingTasksSkeleton />
             ) : uncompletedTasks.length === 0 ? (
-              <p className="text-muted-foreground">No pending tasks. Great job!</p>
+              <motion.p 
+                className="text-muted-foreground"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.4 }}
+              >
+                No pending tasks. Great job!
+              </motion.p>
             ) : (
-              uncompletedTasks.map(task => (
-                <div key={task.id} ref={el => { taskRefs.current[task.id] = el; }}>
-                  <TaskItem 
-                    task={task}
-                    extraActions={
-                      <Button variant="outline" size="sm" onClick={() => handleRewordClick(task)} disabled={isRewording && taskToReword?.id === task.id}>
-                          {isRewording && taskToReword?.id === task.id ? (
-                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          ) : (
-                              <Wand2 className="h-4 w-4 md:mr-2" />
-                          )}
-                          <span className="hidden md:inline">Divide Task</span>
-                      </Button>
-                    }
-                  />
-                </div>
-              ))
+              <AnimatePresence>
+                {uncompletedTasks.map((task, index) => (
+                  <motion.div 
+                    key={task.id} 
+                    ref={el => { taskRefs.current[task.id] = el; }}
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: 20 }}
+                    transition={{ delay: index * 0.05, duration: 0.3 }}
+                    whileHover={{ scale: 1.02, y: -2 }}
+                  >
+                    <TaskItem 
+                      task={task}
+                      extraActions={
+                        <Button variant="outline" size="sm" onClick={() => handleRewordClick(task)} disabled={isRewording && taskToReword?.id === task.id}>
+                            {isRewording && taskToReword?.id === task.id ? (
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            ) : (
+                                <Wand2 className="h-4 w-4 md:mr-2" />
+                            )}
+                            <span className="hidden md:inline">Divide Task</span>
+                        </Button>
+                      }
+                    />
+                  </motion.div>
+                ))}
+              </AnimatePresence>
             )}
           </div>
-        </div>
+        </motion.div>
       </div>
 
        <AlertDialog open={showRewordDialog} onOpenChange={setShowRewordDialog}>
@@ -214,7 +246,7 @@ function PendingTasksContent() {
                 </AlertDialogFooter>
             </AlertDialogContent>
         </AlertDialog>
-    </div>
+    </motion.div>
   );
 }
 
