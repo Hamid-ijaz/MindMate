@@ -26,6 +26,7 @@ export default function HomeMain() {
   const [date, setDate] = useState("");
   const [priority, setPriority] = useState("");
   const [showFilters, setShowFilters] = useState(false);
+  const [showSearchBar, setShowSearchBar] = useState(false); // Controls expanded search UI
 
   // Filtered tasks/notes
   const filteredTasks = useMemo(() => {
@@ -70,12 +71,11 @@ export default function HomeMain() {
 
   return (
     <div className="w-full max-w-5xl mx-auto py-8 px-2 md:px-0">
-      {/* Search & Filter Bar */}
+      {/* Always show search field, expand on focus */}
       <Card className="mb-6 shadow-lg">
         <CardHeader className="flex flex-col md:flex-row md:items-center gap-4">
           <CardTitle className="flex items-center gap-2 text-2xl font-bold">
             <Search className="w-6 h-6 text-primary" />
-            Find Tasks & Notes
           </CardTitle>
           <div className="flex-1 flex gap-2 items-center">
             <Input
@@ -83,15 +83,25 @@ export default function HomeMain() {
               value={search}
               onChange={e => setSearch(e.target.value)}
               className="w-full max-w-xs"
+              onFocus={() => setShowSearchBar(true)}
+              autoFocus={showSearchBar}
             />
-            <Button variant="ghost" onClick={() => setShowFilters(f => !f)}>
-              <Filter className="w-5 h-5" />
-              <span className="hidden sm:inline">Filters</span>
-            </Button>
+            {showSearchBar && (
+              <>
+                <Button variant="ghost" onClick={() => setShowFilters(f => !f)}>
+                  <Filter className="w-5 h-5" />
+                  <span className="hidden sm:inline">Filters</span>
+                </Button>
+                <Button variant="outline" onClick={() => { setShowSearchBar(false); setSearch(""); }}>
+                  <X className="w-4 h-4" />
+                  Close
+                </Button>
+              </>
+            )}
           </div>
         </CardHeader>
         <AnimatePresence>
-          {showFilters && (
+          {showFilters && showSearchBar && (
             <motion.div
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
@@ -137,46 +147,50 @@ export default function HomeMain() {
         </AnimatePresence>
       </Card>
 
-      {/* Notification Center */}
-      <div className="mb-6">
-        <TaskSuggestion />
-      </div>
+      {/* Notification Center (TaskSuggestion) */}
+      {!showSearchBar && (
+        <div className="mb-6">
+          <TaskSuggestion />
+        </div>
+      )}
 
       {/* Search Results: Tasks & Notes */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <motion.div layout className="space-y-4">
-          <h2 className="text-lg font-semibold mb-2">Tasks</h2>
-          <AnimatePresence>
-            {filteredTasks.length === 0 ? (
-              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="text-muted-foreground py-8 text-center">
-                No tasks found.
-              </motion.div>
-            ) : (
-              filteredTasks.map(task => (
-                <motion.div key={task.id} layout initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }}>
-                  <TaskItem task={task} />
+      {showSearchBar && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <motion.div layout className="space-y-4">
+            <h2 className="text-lg font-semibold mb-2">Tasks</h2>
+            <AnimatePresence>
+              {filteredTasks.length === 0 ? (
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="text-muted-foreground py-8 text-center">
+                  No tasks found.
                 </motion.div>
-              ))
-            )}
-          </AnimatePresence>
-        </motion.div>
-        <motion.div layout className="space-y-4">
-          <h2 className="text-lg font-semibold mb-2">Notes</h2>
-          <AnimatePresence>
-            {filteredNotes.length === 0 ? (
-              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="text-muted-foreground py-8 text-center">
-                No notes found.
-              </motion.div>
-            ) : (
-              filteredNotes.map(note => (
-                <motion.div key={note.id} layout initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }}>
-                  <NoteCard note={note} onClick={() => {}} />
+              ) : (
+                filteredTasks.map(task => (
+                  <motion.div key={task.id} layout initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }}>
+                    <TaskItem task={task} />
+                  </motion.div>
+                ))
+              )}
+            </AnimatePresence>
+          </motion.div>
+          <motion.div layout className="space-y-4">
+            <h2 className="text-lg font-semibold mb-2">Notes</h2>
+            <AnimatePresence>
+              {filteredNotes.length === 0 ? (
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="text-muted-foreground py-8 text-center">
+                  No notes found.
                 </motion.div>
-              ))
-            )}
-          </AnimatePresence>
-        </motion.div>
-      </div>
+              ) : (
+                filteredNotes.map(note => (
+                  <motion.div key={note.id} layout initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }}>
+                    <NoteCard note={note} onClick={() => {}} />
+                  </motion.div>
+                ))
+              )}
+            </AnimatePresence>
+          </motion.div>
+        </div>
+      )}
     </div>
   );
 }

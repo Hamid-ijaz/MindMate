@@ -321,8 +321,8 @@ export function TaskSuggestion() {
   const hasPendingSubtasks = subtasksOfSuggested.length > 0;
 
   return (
-    <div className="w-full max-w-xl mx-auto">
-        <Carousel setApi={setApi} className="w-full max-w-lg mx-auto" opts={{ loop: possibleTasks.length > 1 }}>
+    <div className="w-full">
+      <Carousel setApi={setApi} className="w-full" opts={{ loop: possibleTasks.length > 1 }}>
             <CarouselContent>
                 {possibleTasks.map((task, index) => (
                     <CarouselItem key={task.id}>
@@ -346,7 +346,23 @@ export function TaskSuggestion() {
                                     </Select>
                                 </div>
 
-                                <CardTitle className="text-2xl pt-2 break-word">{task.title}</CardTitle>
+                                {/* Make title clickable if it's a URL */}
+                                {(() => {
+                                  const urlRegex = /^(https?:\/\/)?((([a-z\d]([a-z\d-]*[a-z\d])*)\.)+[a-z]{2,}|((\d{1,3}\.){3}\d{1,3}))(\:\d+)?(\/[\-a-z\d%_.~+]*)*(\?[;&a-z\d%_.~+=-]*)?(#[\-a-z\d_]*)?$/i;
+                                  if (urlRegex.test(task.title)) {
+                                    const url = task.title.startsWith('http') ? task.title : `https://${task.title}`;
+                                    return (
+                                      <CardTitle className="text-2xl pt-2 break-word">
+                                        <a href={url} target="_blank" rel="noopener noreferrer" className="underline text-blue-600 hover:text-blue-800">
+                                          {task.title}
+                                        </a>
+                                      </CardTitle>
+                                    );
+                                  }
+                                  return (
+                                    <CardTitle className="text-2xl pt-2 break-word">{task.title}</CardTitle>
+                                  );
+                                })()}
                                 {task.description && <CardDescription className="pt-2">{task.description}</CardDescription>}
                             </CardHeader>
                             <CardContent>

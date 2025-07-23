@@ -2,7 +2,7 @@
 import { TaskSuggestion } from "@/components/task-suggestion";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Metadata } from 'next';
-import { HomeClient } from "@/components/home-client";
+import HomeMain from "@/components/home-main";
 
 export const metadata: Metadata = {
   title: 'Home - MindMate',
@@ -10,5 +10,5 @@ export const metadata: Metadata = {
 };
 
 export default function Home() {
-  return <HomeClient />;
+  return <HomeMain />;
 }
