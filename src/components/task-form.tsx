@@ -113,28 +113,7 @@ export function TaskForm({ task, onFinished, parentId, defaultValues: propDefaul
   }, [task, form, taskCategories, taskDurations]);
 
   const handleTitleBlur = (e: React.FocusEvent<HTMLInputElement>) => {
-    const title = e.target.value;
-    if (urlRegex.test(title)) {
-      startSummarizeTransition(async () => {
-        try {
-          const result = await summarizeUrl({ url: title });
-          if (result.summary) {
-            form.setValue("description", result.summary);
-             toast({
-              title: "Description Updated!",
-              description: "AI has summarized the URL for you.",
-            });
-          }
-        } catch (error) {
-          console.error("Failed to summarize URL:", error);
-          toast({
-            title: "AI Error",
-            description: "Could not summarize the URL. Please try again.",
-            variant: "destructive",
-          });
-        }
-      });
-    }
+    // No summarization. Just leave the title as-is. If it's a URL, it will be rendered as a clickable link in the task card.
   };
 
   const handleEnhanceClick = () => {

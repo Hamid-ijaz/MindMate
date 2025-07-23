@@ -2,6 +2,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useTransition } from 'react';
+import { motion } from 'framer-motion';
 import { useTasks } from '@/contexts/task-context';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -13,6 +14,7 @@ import type { Task } from '@/lib/types';
 import { Send, Loader2, PlusCircle, Check } from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { useAuth } from '@/contexts/auth-context';
+import { pageVariants, messageVariants, staggerContainer } from '@/lib/animations';
 
 
 interface SuggestedTask {
@@ -52,8 +54,8 @@ export default function ChatPage() {
         addTask({
             title: task.title,
             description: task.description,
-            category: 'Personal', // Default category
-            energyLevel: 'Low', // Default energy level
+            category: 'personal', // Default category
+            priority: 'Medium', // Default priority
             duration: 15, // Default duration
             timeOfDay: 'Afternoon', // Default time of day
             userEmail: user?.email || '', // Add missing userEmail
@@ -78,8 +80,14 @@ export default function ChatPage() {
             try {
                 // We only need to serialize root tasks for the main chat context
                 const serializableTasks = tasks.filter(t => !t.parentId).map(t => ({
-                    ...t,
+                    id: t.id,
+                    title: t.title,
                     description: t.description || "",
+                    category: t.category,
+                    energyLevel: (t.priority === 'Low' ? 'Low' : t.priority === 'High' ? 'High' : 'Medium') as 'Low' | 'Medium' | 'High', // Map priority to energyLevel
+                    duration: t.duration,
+                    timeOfDay: t.timeOfDay,
+                    completedAt: t.completedAt,
                 }));
 
                 const result = await chat({
@@ -107,17 +115,36 @@ export default function ChatPage() {
     };
 
     return (
-        <div className="container mx-auto max-w-2xl py-4 md:py-12 px-4">
-            <Card className="h-[calc(100vh-8rem)] md:h-[calc(100vh-12rem)] flex flex-col">
-                <CardHeader>
-                    <CardTitle className="text-2xl">Chat with MindMate</CardTitle>
-                    <CardDescription>Your AI-powered task companion</CardDescription>
-                </CardHeader>
-                <CardContent className="flex-1 flex flex-col gap-4 overflow-hidden">
-                    <ScrollArea className="flex-1 pr-4" ref={scrollAreaRef}>
-                        <div className="space-y-6">
+        <motion.div 
+            className="container mx-auto max-w-2xl py-4 md:py-12 px-4"
+            variants={pageVariants}
+            initial="initial"
+            animate="animate"
+            exit="exit"
+        >
+            <motion.div variants={messageVariants}>
+                <Card className="h-[calc(100vh-8rem)] md:h-[calc(100vh-12rem)] flex flex-col">
+                    <CardHeader>
+                        <CardTitle className="text-2xl">Chat with MindMate</CardTitle>
+                        <CardDescription>Your AI-powered task companion</CardDescription>
+                    </CardHeader>
+                    <CardContent className="flex-1 flex flex-col gap-4 overflow-hidden">
+                        <ScrollArea className="flex-1 pr-4" ref={scrollAreaRef}>
+                            <motion.div 
+                                className="space-y-6"
+                                variants={staggerContainer}
+                                initial="initial"
+                                animate="animate"
+                            >
                             {messages.map((message, index) => (
-                                <div key={index} className={`flex items-start gap-4 ${message.role === 'user' ? 'justify-end' : ''}`}>
+                                <motion.div 
+                                    key={index} 
+                                    className={`flex items-start gap-4 ${message.role === 'user' ? 'justify-end' : ''}`}
+                                    variants={messageVariants}
+                                    initial="initial"
+                                    animate="animate"
+                                    layout
+                                >
                                     {message.role === 'assistant' && (
                                         <Avatar className="w-10 h-10 border">
                                             <AvatarFallback className="bg-primary/20 text-primary font-bold">M</AvatarFallback>
@@ -160,7 +187,7 @@ export default function ChatPage() {
                                             <AvatarFallback className="bg-accent text-accent-foreground font-bold">Y</AvatarFallback>
                                         </Avatar>
                                     )}
-                                </div>
+                                </motion.div>
                             ))}
                              {isPending && (
                                 <div className="flex items-start gap-4">
@@ -172,21 +199,22 @@ export default function ChatPage() {
                                     </div>
                                 </div>
                             )}
-                        </div>
-                    </ScrollArea>
-                    <form onSubmit={handleSubmit} className="flex items-center gap-2 pt-4">
-                        <Input
-                            value={input}
-                            onChange={(e) => setInput(e.target.value)}
-                            placeholder="Ask to break down a task..."
-                            disabled={isPending || tasksLoading}
-                        />
-                        <Button type="submit" disabled={!input.trim() || isPending || tasksLoading}>
-                            <Send className="h-5 w-5" />
-                        </Button>
-                    </form>
-                </CardContent>
-            </Card>
-        </div>
+                            </motion.div>
+                        </ScrollArea>
+                        <form onSubmit={handleSubmit} className="flex items-center gap-2 pt-4">
+                            <Input
+                                value={input}
+                                onChange={(e) => setInput(e.target.value)}
+                                placeholder="Ask to break down a task..."
+                                disabled={isPending || tasksLoading}
+                            />
+                            <Button type="submit" disabled={!input.trim() || isPending || tasksLoading}>
+                                <Send className="h-5 w-5" />
+                            </Button>
+                        </form>
+                    </CardContent>
+                </Card>
+            </motion.div>
+        </motion.div>
     );
 }

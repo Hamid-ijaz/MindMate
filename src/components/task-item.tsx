@@ -126,7 +126,25 @@ export function TaskItem({ task, extraActions, isSubtask = false, isHistoryView 
   return (
     <Card className={isSubtask ? "border-l-4 border-primary/20" : ""}>
       <div className={isSubtask ? "p-3" : "p-6"}>
-        <CardTitle className={`${isSubtask ? "font-semibold text-base" : "text-lg"} ${task.completedAt ? "line-through text-muted-foreground" : ""} break-word`}>{task.title}</CardTitle>
+        {/* Make title clickable if it's a URL */}
+        {(() => {
+          const urlRegex = /^(https?:\/\/)?((([a-z\d]([a-z\d-]*[a-z\d])*)\.)+[a-z]{2,}|((\d{1,3}\.){3}\d{1,3}))(\:\d+)?(\/[\-a-z\d%_.~+]*)*(\?[;&a-z\d%_.~+=-]*)?(#[\-a-z\d_]*)?$/i;
+          if (urlRegex.test(task.title)) {
+            const url = task.title.startsWith('http') ? task.title : `https://${task.title}`;
+            return (
+              <CardTitle className={`${isSubtask ? "font-semibold text-base" : "text-lg"} ${task.completedAt ? "line-through text-muted-foreground" : ""} break-word`}>
+                <a href={url} target="_blank" rel="noopener noreferrer" className="underline text-blue-600 hover:text-blue-800">
+                  {task.title}
+                </a>
+              </CardTitle>
+            );
+          }
+          return (
+            <CardTitle className={`${isSubtask ? "font-semibold text-base" : "text-lg"} ${task.completedAt ? "line-through text-muted-foreground" : ""} break-word`}>
+              {task.title}
+            </CardTitle>
+          );
+        })()}
         {task.description && <CardDescription className="pt-1">{task.description}</CardDescription>}
         {task.completedAt && isHistoryView && (
             <CardDescription className="text-xs pt-1">
@@ -181,8 +199,9 @@ export function TaskItem({ task, extraActions, isSubtask = false, isHistoryView 
                 </Button>
                 )}
                 
-                {!hasPendingSubtasks && !isSubtask && <CompleteButton />}
-                {hasPendingSubtasks && !isSubtask && (
+                {/* Only show complete button for uncompleted tasks */}
+                {!task.completedAt && !hasPendingSubtasks && !isSubtask && <CompleteButton />}
+                {!task.completedAt && hasPendingSubtasks && !isSubtask && (
                   <TooltipProvider>
                     <Tooltip>
                       <TooltipTrigger asChild>
@@ -195,7 +214,15 @@ export function TaskItem({ task, extraActions, isSubtask = false, isHistoryView 
                   </TooltipProvider>
                 )}
                 
-                {isSubtask && <CompleteButton />}
+                {!task.completedAt && isSubtask && <CompleteButton />}
+
+                {/* Show redo button for completed tasks */}
+                {task.completedAt && (
+                  <Button variant="ghost" size="sm" onClick={handleUncomplete}>
+                    <RotateCcw className="h-4 w-4 md:mr-2" />
+                    <span className="hidden md:inline">Redo</span>
+                  </Button>
+                )}
 
                 <Button variant="ghost" size="icon" onClick={() => startEditingTask(task.id)} disabled={isDeleting || isCompleting}>
                 <Edit className="h-4 w-4" />

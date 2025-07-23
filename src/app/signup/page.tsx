@@ -2,6 +2,7 @@
 "use client";
 
 import { useForm } from "react-hook-form";
+import { motion } from 'framer-motion';
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { useRouter } from "next/navigation";
@@ -18,6 +19,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { startOfDay } from "date-fns";
+import { pageVariants, cardVariants } from '@/lib/animations';
 
 const phoneRegex = new RegExp(
   /^([+]?[\s0-9]+)?(\d{3}|[(]?[0-9]+[)])?([-]?[\s]?[0-9])+$/
@@ -84,8 +86,15 @@ export default function SignupPage() {
   };
 
   return (
-    <div className="flex items-center justify-center min-h-[calc(100vh-4rem)] bg-background py-12 px-4">
-      <Card className="w-full max-w-lg">
+    <motion.div 
+      className="flex items-center justify-center min-h-[calc(100vh-4rem)] bg-background py-12 px-4"
+      variants={pageVariants}
+      initial="initial"
+      animate="animate"
+      exit="exit"
+    >
+      <motion.div variants={cardVariants}>
+        <Card className="w-full max-w-lg">
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)}>
             <CardHeader>
@@ -222,6 +231,7 @@ export default function SignupPage() {
           </Link>
         </p>
       </Card>
-    </div>
+      </motion.div>
+    </motion.div>
   );
 }

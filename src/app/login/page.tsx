@@ -2,6 +2,7 @@
 "use client";
 
 import { useState } from "react";
+import { motion } from 'framer-motion';
 import { useAuth } from "@/contexts/auth-context";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -10,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import Link from "next/link";
 import { useToast } from "@/hooks/use-toast";
 import { useRouter } from "next/navigation";
+import { pageVariants, cardVariants } from '@/lib/animations';
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -51,8 +53,15 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="flex items-center justify-center min-h-[calc(100vh-4rem)] bg-background">
-      <Card className="w-full max-w-sm">
+    <motion.div 
+      className="flex items-center justify-center min-h-[calc(100vh-4rem)] bg-background"
+      variants={pageVariants}
+      initial="initial"
+      animate="animate"
+      exit="exit"
+    >
+      <motion.div variants={cardVariants}>
+        <Card className="w-full max-w-sm">
         <form onSubmit={handleSubmit}>
             <CardHeader>
             <CardTitle>Welcome Back</CardTitle>
@@ -94,6 +103,7 @@ export default function LoginPage() {
             </Link>
         </p>
       </Card>
-    </div>
+      </motion.div>
+    </motion.div>
   );
 }

@@ -7,12 +7,13 @@ import { Badge } from '@/components/ui/badge';
 import { format, isToday, isYesterday, startOfDay } from 'date-fns';
 // ...existing code...
 import { Button } from '@/components/ui/button';
-import { RotateCcw, ChevronDown, ChevronUp, CornerDownRight } from 'lucide-react';
+import { RotateCcw, ChevronDown, ChevronUp, CornerDownRight, Edit, Trash2, ExternalLink } from 'lucide-react';
 import { SubtaskList } from '@/components/subtask-list';
 import { useState, useMemo } from 'react';
 import type { Task } from '@/lib/types';
 import Link from 'next/link';
 import { Skeleton } from '@/components/ui/skeleton';
+import { motion, AnimatePresence } from 'framer-motion';
 
 function HistorySkeleton() {
   return (
@@ -44,7 +45,7 @@ const getGroupTitle = (date: Date): string => {
 };
 
 export default function HistoryPage() {
-  const { tasks, uncompleteTask, isLoading } = useTasks();
+  const { tasks, uncompleteTask, deleteTask, startEditingTask, isLoading } = useTasks();
   const [expandedTasks, setExpandedTasks] = useState<Record<string, boolean>>({});
 
   const allCompletedTasks = useMemo(() => {
@@ -83,7 +84,14 @@ export default function HistoryPage() {
     const parentTask = task.parentId ? getParentTask(task.parentId) : null;
 
     return (
-      <Card key={task.id} className="bg-card/50 opacity-80">
+      <Card key={task.id} className="bg-card/50 opacity-80 hover:opacity-100 transition-all duration-200">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -20 }}
+          whileHover={{ scale: 1.02 }}
+          transition={{ duration: 0.2 }}
+        >
         <CardHeader>
           {parentTask && !parentTask.completedAt && (
              <CardDescription className="flex items-center text-xs mb-2">
@@ -110,6 +118,20 @@ export default function HistoryPage() {
                 Subtasks ({subtasks.length})
               </Button>
             )}
+            <Button variant="ghost" size="sm" asChild>
+              <Link href={`/task/${task.id}`}>
+                <ExternalLink className="h-4 w-4 mr-2" />
+                View
+              </Link>
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => startEditingTask(task.id)}>
+              <Edit className="h-4 w-4 mr-2" />
+              Edit
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => deleteTask(task.id)} className="text-destructive hover:text-destructive">
+              <Trash2 className="h-4 w-4 mr-2" />
+              Delete
+            </Button>
             <Button variant="ghost" size="sm" onClick={() => uncompleteTask(task.id)}>
                 <RotateCcw className="mr-2 h-4 w-4" />
                 Redo
@@ -120,46 +142,94 @@ export default function HistoryPage() {
             <SubtaskList parentTask={task} subtasks={subtasks} isHistoryView={true} />
           </CardContent>
         )}
+        </motion.div>
       </Card>
     )
   }
 
   return (
-    <div className="container mx-auto max-w-4xl py-8 md:py-16 px-4">
-      <div className="mb-8">
+    <motion.div 
+      className="container mx-auto max-w-4xl py-8 md:py-16 px-4"
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5 }}
+    >
+      <motion.div 
+        className="mb-8"
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.1, duration: 0.5 }}
+      >
         <h1 className="text-3xl font-bold tracking-tighter sm:text-4xl">Completed Tasks</h1>
         <p className="mt-2 text-muted-foreground">Review your accomplished tasks.</p>
-      </div>
+      </motion.div>
       
       <div className="space-y-12">
         {isLoading ? (
           <HistorySkeleton />
         ) : Object.keys(groupedTasks).length === 0 ? (
-            <p className="text-muted-foreground">You haven't completed any tasks yet.</p>
+            <motion.p 
+              className="text-muted-foreground"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.3 }}
+            >
+              You haven't completed any tasks yet.
+            </motion.p>
         ) : (
-          Object.entries(groupedTasks).map(([groupTitle, tasksInGroup]) => (
-            <div key={groupTitle}>
-              <h2 className="text-2xl font-semibold mb-4">{groupTitle}</h2>
-              <div className="space-y-4">
-                {tasksInGroup.map(task => {
-                    // Only render root tasks or orphaned subtasks directly
-                    // Subtasks of completed parents are rendered recursively within the parent
-                    if (!task.parentId) {
-                      return renderTaskCard(task);
-                    }
-                    const parent = getParentTask(task.parentId!);
-                    if (parent && !parent.completedAt) {
-                      return renderTaskCard(task); // Render orphaned subtask
-                    }
-                    // If parent is also completed, it will be rendered by the parent's `renderTaskCard`
-                    // so we don't render it here to avoid duplication.
-                    return null;
-                })}
-              </div>
-            </div>
-          ))
+          <AnimatePresence>
+            {Object.entries(groupedTasks).map(([groupTitle, tasksInGroup], groupIndex) => (
+              <motion.div 
+                key={groupTitle}
+                initial={{ opacity: 0, y: 40 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -40 }}
+                transition={{ delay: groupIndex * 0.1, duration: 0.5 }}
+              >
+                <h2 className="text-2xl font-semibold mb-4">{groupTitle}</h2>
+                <div className="space-y-4">
+                  <AnimatePresence>
+                    {tasksInGroup.map((task, taskIndex) => {
+                      // Only render root tasks or orphaned subtasks directly
+                      // Subtasks of completed parents are rendered recursively within the parent
+                      if (!task.parentId) {
+                        return (
+                          <motion.div
+                            key={task.id}
+                            initial={{ opacity: 0, x: -20 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            exit={{ opacity: 0, x: 20 }}
+                            transition={{ delay: taskIndex * 0.05, duration: 0.3 }}
+                          >
+                            {renderTaskCard(task)}
+                          </motion.div>
+                        );
+                      }
+                      const parent = getParentTask(task.parentId!);
+                      if (parent && !parent.completedAt) {
+                        return (
+                          <motion.div
+                            key={task.id}
+                            initial={{ opacity: 0, x: -20 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            exit={{ opacity: 0, x: 20 }}
+                            transition={{ delay: taskIndex * 0.05, duration: 0.3 }}
+                          >
+                            {renderTaskCard(task)}
+                          </motion.div>
+                        ); // Render orphaned subtask
+                      }
+                      // If parent is also completed, it will be rendered by the parent's `renderTaskCard`
+                      // so we don't render it here to avoid duplication.
+                      return null;
+                    })}
+                  </AnimatePresence>
+                </div>
+              </motion.div>
+            ))}
+          </AnimatePresence>
         )}
       </div>
-    </div>
+    </motion.div>
   );
 }
