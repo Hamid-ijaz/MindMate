@@ -16,6 +16,10 @@ import { useNotifications } from '@/contexts/notification-context';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCompletionAudio } from '@/hooks/use-completion-audio';
+import { ItemActionsDropdown } from './item-actions-dropdown';
+import { ShareDialog } from './share-dialog';
+import { SharingHistory } from './sharing-history';
+import { safeDate, safeDateFormat } from '@/lib/utils';
 
 
 interface TaskItemProps {
@@ -25,13 +29,15 @@ interface TaskItemProps {
   isHistoryView?: boolean;
 }
 
-export function TaskItem({ task, extraActions, isSubtask = false, isHistoryView = false }: TaskItemProps) {
+export function TaskItem({ task, extraActions, isSubtask = false, isHistoryView = false, className = "" }: TaskItemProps & { className?: string }) {
   const { tasks, deleteTask, acceptTask, uncompleteTask, startEditingTask } = useTasks();
   const { deleteNotification } = useNotifications();
   const { handleTaskCompletion } = useCompletionAudio();
   const [showSubtasks, setShowSubtasks] = useState(false);
   const [isCompleting, setIsCompleting] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [shareDialog, setShareDialog] = useState<{ isOpen: boolean, itemType: 'task' | 'note', itemTitle: string, itemId: string } | null>(null);
+  const [showSharingHistory, setShowSharingHistory] = useState(false);
   const router = useRouter();
   const completeButtonRef = useRef<HTMLButtonElement>(null);
 
@@ -46,21 +52,29 @@ export function TaskItem({ task, extraActions, isSubtask = false, isHistoryView 
     });
     await deleteNotification(task.id);
     setIsCompleting(false);
-  }
+  };
 
   const handleDelete = async () => {
     setIsDeleting(true);
     await deleteTask(task.id);
     await deleteNotification(task.id);
     setIsDeleting(false);
-  }
+  };
+
+  const handleShare = () => {
+    setShareDialog({ isOpen: true, itemType: 'task', itemTitle: task.title, itemId: task.id });
+  };
+
+  const handleEdit = () => {
+    startEditingTask(task.id);
+  };
 
   const handleUncomplete = async () => {
     await uncompleteTask(task.id);
-    if(isHistoryView) {
-        router.push(`/task/${task.id}`);
+    if (isHistoryView) {
+      router.push(`/task/${task.id}`);
     }
-  }
+  };
 
   const CompleteButton = useCallback(() => (
     <Button ref={completeButtonRef} variant="outline" size="sm" onClick={handleComplete} disabled={isCompleting}>
@@ -70,184 +84,226 @@ export function TaskItem({ task, extraActions, isSubtask = false, isHistoryView 
   ), [isCompleting, handleComplete, completeButtonRef]);
 
   const RedoButton = () => (
-     <Button variant="ghost" size="sm" onClick={handleUncomplete}>
-        <RotateCcw className="mr-2 h-4 w-4" />
-        Redo
+    <Button variant="ghost" size="sm" onClick={handleUncomplete}>
+      <RotateCcw className="mr-2 h-4 w-4" />
+      Redo
     </Button>
   );
 
-  // If we are on the task detail page, we don't need to render the full card again.
-  // We just provide the action buttons. This logic is a bit of a hack.
   const isOnTaskPage = typeof window !== 'undefined' && window.location.pathname?.includes('/task/');
 
   if (isOnTaskPage && !isHistoryView) {
-     return (
+    return (
+      <>
+        {extraActions}
+        {!isSubtask && subtasks.length > 0 && (
+          <Button variant="ghost" size="sm" onClick={() => setShowSubtasks(!showSubtasks)}>
+            {showSubtasks ? <ChevronUp className="h-4 w-4 mr-2" /> : <ChevronDown className="h-4 w-4 mr-2" />}
+            <span className="hidden md:inline">Subtasks</span>
+            <span className="md:ml-1">({pendingSubtasks.length})</span>
+          </Button>
+        )}
+
+        {!hasPendingSubtasks && !isSubtask && <CompleteButton />}
+        {hasPendingSubtasks && !isSubtask && (
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span tabIndex={0}><CompleteButton /></span>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Complete all sub-tasks first.</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        )}
+
+        {isSubtask && <CompleteButton />}
+
+        <Button variant="ghost" size="icon" onClick={() => startEditingTask(task.id)} disabled={isDeleting || isCompleting}>
+          <Edit className="h-4 w-4" />
+        </Button>
+        <Button variant="ghost" size="icon" onClick={handleDelete} disabled={isDeleting || isCompleting}>
+          {isDeleting ? <Loader2 className="h-4 w-4 animate-spin text-destructive" /> : <Trash2 className="h-4 w-4 text-destructive" />}
+        </Button>
+      </>
+    );
+  }
+
+  if (isOnTaskPage && isHistoryView) {
+    return <RedoButton />;
+  }
+
+  return (
+    <Card className={`${isSubtask ? "border-l-4 border-primary/20" : ""} group hover:shadow-md transition-all duration-200 ${className}`}>
+      <div className={isSubtask ? "p-3" : "p-6"}>
+        {/* Title and description */}
+        <div className="flex items-start justify-between gap-3 mb-4">
+          <div className="flex-1 min-w-0">
+            {/* Make title clickable if it's a URL */}
+            {(() => {
+              const urlRegex = /^(https?:\/\/)?((([a-z\d]([a-z\d-]*[a-z\d])*)\.)+[a-z]{2,}|((\d{1,3}\.){3}\d{1,3}))(\:\d+)?(\/[\-a-z\d%_.~+]*)*(\?[;&a-z\d%_.~+=-]*)?(#[\-a-z\d_]*)?$/i;
+              if (urlRegex.test(task.title)) {
+                const url = task.title.startsWith('http') ? task.title : `https://${task.title}`;
+                return (
+                  <CardTitle className={`${isSubtask ? "font-semibold text-base" : "text-lg"} ${task.completedAt ? "line-through text-muted-foreground" : ""} break-word`}>
+                    <a href={url} target="_blank" rel="noopener noreferrer" className="underline text-blue-600 hover:text-blue-800">
+                      {task.title}
+                    </a>
+                  </CardTitle>
+                );
+              }
+              return (
+                <CardTitle className={`${isSubtask ? "font-semibold text-base" : "text-lg"} ${task.completedAt ? "line-through text-muted-foreground" : ""} break-word`}>
+                  {task.title}
+                </CardTitle>
+              );
+            })()}
+            {task.description && <CardDescription className="pt-1">{task.description}</CardDescription>}
+            {task.completedAt && isHistoryView && (
+              <CardDescription className="text-xs pt-1">
+                Completed
+              </CardDescription>
+            )}
+          </div>
+
+          {/* Actions dropdown - visible on hover or always on mobile */}
+          <div className="flex-shrink-0 opacity-0 group-hover:opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-200">
+            <ItemActionsDropdown
+              item={task}
+              itemType="task"
+              onShare={handleShare}
+              onEdit={handleEdit}
+              onDelete={handleDelete}
+              isDeleting={isDeleting}
+              disabled={isCompleting}
+              showExternalLink={!isSubtask}
+            />
+          </div>
+        </div>
+
+        {/* Tags inside the card body */}
+        {!isHistoryView && (
+          <div className="flex flex-wrap gap-2 mb-3">
+            <Badge variant="secondary">{task.category}</Badge>
+            <Badge
+              variant={
+                task.priority === 'Critical' ? 'destructive' :
+                  task.priority === 'High' ? 'default' :
+                    task.priority === 'Medium' ? 'outline' : 'secondary'
+              }
+            >
+              {task.priority} Priority
+            </Badge>
+            <Badge variant="secondary">{task.duration} min</Badge>
+            <Badge variant="secondary">{task.timeOfDay}</Badge>
+            {task.reminderAt && (
+              <Badge variant="outline" className="flex items-center gap-1">
+                <CalendarIcon className="h-3 w-3" />
+                {safeDateFormat(task.reminderAt, "MMM d, h:mm a", "Invalid date")}
+              </Badge>
+            )}
+            {task.recurrence && task.recurrence.frequency !== 'none' && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Badge variant="outline" className="flex items-center gap-1 cursor-default capitalize">
+                      <Repeat className="h-3 w-3" />
+                      {task.recurrence.frequency}
+                    </Badge>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    {task.recurrence.endDate ? 
+                      `Repeats ${task.recurrence.frequency} until ${safeDateFormat(task.recurrence.endDate, "MMM d, yyyy", "Invalid date")}` :
+                      `Repeats ${task.recurrence.frequency}`
+                    }
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
+          </div>
+        )}
+      </div>
+      {!isHistoryView && (
         <>
+          <CardFooter className={`flex flex-wrap justify-end gap-2 ${isSubtask ? 'px-3 pb-3 pt-0' : 'p-6 pt-0'}`}>
             {extraActions}
+            {!isSubtask && (
+              <Button variant="ghost" size="sm" asChild>
+                <Link href={`/task/${task.id}`}>
+                  <ExternalLink className="h-4 w-4 md:mr-2" />
+                  <span className="hidden md:inline">View</span>
+                </Link>
+              </Button>
+            )}
             {!isSubtask && subtasks.length > 0 && (
-            <Button variant="ghost" size="sm" onClick={() => setShowSubtasks(!showSubtasks)}>
+              <Button variant="ghost" size="sm" onClick={() => setShowSubtasks(!showSubtasks)}>
                 {showSubtasks ? <ChevronUp className="h-4 w-4 mr-2" /> : <ChevronDown className="h-4 w-4 mr-2" />}
                 <span className="hidden md:inline">Subtasks</span>
                 <span className="md:ml-1">({pendingSubtasks.length})</span>
-            </Button>
+              </Button>
             )}
-            
-            {!hasPendingSubtasks && !isSubtask && <CompleteButton />}
-            {hasPendingSubtasks && !isSubtask && (
-                <TooltipProvider>
+
+            {!task.completedAt && !hasPendingSubtasks && !isSubtask && <CompleteButton />}
+            {!task.completedAt && hasPendingSubtasks && !isSubtask && (
+              <TooltipProvider>
                 <Tooltip>
-                    <TooltipTrigger asChild>
+                  <TooltipTrigger asChild>
                     <span tabIndex={0}><CompleteButton /></span>
-                    </TooltipTrigger>
-                    <TooltipContent>
+                  </TooltipTrigger>
+                  <TooltipContent>
                     <p>Complete all sub-tasks first.</p>
-                    </TooltipContent>
+                  </TooltipContent>
                 </Tooltip>
-                </TooltipProvider>
+              </TooltipProvider>
             )}
-            
-            {isSubtask && <CompleteButton />}
 
-            <Button variant="ghost" size="icon" onClick={() => startEditingTask(task.id)} disabled={isDeleting || isCompleting}>
-              <Edit className="h-4 w-4" />
-            </Button>
-            <Button variant="ghost" size="icon" onClick={handleDelete} disabled={isDeleting || isCompleting}>
-              {isDeleting ? <Loader2 className="h-4 w-4 animate-spin text-destructive" /> : <Trash2 className="h-4 w-4 text-destructive" />}
-            </Button>
+            {!task.completedAt && isSubtask && <CompleteButton />}
+
+            {task.completedAt && (
+              <Button variant="ghost" size="sm" onClick={handleUncomplete}>
+                <RotateCcw className="h-4 w-4 md:mr-2" />
+                <span className="hidden md:inline">Redo</span>
+              </Button>
+            )}
+          </CardFooter>
         </>
-     )
-  }
-
-   if (isOnTaskPage && isHistoryView) {
-       return <RedoButton />;
-   }
-
-
-  return (
-    <Card className={isSubtask ? "border-l-4 border-primary/20" : ""}>
-      <div className={isSubtask ? "p-3" : "p-6"}>
-        {/* Make title clickable if it's a URL */}
-        {(() => {
-          const urlRegex = /^(https?:\/\/)?((([a-z\d]([a-z\d-]*[a-z\d])*)\.)+[a-z]{2,}|((\d{1,3}\.){3}\d{1,3}))(\:\d+)?(\/[\-a-z\d%_.~+]*)*(\?[;&a-z\d%_.~+=-]*)?(#[\-a-z\d_]*)?$/i;
-          if (urlRegex.test(task.title)) {
-            const url = task.title.startsWith('http') ? task.title : `https://${task.title}`;
-            return (
-              <CardTitle className={`${isSubtask ? "font-semibold text-base" : "text-lg"} ${task.completedAt ? "line-through text-muted-foreground" : ""} break-word`}>
-                <a href={url} target="_blank" rel="noopener noreferrer" className="underline text-blue-600 hover:text-blue-800">
-                  {task.title}
-                </a>
-              </CardTitle>
-            );
-          }
-          return (
-            <CardTitle className={`${isSubtask ? "font-semibold text-base" : "text-lg"} ${task.completedAt ? "line-through text-muted-foreground" : ""} break-word`}>
-              {task.title}
-            </CardTitle>
-          );
-        })()}
-        {task.description && <CardDescription className="pt-1">{task.description}</CardDescription>}
-        {task.completedAt && isHistoryView && (
-            <CardDescription className="text-xs pt-1">
-                Completed
-            </CardDescription>
-        )}
-      </div>
-       {!isHistoryView && (
-        <>
-            <CardContent className={`flex flex-wrap gap-2 ${isSubtask ? 'px-3 pt-0 pb-2' : 'p-6 pt-0'}`}>
-                <Badge variant="secondary">{task.category}</Badge>
-                <Badge variant={task.priority === 'Critical' ? 'destructive' : task.priority === 'High' ? 'default' : task.priority === 'Medium' ? 'outline' : 'secondary'}>{task.priority} Priority</Badge>
-                <Badge variant="secondary">{task.duration} min</Badge>
-                <Badge variant="secondary">{task.timeOfDay}</Badge>
-                {task.reminderAt && (
-                   <Badge variant="outline" className="flex items-center gap-1">
-                      <CalendarIcon className="h-3 w-3" />
-                      {format(new Date(task.reminderAt), "MMM d, h:mm a")}
-                   </Badge>
-                )}
-                {task.recurrence && task.recurrence.frequency !== 'none' && (
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                         <Badge variant="outline" className="flex items-center gap-1 cursor-default capitalize">
-                            <Repeat className="h-3 w-3" />
-                            {task.recurrence.frequency}
-                         </Badge>
-                      </TooltipTrigger>
-                       <TooltipContent>
-                          {task.recurrence.endDate ? `Repeats ${task.recurrence.frequency} until ${format(new Date(task.recurrence.endDate), "MMM d, yyyy")}` : `Repeats ${task.recurrence.frequency}`}
-                       </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                )}
-            </CardContent>
-            <CardFooter className={`flex flex-wrap justify-end gap-2 ${isSubtask ? 'px-3 pb-3 pt-0' : 'p-6 pt-0'}`}>
-                {extraActions}
-                {!isSubtask && (
-                     <Button variant="ghost" size="sm" asChild>
-                        <Link href={`/task/${task.id}`}>
-                            <ExternalLink className="h-4 w-4 md:mr-2"/>
-                             <span className="hidden md:inline">View</span>
-                        </Link>
-                     </Button>
-                )}
-                {!isSubtask && subtasks.length > 0 && (
-                <Button variant="ghost" size="sm" onClick={() => setShowSubtasks(!showSubtasks)}>
-                    {showSubtasks ? <ChevronUp className="h-4 w-4 mr-2" /> : <ChevronDown className="h-4 w-4 mr-2" />}
-                    <span className="hidden md:inline">Subtasks</span>
-                    <span className="md:ml-1">({pendingSubtasks.length})</span>
-                </Button>
-                )}
-                
-                {/* Only show complete button for uncompleted tasks */}
-                {!task.completedAt && !hasPendingSubtasks && !isSubtask && <CompleteButton />}
-                {!task.completedAt && hasPendingSubtasks && !isSubtask && (
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <span tabIndex={0}><CompleteButton /></span>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p>Complete all sub-tasks first.</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                )}
-                
-                {!task.completedAt && isSubtask && <CompleteButton />}
-
-                {/* Show redo button for completed tasks */}
-                {task.completedAt && (
-                  <Button variant="ghost" size="sm" onClick={handleUncomplete}>
-                    <RotateCcw className="h-4 w-4 md:mr-2" />
-                    <span className="hidden md:inline">Redo</span>
-                  </Button>
-                )}
-
-                <Button variant="ghost" size="icon" onClick={() => startEditingTask(task.id)} disabled={isDeleting || isCompleting}>
-                <Edit className="h-4 w-4" />
-                </Button>
-                <Button variant="ghost" size="icon" onClick={handleDelete} disabled={isDeleting || isCompleting}>
-                  {isDeleting ? <Loader2 className="h-4 w-4 animate-spin text-destructive" /> : <Trash2 className="h-4 w-4 text-destructive" />}
-                </Button>
-            </CardFooter>
-        </>
-       )}
-       {isHistoryView && (
-            <CardFooter className={`flex justify-end gap-2 ${isSubtask ? 'px-3 pb-3 pt-0' : 'p-6 pt-0'}`}>
-                 <Button variant="ghost" size="sm" asChild>
-                    <Link href={`/task/${task.id}`}>
-                        <ExternalLink className="h-4 w-4 md:mr-2"/>
-                            <span className="hidden md:inline">View Details</span>
-                    </Link>
-                </Button>
-                <RedoButton />
-            </CardFooter>
-       )}
+      )}
+      {isHistoryView && (
+        <CardFooter className={`flex justify-end gap-2 ${isSubtask ? 'px-3 pb-3 pt-0' : 'p-6 pt-0'}`}>
+          <Button variant="ghost" size="sm" asChild>
+            <Link href={`/task/${task.id}`}>
+              <ExternalLink className="h-4 w-4 md:mr-2" />
+              <span className="hidden md:inline">View Details</span>
+            </Link>
+          </Button>
+          <RedoButton />
+        </CardFooter>
+      )}
       {showSubtasks && !isSubtask && !isHistoryView && (
         <CardContent>
-            <SubtaskList parentTask={task} subtasks={subtasks} />
+          <SubtaskList parentTask={task} subtasks={subtasks} />
         </CardContent>
+      )}
+
+      {shareDialog && (
+        <ShareDialog
+          isOpen={shareDialog.isOpen}
+          onClose={() => setShareDialog(null)}
+          itemType={shareDialog.itemType}
+          itemTitle={shareDialog.itemTitle}
+          itemId={shareDialog.itemId}
+        />
+      )}
+      
+      {showSharingHistory && (
+        <SharingHistory
+          isOpen={showSharingHistory}
+          onClose={() => setShowSharingHistory(false)}
+          itemId={task.id}
+          itemType="task"
+          itemTitle={task.title}
+        />
       )}
     </Card>
   );

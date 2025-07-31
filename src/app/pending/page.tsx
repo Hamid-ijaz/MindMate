@@ -1,16 +1,18 @@
 
 "use client";
 
-import { useState, useTransition, useEffect, useRef, Suspense } from 'react';
+import { useState, useTransition, useEffect, useRef, Suspense, useMemo } from 'react';
 import { useTasks } from '@/contexts/task-context';
 // ...existing code...
 import { TaskItem } from '@/components/task-item';
 import { Button } from '@/components/ui/button';
-import { Wand2, Loader2, PlusCircle } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Wand2, Loader2, PlusCircle, Search, Filter, X, SortAsc } from 'lucide-react';
 import { AlertDialog, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { rewordTask } from '@/ai/flows/reword-task-flow';
 import { useToast } from '@/hooks/use-toast';
-import type { Task } from '@/lib/types';
+import type { Task, Priority, TaskCategory } from '@/lib/types';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
@@ -18,6 +20,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useSearchParams } from 'next/navigation';
 import { useAuth } from '@/contexts/auth-context';
 import { motion, AnimatePresence } from 'framer-motion';
+import { cn } from '@/lib/utils';
 
 interface SuggestedTask {
   title: string;
@@ -53,12 +56,46 @@ function PendingTasksContent() {
   const [selectedTasks, setSelectedTasks] = useState<Record<string, boolean>>({});
   const [taskToReword, setTaskToReword] = useState<Task | null>(null);
   
+  // Search and filter state
+  const [search, setSearch] = useState("");
+  const [category, setCategory] = useState("");
+  const [priority, setPriority] = useState("");
+  const [sortBy, setSortBy] = useState<'date' | 'priority' | 'alphabetical'>('date');
+  const [showFilters, setShowFilters] = useState(false);
+  
   const searchParams = useSearchParams();
   const taskRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const { user } = useAuth();
 
   const rootTasks = tasks.filter(t => !t.parentId);
   const uncompletedTasks = rootTasks.filter(t => !t.completedAt);
+
+  // Filtered and sorted tasks
+  const filteredAndSortedTasks = useMemo(() => {
+    let filtered = uncompletedTasks.filter(task => {
+      const matchesSearch = search === "" || 
+        task.title.toLowerCase().includes(search.toLowerCase()) || 
+        (task.description || "").toLowerCase().includes(search.toLowerCase());
+      const matchesCategory = category === "" || category === "all-categories" || task.category === category;
+      const matchesPriority = priority === "" || priority === "all-priorities" || task.priority === priority;
+      
+      return matchesSearch && matchesCategory && matchesPriority;
+    });
+
+    // Sort the filtered tasks
+    return filtered.sort((a, b) => {
+      switch (sortBy) {
+        case 'priority':
+          const priorityOrder = { 'Critical': 0, 'High': 1, 'Medium': 2, 'Low': 3 };
+          return priorityOrder[a.priority] - priorityOrder[b.priority];
+        case 'alphabetical':
+          return a.title.localeCompare(b.title);
+        case 'date':
+        default:
+          return b.createdAt - a.createdAt;
+      }
+    });
+  }, [uncompletedTasks, search, category, priority, sortBy]);
 
   useEffect(() => {
     const taskId = searchParams.get('taskId');
@@ -159,6 +196,131 @@ function PendingTasksContent() {
       >
         <h1 className="text-3xl font-bold tracking-tighter sm:text-4xl">Pending Tasks</h1>
         <p className="mt-2 text-muted-foreground">Here's what's on your plate. You can do it!</p>
+        
+        {/* Search and Filter Section */}
+        <Card className="mt-6 border-0 shadow-lg bg-gradient-to-r from-background to-muted/30 backdrop-blur-sm">
+          <CardHeader className="pb-4">
+            <div className="space-y-4">
+              {/* Search Input */}
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search tasks..."
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  className="pl-10 pr-10 h-11 border-2 focus:border-primary/50 transition-all rounded-lg bg-background/80 backdrop-blur-sm"
+                />
+                {search && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 h-7 w-7 p-0 hover:bg-destructive/10"
+                    onClick={() => setSearch("")}
+                  >
+                    <X className="w-4 h-4" />
+                  </Button>
+                )}
+              </div>
+              
+              {/* Filter Toggle */}
+              <div className="flex items-center gap-2">
+                <Button 
+                  variant="outline" 
+                  onClick={() => setShowFilters(!showFilters)}
+                  className={cn(
+                    "h-9 transition-all",
+                    showFilters && "bg-primary/10 border-primary/30 shadow-sm"
+                  )}
+                >
+                  <Filter className="w-4 h-4 mr-2" />
+                  Filters
+                  {showFilters && <span className="ml-1 text-xs">✓</span>}
+                </Button>
+                
+                <Button 
+                  variant="outline" 
+                  onClick={() => {
+                    setSearch("");
+                    setCategory("");
+                    setPriority("");
+                    setSortBy('date');
+                    setShowFilters(false);
+                  }}
+                  className="h-9"
+                >
+                  <X className="w-4 h-4 mr-2" />
+                  Clear
+                </Button>
+              </div>
+              
+              {/* Expanded Filters */}
+              <AnimatePresence>
+                {showFilters && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0, y: -10 }}
+                    animate={{ opacity: 1, height: "auto", y: 0 }}
+                    exit={{ opacity: 0, height: 0, y: -10 }}
+                    transition={{ duration: 0.2 }}
+                    className="overflow-hidden"
+                  >
+                    <div className="pt-4 border-t border-border/50">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        {/* Category Filter */}
+                        <div className="space-y-2">
+                          <label className="text-sm font-medium text-muted-foreground">Category</label>
+                          <Select value={category} onValueChange={setCategory}>
+                            <SelectTrigger className="h-9">
+                              <SelectValue placeholder="All Categories" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="all-categories">All Categories</SelectItem>
+                              <SelectItem value="Work">💼 Work</SelectItem>
+                              <SelectItem value="Personal">🏠 Personal</SelectItem>
+                              <SelectItem value="Health">❤️ Health</SelectItem>
+                              <SelectItem value="Other">📂 Other</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        
+                        {/* Priority Filter */}
+                        <div className="space-y-2">
+                          <label className="text-sm font-medium text-muted-foreground">Priority</label>
+                          <Select value={priority} onValueChange={setPriority}>
+                            <SelectTrigger className="h-9">
+                              <SelectValue placeholder="All Priorities" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="all-priorities">All Priorities</SelectItem>
+                              <SelectItem value="Critical">🔥 Critical</SelectItem>
+                              <SelectItem value="High">⚡ High</SelectItem>
+                              <SelectItem value="Medium">📋 Medium</SelectItem>
+                              <SelectItem value="Low">📝 Low</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        
+                        {/* Sort By */}
+                        <div className="space-y-2">
+                          <label className="text-sm font-medium text-muted-foreground">Sort By</label>
+                          <Select value={sortBy} onValueChange={(value: 'date' | 'priority' | 'alphabetical') => setSortBy(value)}>
+                            <SelectTrigger className="h-9">
+                              <SelectValue placeholder="Sort by" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="date">📅 Date Added</SelectItem>
+                              <SelectItem value="priority">⚡ Priority Level</SelectItem>
+                              <SelectItem value="alphabetical">🔤 Alphabetical</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          </CardHeader>
+        </Card>
       </motion.div>
       
       <div className="space-y-12">
@@ -167,22 +329,33 @@ function PendingTasksContent() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2, duration: 0.5 }}
         >
-          <h2 className="text-2xl font-semibold mb-4">To-Do ({isLoading ? '...' : uncompletedTasks.length})</h2>
+          <h2 className="text-2xl font-semibold mb-4">
+            To-Do ({isLoading ? '...' : filteredAndSortedTasks.length}
+            {search || category || priority ? ` of ${uncompletedTasks.length}` : ''})
+          </h2>
           <div className="space-y-4">
             {isLoading ? (
               <PendingTasksSkeleton />
-            ) : uncompletedTasks.length === 0 ? (
-              <motion.p 
-                className="text-muted-foreground"
+            ) : filteredAndSortedTasks.length === 0 ? (
+              <motion.div 
+                className="text-center py-12"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ delay: 0.4 }}
               >
-                No pending tasks. Great job!
-              </motion.p>
+                {search || category || priority ? (
+                  <div className="space-y-2">
+                    <Search className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                    <p className="text-lg text-muted-foreground">No tasks match your filters</p>
+                    <p className="text-sm text-muted-foreground">Try adjusting your search terms or filters</p>
+                  </div>
+                ) : (
+                  <p className="text-muted-foreground">No pending tasks. Great job!</p>
+                )}
+              </motion.div>
             ) : (
               <AnimatePresence>
-                {uncompletedTasks.map((task, index) => (
+                {filteredAndSortedTasks.map((task, index) => (
                   <motion.div 
                     key={task.id} 
                     ref={el => { taskRefs.current[task.id] = el; }}

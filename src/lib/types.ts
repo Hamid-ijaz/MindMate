@@ -60,7 +60,8 @@ export interface Note {
     userEmail: string;
     title: string;
     content: string; // Will store HTML content for rich text
-    imageUrl?: string;
+    imageUrl?: string | null;
+    audioUrl?: string | null;
     color?: string; // e.g., hex code for background color
     fontSize?: number; // New property for font size
     createdAt: number;
@@ -83,3 +84,88 @@ export const RewordTaskOutputSchema = z.object({
   suggestedTasks: z.array(SuggestedTaskSchema).describe("A list of 2-4 smaller, concrete steps to break down the original task."),
 });
 export type RewordTaskOutput = z.infer<typeof RewordTaskOutputSchema>;
+
+// Sharing and collaboration types
+export type SharePermission = 'view' | 'edit';
+
+export interface SharedItem {
+  id: string;
+  itemId: string; // The task or note ID
+  itemType: 'task' | 'note';
+  ownerEmail: string;
+  ownerName?: string; // Display name of owner
+  permission: SharePermission;
+  shareToken: string; // Unique token for the share URL
+  createdAt: number;
+  updatedAt: number;
+  expiresAt?: number; // Optional expiration
+  isActive: boolean;
+  viewCount: number; // Track how many times viewed
+  lastViewedAt?: number; // Last time someone viewed
+  lastEditedAt?: number; // Last time someone edited
+  lastEditedBy?: string; // Email of last editor
+  allowComments?: boolean; // Allow comments on shared item
+  allowDownload?: boolean; // Allow downloading/duplicating
+  history: ShareHistoryEntry[];
+  collaborators: ShareCollaborator[]; // People with direct access
+}
+
+export interface ShareCollaborator {
+  email: string;
+  name?: string;
+  permission: SharePermission;
+  addedAt: number;
+  addedBy: string; // Email of who added them
+  lastAccessAt?: number;
+}
+
+export interface ShareHistoryEntry {
+  id: string;
+  userId?: string; // Email if logged in, 'anonymous' for guests
+  userName?: string; // Display name if available
+  userAvatar?: string; // Avatar URL if available
+  action: string; // "viewed", "edited", "commented", "duplicated", etc.
+  timestamp: number;
+  fieldChanged?: string; // Which field was changed
+  oldValue?: any; // Previous value
+  newValue?: any; // New value
+  details?: string; // Additional context
+  ipAddress?: string; // For security tracking
+  userAgent?: string; // Browser info
+}
+
+export interface ShareLinkInfo {
+  url: string;
+  permission: SharePermission;
+  token: string;
+  createdAt: number;
+  isActive: boolean;
+  viewCount: number;
+  lastViewedAt?: number;
+}
+
+export interface ShareAnalytics {
+  totalViews: number;
+  uniqueViewers: number;
+  totalEdits: number;
+  uniqueEditors: number;
+  averageViewTime?: number;
+  mostActiveDay?: string;
+  topActions: Array<{ action: string; count: number }>;
+  recentActivity: ShareHistoryEntry[];
+}
+
+export interface ShareSettings {
+  allowAnonymousViewing: boolean;
+  allowAnonymousEditing: boolean;
+  requireAuthentication: boolean;
+  autoExpire: boolean;
+  expirationDays: number;
+  maxViewers?: number;
+  maxEditors?: number;
+  allowComments: boolean;
+  allowDownload: boolean;
+  trackAnalytics: boolean;
+  notifyOnView: boolean;
+  notifyOnEdit: boolean;
+}

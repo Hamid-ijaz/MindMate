@@ -1,6 +1,6 @@
 "use client";
 import { TaskSuggestion } from "@/components/task-suggestion";
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { useTasks } from "@/contexts/task-context";
 import { useNotes } from "@/contexts/note-context";
 import { useNotifications } from "@/contexts/notification-context";
@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { CalendarIcon, Bell, Search, AlarmClock, Repeat, Filter, X, Grid, LayoutGrid, StickyNote, CheckSquare, Edit3, Plus, ArrowRight, MoreHorizontal, Share2 } from "lucide-react";
+import { CalendarIcon, Bell, Search, AlarmClock, Repeat, Filter, X, Grid, LayoutGrid, StickyNote, CheckSquare, Edit3, Plus, ArrowRight, MoreHorizontal, Share2, SortAsc } from "lucide-react";
 import { format } from "date-fns";
 import { AnimatePresence, motion } from "framer-motion";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -32,11 +32,29 @@ export default function HomeMain() {
   const [category, setCategory] = useState("");
   const [date, setDate] = useState("");
   const [priority, setPriority] = useState("");
+  const [contentType, setContentType] = useState<'all' | 'tasks' | 'notes'>('all'); // New content type filter
+  const [sortBy, setSortBy] = useState<'date' | 'priority' | 'alphabetical'>('date'); // New sorting option
+  const [cardsPerRow, setCardsPerRow] = useState<1 | 2 | 3 | 4 | 5>(2); // Default to 2, will be updated on mount
   const [showFilters, setShowFilters] = useState(false);
   const [showSearchBar, setShowSearchBar] = useState(false); // Controls expanded search UI
   const [searchView, setSearchView] = useState<'unified' | 'separated'>('unified'); // New view toggle
   const [editingNote, setEditingNote] = useState<Note | null>(null); // For note editing in search results
   const [shareDialog, setShareDialog] = useState<{isOpen: boolean, itemType: 'task' | 'note', itemTitle: string, itemId: string} | null>(null);
+
+  // Set cards per row based on screen size after component mounts
+  useEffect(() => {
+    const updateCardsPerRow = () => {
+      const width = window.innerWidth;
+      if (width < 640) setCardsPerRow(1); // sm
+      else if (width < 1024) setCardsPerRow(2); // lg
+      else if (width < 1280) setCardsPerRow(3); // xl
+      else setCardsPerRow(4); // 2xl+
+    };
+
+    updateCardsPerRow();
+    window.addEventListener('resize', updateCardsPerRow);
+    return () => window.removeEventListener('resize', updateCardsPerRow);
+  }, []);
 
   // Function to convert note to task
   const convertNoteToTask = async (note: Note) => {
@@ -63,35 +81,67 @@ export default function HomeMain() {
     }
   };
 
-  // Filtered tasks/notes
+  // Filtered tasks/notes with improved date filtering
   const filteredTasks = useMemo(() => {
     return tasks.filter(t => {
       const matchesSearch = search === "" || t.title.toLowerCase().includes(search.toLowerCase()) || (t.description || "").toLowerCase().includes(search.toLowerCase());
       const matchesCategory = category === "" || category === "all-categories" || t.category === category;
-      const matchesDate = date === "" || format(new Date(t.createdAt), "yyyy-MM-dd") === date;
+      
+      // Improved date filtering - show tasks that are due on or before the selected date
+      const matchesDate = date === "" || (() => {
+        // For tasks with reminderAt, use that date, otherwise use createdAt
+        const taskDate = new Date(t.reminderAt || t.createdAt);
+        const selectedDate = new Date(date);
+        selectedDate.setHours(23, 59, 59, 999); // Include the entire selected day
+        return taskDate <= selectedDate;
+      })();
+      
       const matchesPriority = priority === "" || priority === "all-priorities" || t.priority === priority;
-      return matchesSearch && matchesCategory && matchesDate && matchesPriority;
+      const matchesContentType = contentType === 'all' || contentType === 'tasks';
+      
+      return matchesSearch && matchesCategory && matchesDate && matchesPriority && matchesContentType;
     });
-  }, [tasks, search, category, date, priority]);
+  }, [tasks, search, category, date, priority, contentType]);
 
   const filteredNotes = useMemo(() => {
     return notes?.filter(n => {
       const matchesSearch = search === "" || n.title.toLowerCase().includes(search.toLowerCase()) || (n.content || "").toLowerCase().includes(search.toLowerCase());
-      const matchesDate = date === "" || format(new Date(n.createdAt), "yyyy-MM-dd") === date;
-      return matchesSearch && matchesDate;
+      const matchesDate = date === "" || (() => {
+        const noteDate = new Date(n.createdAt);
+        const selectedDate = new Date(date);
+        return noteDate <= selectedDate;
+      })();
+      const matchesContentType = contentType === 'all' || contentType === 'notes';
+      return matchesSearch && matchesDate && matchesContentType;
     }) || [];
-  }, [notes, search, date]);
+  }, [notes, search, date, contentType]);
 
-  // Combined and sorted items for unified view
+  // Combined and sorted items for unified view with enhanced sorting
   const unifiedItems = useMemo(() => {
     const items = [
       ...filteredTasks.map(task => ({ ...task, type: 'task' as const })),
       ...filteredNotes.map(note => ({ ...note, type: 'note' as const }))
     ];
     
-    // Sort by creation date (newest first)
-    return items.sort((a, b) => b.createdAt - a.createdAt);
-  }, [filteredTasks, filteredNotes]);
+    // Sort based on selected option
+    return items.sort((a, b) => {
+      switch (sortBy) {
+        case 'priority':
+          // Only apply priority sorting to tasks
+          if (a.type === 'task' && b.type === 'task') {
+            const priorityOrder = { 'Critical': 0, 'High': 1, 'Medium': 2, 'Low': 3 };
+            return priorityOrder[a.priority] - priorityOrder[b.priority];
+          }
+          // Fall back to date for notes or mixed items
+          return b.createdAt - a.createdAt;
+        case 'alphabetical':
+          return a.title.localeCompare(b.title);
+        case 'date':
+        default:
+          return b.createdAt - a.createdAt;
+      }
+    });
+  }, [filteredTasks, filteredNotes, sortBy]);
 
   // Notification center actions
   // Fallback for missing snoozeNotification
@@ -114,6 +164,18 @@ export default function HomeMain() {
   };
   const handleDelete = (id: string) => deleteNotification(id);
 
+  // Dynamic grid class based on cardsPerRow
+  const getGridClass = () => {
+    switch (cardsPerRow) {
+      case 1: return "grid grid-cols-1 gap-4 auto-rows-max";
+      case 2: return "grid grid-cols-1 sm:grid-cols-2 gap-4 auto-rows-max";
+      case 3: return "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 auto-rows-max";
+      case 4: return "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 auto-rows-max";
+      case 5: return "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4 auto-rows-max";
+      default: return "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 auto-rows-max";
+    }
+  };
+
   return (
     <div className="w-full max-w-6xl mx-auto py-4 md:py-8 px-2 md:px-0">
       {/* Modern Search Header */}
@@ -124,38 +186,16 @@ export default function HomeMain() {
       >
         <Card className="border-0 shadow-xl bg-gradient-to-r from-background to-muted/30 backdrop-blur-sm">
           <CardHeader className="pb-4">
-            {/* Mobile-first responsive header */}
             <div className="flex flex-col gap-4">
-              {/* Title and mobile controls */}
+              {/* Title and search input */}
               <div className="flex items-center justify-between">
                 <CardTitle className="flex items-center gap-2 text-xl md:text-2xl font-bold">
-                  <Search className="w-6 h-6 text-primary" />
-                  Search & Filter
+                  <Search className="w-5 h-5 md:w-6 md:h-6 text-primary" />
+                  <span className="hidden md:inline">Search</span>
                 </CardTitle>
-                {/* Mobile view toggle - only show when searching */}
-                {showSearchBar && (
-                  <div className="flex md:hidden gap-1">
-                    <Button
-                      variant={searchView === 'unified' ? 'default' : 'ghost'}
-                      size="sm"
-                      onClick={() => setSearchView('unified')}
-                      className="h-8 w-8 p-0"
-                    >
-                      <LayoutGrid className="w-4 h-4" />
-                    </Button>
-                    <Button
-                      variant={searchView === 'separated' ? 'default' : 'ghost'}
-                      size="sm" 
-                      onClick={() => setSearchView('separated')}
-                      className="h-8 w-8 p-0"
-                    >
-                      <Grid className="w-4 h-4" />
-                    </Button>
-                  </div>
-                )}
               </div>
               
-              {/* Search Input - Full width and prominent */}
+              {/* Search Input - Always visible but expanded controls only show when focused */}
               <div className="relative">
                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
                 <Input
@@ -178,65 +218,121 @@ export default function HomeMain() {
                 )}
               </div>
               
-              {/* Action buttons */}
-              <div className="flex gap-2">
-                {/* Desktop view toggle */}
-                <div className="hidden md:flex border rounded-lg p-1 bg-muted/30">
-                  <Button
-                    variant={searchView === 'unified' ? 'default' : 'ghost'}
-                    size="sm"
-                    onClick={() => setSearchView('unified')}
-                    className="h-9 px-4"
+              {/* Enhanced Controls - Only show when search is focused */}
+              <AnimatePresence>
+                {showSearchBar && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0, y: -10 }}
+                    animate={{ opacity: 1, height: "auto", y: 0 }}
+                    exit={{ opacity: 0, height: 0, y: -10 }}
+                    transition={{ duration: 0.2 }}
+                    className="space-y-4"
                   >
-                    <LayoutGrid className="w-4 h-4 mr-2" />
-                    Unified
-                  </Button>
-                  <Button
-                    variant={searchView === 'separated' ? 'default' : 'ghost'}
-                    size="sm" 
-                    onClick={() => setSearchView('separated')}
-                    className="h-9 px-4"
-                  >
-                    <Grid className="w-4 h-4 mr-2" />
-                    Grouped
-                  </Button>
-                </div>
-                
-                <Button 
-                  variant="outline" 
-                  onClick={() => {
-                    try {
-                      setShowFilters(f => !f);
-                    } catch (error) {
-                      console.error('Error toggling filters:', error);
-                    }
-                  }}
-                  className={cn(
-                    "flex-1 md:flex-none h-10 transition-all",
-                    showFilters && "bg-primary/10 border-primary/30 shadow-sm"
-                  )}
-                >
-                  <Filter className="w-4 h-4 mr-2" />
-                  Filters
-                  {showFilters && <span className="ml-1 text-xs">✓</span>}
-                </Button>
-                
-                <Button 
-                  variant="outline" 
-                  onClick={() => { 
-                    setShowSearchBar(false); 
-                    setSearch(""); 
-                    setShowFilters(false);
-                    setCategory("");
-                    setPriority("");
-                    setDate("");
-                  }}
-                  className="flex-1 md:flex-none h-10"
-                >
-                  <X className="w-4 h-4 mr-2" />
-                  Clear All
-                </Button>
-              </div>
+                    {/* View controls and action buttons */}
+                    <div className="flex flex-col sm:flex-row gap-3">
+                      {/* Mobile view toggle - only on mobile */}
+                      <div className="flex sm:hidden border rounded-lg p-1 bg-muted/30">
+                        <Button
+                          variant={searchView === 'unified' ? 'default' : 'ghost'}
+                          size="sm"
+                          onClick={() => setSearchView('unified')}
+                          className="flex-1 h-9"
+                        >
+                          <LayoutGrid className="w-4 h-4 mr-2" />
+                          Grid
+                        </Button>
+                        <Button
+                          variant={searchView === 'separated' ? 'default' : 'ghost'}
+                          size="sm" 
+                          onClick={() => setSearchView('separated')}
+                          className="flex-1 h-9"
+                        >
+                          <Grid className="w-4 h-4 mr-2" />
+                          List
+                        </Button>
+                      </div>
+                      
+                      {/* Desktop view toggle */}
+                      <div className="hidden sm:flex border rounded-lg p-1 bg-muted/30">
+                        <Button
+                          variant={searchView === 'unified' ? 'default' : 'ghost'}
+                          size="sm"
+                          onClick={() => setSearchView('unified')}
+                          className="h-9 px-4"
+                        >
+                          <LayoutGrid className="w-4 h-4 mr-2" />
+                          Unified
+                        </Button>
+                        <Button
+                          variant={searchView === 'separated' ? 'default' : 'ghost'}
+                          size="sm" 
+                          onClick={() => setSearchView('separated')}
+                          className="h-9 px-4"
+                        >
+                          <Grid className="w-4 h-4 mr-2" />
+                          Grouped
+                        </Button>
+                      </div>
+                      
+                      {/* Action buttons */}
+                      <div className="flex gap-2 flex-1">
+                        {/* Cards per row selector - compact version */}
+                        <Select value={cardsPerRow.toString()} onValueChange={(value) => setCardsPerRow(parseInt(value) as 1 | 2 | 3 | 4 | 5)}>
+                          <SelectTrigger className="w-16 h-10 border-2 focus:border-primary/50">
+                            <div className="flex items-center justify-center w-full">
+                              <LayoutGrid className="w-4 h-4 text-indigo-500" />
+                            </div>
+                          </SelectTrigger>
+                          <SelectContent className="w-32" align="start">
+                            <SelectItem value="1">1 col</SelectItem>
+                            <SelectItem value="2">2 cols</SelectItem>
+                            <SelectItem value="3">3 cols</SelectItem>
+                            <SelectItem value="4">4 cols</SelectItem>
+                            <SelectItem value="5">5 cols</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        
+                        <Button 
+                          variant="outline" 
+                          onClick={() => {
+                            try {
+                              setShowFilters(f => !f);
+                            } catch (error) {
+                              console.error('Error toggling filters:', error);
+                            }
+                          }}
+                          className={cn(
+                            "flex-1 sm:flex-none h-10 transition-all",
+                            showFilters && "bg-primary/10 border-primary/30 shadow-sm"
+                          )}
+                        >
+                          <Filter className="w-4 h-4 mr-2" />
+                          Filters
+                          {showFilters && <span className="ml-1 text-xs">✓</span>}
+                        </Button>
+                        
+                        <Button 
+                          variant="outline" 
+                          onClick={() => { 
+                            setShowSearchBar(false); 
+                            setSearch(""); 
+                            setShowFilters(false);
+                            setCategory("");
+                            setPriority("");
+                            setDate("");
+                            setContentType('all');
+                            setSortBy('date');
+                          }}
+                          className="flex-1 sm:flex-none h-10"
+                        >
+                          <X className="w-4 h-4 mr-2" />
+                          Close
+                        </Button>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
             
             {/* Enhanced Animated Filters */}
@@ -254,11 +350,47 @@ export default function HomeMain() {
                       {/* Filter header */}
                       <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
                         <Filter className="w-4 h-4" />
-                        Filter Options
+                        Filter & Sort Options
                       </div>
                       
-                      {/* Filter controls */}
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                      {/* Filter controls - Mobile responsive grid */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
+                        {/* Content Type Filter */}
+                        <div className="space-y-2">
+                          <label className="text-sm font-medium text-muted-foreground">Content Type</label>
+                          <Select value={contentType} onValueChange={(value: 'all' | 'tasks' | 'notes') => setContentType(value)}>
+                            <SelectTrigger className="h-10 focus:ring-2 focus:ring-primary/20">
+                              <div className="flex items-center gap-2 w-full">
+                                {contentType === "tasks" && <CheckSquare className="w-4 h-4 text-blue-500" />}
+                                {contentType === "notes" && <StickyNote className="w-4 h-4 text-green-500" />}
+                                {contentType === "all" && <LayoutGrid className="w-4 h-4 text-purple-500" />}
+                                <SelectValue placeholder="All Content" />
+                              </div>
+                            </SelectTrigger>
+                            <SelectContent className="w-[var(--radix-select-trigger-width)] min-w-[160px]">
+                              <SelectItem value="all" className="py-3">
+                                <div className="flex items-center gap-2">
+                                  <LayoutGrid className="w-4 h-4 text-purple-500" />
+                                  <span className="font-medium">All Content</span>
+                                </div>
+                              </SelectItem>
+                              <SelectItem value="tasks" className="py-3">
+                                <div className="flex items-center gap-2">
+                                  <CheckSquare className="w-4 h-4 text-blue-500" />
+                                  <span className="font-medium">Tasks Only</span>
+                                </div>
+                              </SelectItem>
+                              <SelectItem value="notes" className="py-3">
+                                <div className="flex items-center gap-2">
+                                  <StickyNote className="w-4 h-4 text-green-500" />
+                                  <span className="font-medium">Notes Only</span>
+                                </div>
+                              </SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        {/* Category Filter */}
                         <div className="space-y-2">
                           <label className="text-sm font-medium text-muted-foreground">Category</label>
                           <Select value={category} onValueChange={setCategory}>
@@ -271,7 +403,7 @@ export default function HomeMain() {
                                 <SelectValue placeholder="All Categories" />
                               </div>
                             </SelectTrigger>
-                            <SelectContent className="min-w-[200px]">
+                            <SelectContent className="w-[var(--radix-select-trigger-width)] min-w-[160px]">
                               <SelectItem value="all-categories" className="py-3">
                                 <div className="flex items-center gap-2">
                                   <span>📁</span>
@@ -306,19 +438,20 @@ export default function HomeMain() {
                           </Select>
                         </div>
                         
+                        {/* Priority Filter - Mobile responsive */}
                         <div className="space-y-2">
                           <label className="text-sm font-medium text-muted-foreground">Priority</label>
                           <Select value={priority} onValueChange={setPriority}>
-                            <SelectTrigger className="h-10 focus:ring-2 focus:ring-primary/20">
-                              <div className="flex items-center gap-2 w-full">
-                                {priority === "Critical" && <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />}
-                                {priority === "High" && <div className="w-2 h-2 bg-orange-500 rounded-full" />}
-                                {priority === "Medium" && <div className="w-2 h-2 bg-yellow-500 rounded-full" />}
-                                {priority === "Low" && <div className="w-2 h-2 bg-green-500 rounded-full" />}
-                                <SelectValue placeholder="All Priorities" />
+                            <SelectTrigger className="h-10 focus:ring-2 focus:ring-primary/20 w-full max-w-full">
+                              <div className="flex items-center gap-2 w-full overflow-hidden min-w-0">
+                                {priority === "Critical" && <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse flex-shrink-0" />}
+                                {priority === "High" && <div className="w-2 h-2 bg-orange-500 rounded-full flex-shrink-0" />}
+                                {priority === "Medium" && <div className="w-2 h-2 bg-yellow-500 rounded-full flex-shrink-0" />}
+                                {priority === "Low" && <div className="w-2 h-2 bg-green-500 rounded-full flex-shrink-0" />}
+                                <SelectValue placeholder="All Priorities" className="truncate flex-1 min-w-0" />
                               </div>
                             </SelectTrigger>
-                            <SelectContent className="min-w-[200px]">
+                            <SelectContent className="w-[var(--radix-select-trigger-width)] min-w-[160px] max-w-[calc(100vw-2rem)]">
                               <SelectItem value="all-priorities" className="py-3">
                                 <div className="flex items-center gap-2">
                                   <div className="w-2 h-2 bg-gray-400 rounded-full" />
@@ -357,6 +490,7 @@ export default function HomeMain() {
                           </Select>
                         </div>
                         
+                        {/* Due Date Filter */}
                         <div className="space-y-2">
                           <label className="text-sm font-medium text-muted-foreground">Due Date</label>
                           <Input
@@ -365,23 +499,63 @@ export default function HomeMain() {
                             onChange={e => setDate(e.target.value)}
                             className="h-10 focus:ring-2 focus:ring-primary/20"
                             placeholder="Select date"
+                            title="Show tasks that are due on or before this date"
                           />
                         </div>
-                        
-                        <div className="space-y-2 flex flex-col justify-end">
-                          <Button 
-                            variant="outline" 
-                            onClick={() => { 
-                              setCategory(""); 
-                              setPriority(""); 
-                              setDate(""); 
-                            }}
-                            className="h-10 w-full"
-                          >
-                            <X className="w-4 h-4 mr-2" />
-                            Clear Filters
-                          </Button>
+
+                        {/* Sort By */}
+                        <div className="space-y-2">
+                          <label className="text-sm font-medium text-muted-foreground">Sort By</label>
+                          <Select value={sortBy} onValueChange={(value: 'date' | 'priority' | 'alphabetical') => setSortBy(value)}>
+                            <SelectTrigger className="h-10 focus:ring-2 focus:ring-primary/20">
+                              <div className="flex items-center gap-2 w-full">
+                                {sortBy === "date" && <CalendarIcon className="w-4 h-4 text-blue-500" />}
+                                {sortBy === "priority" && <AlarmClock className="w-4 h-4 text-orange-500" />}
+                                {sortBy === "alphabetical" && <span className="text-green-500 font-semibold text-sm">A→Z</span>}
+                                <SelectValue placeholder="Sort by" />
+                              </div>
+                            </SelectTrigger>
+                            <SelectContent className="w-[var(--radix-select-trigger-width)] min-w-[160px]">
+                              <SelectItem value="date" className="py-3">
+                                <div className="flex items-center gap-2">
+                                  <CalendarIcon className="w-4 h-4 text-blue-500" />
+                                  <span className="font-medium">Date Added</span>
+                                </div>
+                              </SelectItem>
+                              <SelectItem value="priority" className="py-3">
+                                <div className="flex items-center gap-2">
+                                  <AlarmClock className="w-4 h-4 text-orange-500" />
+                                  <span className="font-medium">Priority Level</span>
+                                </div>
+                              </SelectItem>
+                              <SelectItem value="alphabetical" className="py-3">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-green-500 font-semibold text-sm">A→Z</span>
+                                  <span className="font-medium">Alphabetical</span>
+                                </div>
+                              </SelectItem>
+                            </SelectContent>
+                          </Select>
                         </div>
+                      </div>
+
+                      {/* Clear filters button */}
+                      <div className="flex justify-end pt-2">
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => { 
+                            setCategory(""); 
+                            setPriority(""); 
+                            setDate(""); 
+                            setContentType('all');
+                            setSortBy('date');
+                          }}
+                          className="h-9"
+                        >
+                          <X className="w-4 h-4 mr-2" />
+                          Clear All Filters
+                        </Button>
                       </div>
                     </div>
                   </div>
@@ -423,7 +597,7 @@ export default function HomeMain() {
 
           {searchView === 'unified' ? (
             /* Modern Unified Google Keep-style Grid */
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 auto-rows-max">
+            <div className={getGridClass()}>
               <AnimatePresence mode="popLayout">
                 {unifiedItems.length === 0 ? (
                   <motion.div 
@@ -454,119 +628,46 @@ export default function HomeMain() {
                           className="relative transform transition-all duration-200 hover:scale-[1.02] hover:shadow-md group"
                           whileHover={{ y: -2 }}
                         >
-                          <div className="absolute top-3 right-3 z-10 flex gap-1">
-                            <Badge 
-                              variant="secondary" 
-                              className="text-xs bg-blue-500/10 text-blue-700 border-blue-200 backdrop-blur-sm shadow-sm px-2 py-1 rounded-full"
-                            >
-                              <CheckSquare className="w-3 h-3 mr-1" />
-                              Task
-                            </Badge>
-                            {item.priority && (
+                          
+
+                          {/* Task content wrapper */}
+                          <div className="relative ">
+                            <TaskItem task={item} className="pt-4"  />
+
+                            {/* Tags overlay - positioned inside the card */}
+                            <div className="absolute top-3 left-3 z-20 flex gap-1">
                               <Badge 
-                                variant="outline"
-                                className={cn(
-                                  "text-xs px-2 py-1 rounded-full backdrop-blur-sm shadow-sm",
-                                  item.priority === "Critical" && "bg-red-50 text-red-700 border-red-200",
-                                  item.priority === "High" && "bg-orange-50 text-orange-700 border-orange-200",
-                                  item.priority === "Medium" && "bg-yellow-50 text-yellow-700 border-yellow-200",
-                                  item.priority === "Low" && "bg-green-50 text-green-700 border-green-200"
-                                )}
+                                variant="secondary" 
+                                className="text-xs bg-blue-500/20 text-blue-700 border-blue-200 backdrop-blur-sm shadow-sm px-2 py-1 rounded-full"
                               >
-                                {item.priority === "Critical" && "🔥"}
-                                {item.priority === "High" && "⚡"}
-                                {item.priority === "Medium" && "📋"}
-                                {item.priority === "Low" && "📝"}
-                                <span className="ml-1">{item.priority}</span>
+                                <CheckSquare className="w-3 h-3 mr-1" />
+                                Task
                               </Badge>
-                            )}
+                              
+                            </div>
                           </div>
-                          {/* Share button for tasks */}
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            className="absolute top-3 left-3 z-10 opacity-0 group-hover:opacity-100 transition-all duration-200 h-7 w-7 p-0 bg-background/90 backdrop-blur-sm shadow-md hover:shadow-lg"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setShareDialog({
-                                isOpen: true,
-                                itemType: 'task',
-                                itemTitle: item.title,
-                                itemId: item.id
-                              });
-                            }}
-                          >
-                            <Share2 className="w-3 h-3" />
-                          </Button>
-                          <TaskItem task={item} />
                         </motion.div>
                       ) : (
                         <motion.div 
                           className="relative transform transition-all duration-200 hover:scale-[1.02] hover:shadow-md group"
                           whileHover={{ y: -2 }}
                         >
-                          <div className="absolute top-3 right-3 z-10 flex gap-1">
-                            <Badge 
-                              variant="secondary" 
-                              className="text-xs bg-green-500/10 text-green-700 border-green-200 backdrop-blur-sm shadow-sm px-2 py-1 rounded-full"
-                            >
-                              <StickyNote className="w-3 h-3 mr-1" />
-                              Note
-                            </Badge>
-                            {item.color && (
-                              <div 
-                                className="w-4 h-4 rounded-full border-2 border-white shadow-sm"
-                                style={{ backgroundColor: item.color }}
-                              />
-                            )}
+                          
+                          {/* Add padding-top to card content to avoid tag overlap */}
+                          <div className="">
+                            <NoteCard note={item} onClick={() => setEditingNote(item)} className="pt-5" />
+
+                              <div className="absolute top-3 left-3 z-20 flex gap-1">
+                              <Badge 
+                                variant="secondary" 
+                                className="text-xs bg-green-500/20 text-green-700 border-green-200 backdrop-blur-sm shadow-sm px-2 py-1 rounded-full"
+                              >
+                                <CheckSquare className="w-3 h-3 mr-1" />
+                                Note
+                              </Badge>
+                              
+                            </div>
                           </div>
-                          {/* Action buttons - show on hover */}
-                          <div className="absolute top-3 left-3 z-10 flex gap-1 opacity-0 group-hover:opacity-100 transition-all duration-200">
-                            <Button
-                              variant="secondary"
-                              size="sm"
-                              className="h-7 w-7 p-0 bg-background/90 backdrop-blur-sm shadow-md hover:shadow-lg"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setEditingNote(item);
-                              }}
-                            >
-                              <Edit3 className="w-3 h-3" />
-                            </Button>
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button
-                                  variant="secondary"
-                                  size="sm"
-                                  className="h-7 w-7 p-0 bg-background/90 backdrop-blur-sm shadow-md hover:shadow-lg"
-                                  onClick={(e) => e.stopPropagation()}
-                                >
-                                  <MoreHorizontal className="w-3 h-3" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="start" className="w-48">
-                                <DropdownMenuItem onClick={() => convertNoteToTask(item)}>
-                                  <ArrowRight className="w-4 h-4 mr-2" />
-                                  Convert to Task
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => setShareDialog({
-                                  isOpen: true,
-                                  itemType: 'note',
-                                  itemTitle: item.title || 'Untitled Note',
-                                  itemId: item.id
-                                })}>
-                                  <Share2 className="w-4 h-4 mr-2" />
-                                  Share Note
-                                </DropdownMenuItem>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem onClick={() => setEditingNote(item)}>
-                                  <Edit3 className="w-4 h-4 mr-2" />
-                                  Edit Note
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          </div>
-                          <NoteCard note={item} onClick={() => setEditingNote(item)} />
                         </motion.div>
                       )}
                     </motion.div>
@@ -621,7 +722,7 @@ export default function HomeMain() {
                         className="relative group"
                       >
                         {/* Share button for tasks */}
-                        <Button
+                        {/* <Button
                           variant="secondary"
                           size="sm"
                           className="absolute top-2 right-2 z-10 opacity-0 group-hover:opacity-100 transition-all duration-200 h-8 w-8 p-0 bg-background/90 backdrop-blur-sm shadow-sm"
@@ -636,7 +737,7 @@ export default function HomeMain() {
                           }}
                         >
                           <Share2 className="w-4 h-4" />
-                        </Button>
+                        </Button> */}
                         <TaskItem task={task} />
                       </motion.div>
                     ))
@@ -689,7 +790,7 @@ export default function HomeMain() {
                           className="break-inside-avoid relative group"
                         >
                           {/* Action buttons - show on hover */}
-                          <div className="absolute top-2 right-2 z-10 flex gap-1 opacity-0 group-hover:opacity-100 transition-all duration-200">
+                          {/* <div className="absolute top-2 right-2 z-10 flex gap-1 opacity-0 group-hover:opacity-100 transition-all duration-200">
                             <Button
                               variant="secondary"
                               size="sm"
@@ -733,7 +834,7 @@ export default function HomeMain() {
                                 </DropdownMenuItem>
                               </DropdownMenuContent>
                             </DropdownMenu>
-                          </div>
+                          </div> */}
                           <NoteCard note={note} onClick={() => setEditingNote(note)} />
                         </motion.div>
                       ))}

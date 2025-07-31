@@ -8,8 +8,10 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Trash2 } from 'lucide-react';
+import { Loader2, Trash2, Mic } from 'lucide-react';
 import { NoteToolbar } from './note-toolbar';
+import { AudioRecorder } from './audio-recorder';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 const DEFAULT_FONT_SIZE = 14;
 
@@ -17,13 +19,17 @@ interface EditNoteDialogProps {
     note: Note | null;
     isOpen: boolean;
     onClose: () => void;
+    shareToken?: string; // For tracking edits on shared notes
+    sharedBy?: { email: string; name: string }; // User info for shared context
 }
 
-export function EditNoteDialog({ note, isOpen, onClose }: EditNoteDialogProps) {
+export function EditNoteDialog({ note, isOpen, onClose, shareToken, sharedBy }: EditNoteDialogProps) {
     const [title, setTitle] = useState('');
     const [color, setColor] = useState('');
     const [imageUrl, setImageUrl] = useState('');
     const [fontSize, setFontSize] = useState(DEFAULT_FONT_SIZE);
+    const [audioUrl, setAudioUrl] = useState('');
+    const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
     
     const [isSaving, setIsSaving] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
@@ -39,6 +45,7 @@ export function EditNoteDialog({ note, isOpen, onClose }: EditNoteDialogProps) {
             setColor(note.color || '');
             setImageUrl(note.imageUrl || '');
             setFontSize(note.fontSize || DEFAULT_FONT_SIZE);
+            setAudioUrl(note.audioUrl || '');
         }
     }, [note]);
 
@@ -89,7 +96,8 @@ export function EditNoteDialog({ note, isOpen, onClose }: EditNoteDialogProps) {
                            currentContent !== (note.content || '') || 
                            color !== (note.color || '') ||
                            imageUrl !== (note.imageUrl || '') ||
-                           fontSize !== (note.fontSize || DEFAULT_FONT_SIZE);
+                           fontSize !== (note.fontSize || DEFAULT_FONT_SIZE) ||
+                           audioUrl !== (note.audioUrl || '');
                            
         if (hasChanged && (title.trim() || currentContent.trim())) {
             handleSave(currentContent);
@@ -102,13 +110,42 @@ export function EditNoteDialog({ note, isOpen, onClose }: EditNoteDialogProps) {
         if (!note) return;
         setIsSaving(true);
         try {
-            await updateNote(note.id, { title, content: currentContent, color, imageUrl, fontSize });
+            await updateNote(note.id, { 
+                title, 
+                content: currentContent, 
+                color, 
+                imageUrl, 
+                fontSize,
+                audioUrl: audioUrl || null
+            });
+
+            // If this is a shared note, record the edit in the sharing history
+            if (shareToken && sharedBy) {
+                const { sharingService } = await import('@/lib/firestore');
+                await sharingService.addHistoryEntry(shareToken, {
+                    userId: sharedBy.email,
+                    userName: sharedBy.name,
+                    action: 'content_edited',
+                    details: `Modified the shared note: ${title || 'Untitled'}`
+                });
+            }
+
             toast({ title: "Note updated" });
         } catch (e) {
             toast({ title: "Error", description: "Failed to save note.", variant: "destructive" });
         } finally {
             setIsSaving(false);
         }
+    };
+    
+    const handleAudioSave = (blob: Blob, url: string) => {
+        setAudioBlob(blob);
+        setAudioUrl(url);
+    };
+
+    const handleAudioDelete = () => {
+        setAudioBlob(null);
+        setAudioUrl('');
     };
     
     const handleDelete = async () => {
@@ -150,17 +187,39 @@ export function EditNoteDialog({ note, isOpen, onClose }: EditNoteDialogProps) {
                     </DialogHeader>
 
                     <div className="px-6">
-                        <div
-                            ref={contentRef}
-                            suppressContentEditableWarning={true}
-                            contentEditable
-                            dangerouslySetInnerHTML={{ __html: note?.content || '' }}
-                            className="w-full min-h-[200px] border-none focus-visible:ring-0 resize-none bg-transparent p-0 outline-none max-w-none"
-                            style={{ 
-                                fontSize: `${fontSize}px`,
-                                color: 'hsl(var(--foreground))'
-                            }}
-                        />
+                        <Tabs defaultValue="content" className="w-full">
+                            <TabsList className="grid w-full grid-cols-2">
+                                <TabsTrigger value="content">Content</TabsTrigger>
+                                <TabsTrigger value="audio" className="flex items-center gap-2">
+                                    <Mic className="w-4 h-4" />
+                                    Audio
+                                </TabsTrigger>
+                            </TabsList>
+                            
+                            <TabsContent value="content" className="mt-4">
+                                <div
+                                    ref={contentRef}
+                                    suppressContentEditableWarning={true}
+                                    contentEditable
+                                    dangerouslySetInnerHTML={{ __html: note?.content || '' }}
+                                    className="w-full min-h-[200px] border-none focus-visible:ring-0 resize-none bg-transparent p-0 outline-none max-w-none"
+                                    style={{ 
+                                        fontSize: `${fontSize}px`,
+                                        color: 'hsl(var(--foreground))'
+                                    }}
+                                />
+                            </TabsContent>
+                            
+                            <TabsContent value="audio" className="mt-4">
+                                <AudioRecorder
+                                    onAudioSave={handleAudioSave}
+                                    onAudioDelete={handleAudioDelete}
+                                    existingAudioUrl={audioUrl}
+                                    maxDuration={300}
+                                    maxFileSize={10}
+                                />
+                            </TabsContent>
+                        </Tabs>
                     </div>
                 </div>
                 

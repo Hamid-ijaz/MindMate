@@ -6,8 +6,13 @@ export function middleware(request: NextRequest) {
   const authCookie = request.cookies.get('mindmate-auth');
   const { pathname } = request.nextUrl;
 
-  const isAuthPage = pathname === '/login' || pathname === '/signup';
-
+const isAuthPage =
+    pathname === '/login' ||
+    pathname === '/signup';
+    
+  const isPublicPage = 
+    isAuthPage ||
+    pathname.startsWith('/share');
   // If user is authenticated
   if (authCookie) {
     // If they try to access an auth page (login/signup), redirect them to the home page
@@ -19,12 +24,12 @@ export function middleware(request: NextRequest) {
   }
 
   // If user is not authenticated and is trying to access a protected route
-  if (!isAuthPage) {
+  if (!isPublicPage) {
     // Redirect them to the login page
     return NextResponse.redirect(new URL('/login', request.url));
   }
 
-  // Allow unauthenticated access to login and signup pages
+  // Allow unauthenticated access to login, signup, and share pages
   return NextResponse.next();
 }
 

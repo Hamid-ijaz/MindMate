@@ -16,7 +16,7 @@ import { AlertDialog, AlertDialogContent, AlertDialogDescription, AlertDialogFoo
 import { AddTaskButton } from "./manage-tasks-sheet";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "./ui/accordion";
 import { rewordTask } from '@/ai/flows/reword-task-flow';
-import { getCurrentTimeOfDay, getDefaultPriority, cn } from "@/lib/utils";
+import { getCurrentTimeOfDay, getDefaultPriority, cn, safeDateFormat } from "@/lib/utils";
 import { TaskItem } from "@/components/task-item";
 import { Checkbox } from "./ui/checkbox";
 import { Label } from "./ui/label";
@@ -28,13 +28,15 @@ import { useNotifications } from "@/contexts/notification-context";
 import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious, type CarouselApi } from "@/components/ui/carousel";
 import Link from "next/link";
 import { useCompletionAudio } from '@/hooks/use-completion-audio';
+import { ItemActionsDropdown } from '@/components/item-actions-dropdown';
+import { ShareDialog } from '@/components/share-dialog';
 import { useAuth } from "@/contexts/auth-context";
 import { motion, AnimatePresence } from "framer-motion";
 import { slideInFromTop, carouselSlide, staggerContainer, staggerItem, cardHover } from "@/lib/animations";
 
 
 export function TaskSuggestion() {
-    const { tasks, acceptTask, rejectTask, muteTask, addTask, isLoading: tasksLoading, startEditingTask } = useTasks();
+    const { tasks, acceptTask, rejectTask, muteTask, addTask, isLoading: tasksLoading, startEditingTask, deleteTask } = useTasks();
     const { deleteNotification } = useNotifications();
   const { handleTaskCompletion } = useCompletionAudio();
   const { user } = useAuth();
@@ -61,6 +63,10 @@ export function TaskSuggestion() {
   const [isRejecting, setIsRejecting] = useState(false);
   const [isMuting, setIsMuting] = useState(false);
   const [isAcceptingReword, setIsAcceptingReword] = useState(false);
+  const [shareDialog, setShareDialog] = useState<{isOpen: boolean, task: Task | null}>({
+    isOpen: false, 
+    task: null
+  });
 
   const [api, setApi] = useState<CarouselApi>();
   const [currentSlide, setCurrentSlide] = useState(0);
@@ -324,15 +330,15 @@ export function TaskSuggestion() {
 
   return (
     <div className="w-full space-y-6">
-      {/* Modern Priority Selector */}
+      {/* Modern Priority Selector - Mobile Responsive */}
       <motion.div 
         variants={slideInFromTop}
         initial="initial"
         animate="animate"
-        className="flex justify-center"
+        className="flex justify-center px-2"
       >
-        <Card className="inline-flex p-1 bg-gradient-to-r from-primary/5 to-accent/5 border-primary/20">
-          <div className="flex gap-1">
+        <Card className="w-full max-w-4xl p-1 bg-gradient-to-r from-primary/5 to-accent/5 border-primary/20">
+          <div className="grid grid-cols-2 sm:flex sm:flex-wrap lg:grid lg:grid-cols-4 gap-1">
             {(['Critical', 'High', 'Medium', 'Low'] as Priority[]).map((priority) => {
               const count = tasks.filter(t => !t.completedAt && !t.isMuted && !t.parentId && t.priority === priority).length;
               return (
@@ -342,25 +348,25 @@ export function TaskSuggestion() {
                   size="sm"
                   onClick={() => setCurrentPriority(priority)}
                   className={cn(
-                    "relative h-9 px-4 transition-all duration-300",
+                    "relative h-9 px-2 sm:px-4 min-w-0 flex-1 sm:flex-none transition-all duration-300 text-xs sm:text-sm",
                     currentPriority === priority && "shadow-lg scale-105"
                   )}
                   disabled={count === 0}
                 >
-                  <span className="flex items-center gap-2">
+                  <span className="flex items-center gap-1 sm:gap-2 min-w-0">
                     <div className={cn(
-                      "w-2 h-2 rounded-full",
+                      "w-2 h-2 rounded-full flex-shrink-0",
                       priority === 'Critical' && "bg-red-500",
                       priority === 'High' && "bg-orange-500", 
                       priority === 'Medium' && "bg-yellow-500",
                       priority === 'Low' && "bg-green-500"
                     )} />
-                    {priority}
+                    <span className="truncate">{priority}</span>
                   </span>
                   {count > 0 && (
                     <Badge 
                       variant="secondary" 
-                      className="ml-2 h-5 min-w-5 text-xs p-0 flex items-center justify-center"
+                      className="ml-1 sm:ml-2 h-4 sm:h-5 min-w-4 sm:min-w-5 text-xs p-0 flex items-center justify-center flex-shrink-0"
                     >
                       {count}
                     </Badge>
@@ -391,9 +397,20 @@ export function TaskSuggestion() {
                           <Sparkles className="w-5 h-5" />
                           Ready for this one?
                         </CardDescription>
-                        <Badge variant="outline" className="shrink-0">
-                          {index + 1} of {possibleTasks.length}
-                        </Badge>
+                        <div className="flex items-center gap-2">
+                          <Badge variant="outline" className="shrink-0">
+                            {index + 1} of {possibleTasks.length}
+                          </Badge>
+                          <ItemActionsDropdown
+                            item={task}
+                            itemType="task"
+                            onShare={() => setShareDialog({isOpen: true, task})}
+                            onEdit={() => startEditingTask(task.id)}
+                            onDelete={() => deleteTask(task.id)}
+                            showExternalLink={true}
+                            size="sm"
+                          />
+                        </div>
                       </div>
 
                                 {/* Make title clickable if it's a URL */}
@@ -425,7 +442,7 @@ export function TaskSuggestion() {
                                     {task.reminderAt && (
                                         <Badge variant="outline" className="flex items-center gap-1">
                                             <CalendarIcon className="h-3 w-3" />
-                                            {format(new Date(task.reminderAt), "MMM d, h:mm a")}
+                                            {safeDateFormat(task.reminderAt, "MMM d, h:mm a", "Invalid date")}
                                         </Badge>
                                     )}
                                     {task.recurrence && task.recurrence.frequency !== 'none' && (
@@ -438,7 +455,10 @@ export function TaskSuggestion() {
                                             </Badge>
                                             </TooltipTrigger>
                                             <TooltipContent>
-                                                {task.recurrence.endDate ? `Repeats ${task.recurrence.frequency} until ${format(new Date(task.recurrence.endDate), "MMM d, yyyy")}` : `Repeats ${task.recurrence.frequency}`}
+                                                {task.recurrence.endDate ? 
+                                                  `Repeats ${task.recurrence.frequency} until ${safeDateFormat(task.recurrence.endDate, "MMM d, yyyy", "Invalid date")}` :
+                                                  `Repeats ${task.recurrence.frequency}`
+                                                }
                                             </TooltipContent>
                                         </Tooltip>
                                         </TooltipProvider>
@@ -585,6 +605,17 @@ export function TaskSuggestion() {
             </AlertDialogFooter>
         </AlertDialogContent>
     </AlertDialog>
+    
+    {/* Share Dialog */}
+    {shareDialog.task && (
+      <ShareDialog
+        isOpen={shareDialog.isOpen}
+        onClose={() => setShareDialog({isOpen: false, task: null})}
+        itemType="task"
+        itemTitle={shareDialog.task.title}
+        itemId={shareDialog.task.id}
+      />
+    )}
     </div>
   );
 }

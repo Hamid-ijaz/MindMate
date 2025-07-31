@@ -70,6 +70,8 @@ interface TaskFormProps {
   onFinished?: () => void;
   parentId?: string;
   defaultValues?: Partial<TaskFormValues>;
+  customSaveHandler?: (taskData: Partial<Task>) => Promise<void>;
+  customAddHandler?: (taskData: Omit<Task, 'id' | 'createdAt' | 'rejectionCount' | 'isMuted' | 'completedAt' | 'lastRejectedAt' | 'notifiedAt'>) => Promise<void>;
 }
 
 const urlRegex = new RegExp(
@@ -77,7 +79,7 @@ const urlRegex = new RegExp(
 );
 
 
-export function TaskForm({ task, onFinished, parentId, defaultValues: propDefaults }: TaskFormProps) {
+export function TaskForm({ task, onFinished, parentId, defaultValues: propDefaults, customSaveHandler, customAddHandler }: TaskFormProps) {
   const { addTask, updateTask, taskCategories, taskDurations } = useTasks();
   const [isSummarizing, startSummarizeTransition] = useTransition();
   const [isEnhancing, startEnhanceTransition] = useTransition();
@@ -86,10 +88,32 @@ export function TaskForm({ task, onFinished, parentId, defaultValues: propDefaul
   const defaultValues: Partial<TaskFormValues> = task ? {
     ...task,
     duration: Number(task.duration) as TaskDuration,
-    reminderAt: task.reminderAt ? new Date(task.reminderAt) : undefined,
+    reminderAt: task.reminderAt ? (() => {
+      try {
+        const date = new Date(task.reminderAt);
+        if (isNaN(date.getTime())) {
+          return undefined;
+        }
+        return date;
+      } catch (error) {
+        console.error('Date parsing error:', error);
+        return undefined;
+      }
+    })() : undefined,
     recurrence: task.recurrence ? {
         ...task.recurrence,
-        endDate: task.recurrence.endDate ? new Date(task.recurrence.endDate) : undefined,
+        endDate: task.recurrence.endDate ? (() => {
+          try {
+            const date = new Date(task.recurrence.endDate);
+            if (isNaN(date.getTime())) {
+              return undefined;
+            }
+            return date;
+          } catch (error) {
+            console.error('Date parsing error:', error);
+            return undefined;
+          }
+        })() : undefined,
     } : { frequency: 'none' },
   } : {
     title: "",
@@ -151,7 +175,7 @@ export function TaskForm({ task, onFinished, parentId, defaultValues: propDefaul
     });
   }
 
-  const onSubmit = (data: TaskFormValues) => {
+  const onSubmit = async (data: TaskFormValues) => {
     const taskData = {
         ...data,
         reminderAt: data.reminderAt ? data.reminderAt.getTime() : undefined,
@@ -161,14 +185,34 @@ export function TaskForm({ task, onFinished, parentId, defaultValues: propDefaul
         } : undefined,
     }
 
-    if (task) {
-      updateTask(task.id, taskData as Partial<Task>);
-    } else {
-      addTask({ ...taskData, parentId } as Omit<Task, 'id' | 'createdAt' | 'rejectionCount' | 'isMuted' | 'completedAt' | 'lastRejectedAt'>);
-    }
-    onFinished?.();
-    if (!task) {
-      form.reset(defaultValues);
+    try {
+      if (task) {
+        // Update existing task
+        if (customSaveHandler) {
+          await customSaveHandler(taskData as Partial<Task>);
+        } else {
+          updateTask(task.id, taskData as Partial<Task>);
+        }
+      } else {
+        // Add new task
+        if (customAddHandler) {
+          await customAddHandler({ ...taskData, parentId } as Omit<Task, 'id' | 'createdAt' | 'rejectionCount' | 'isMuted' | 'completedAt' | 'lastRejectedAt' | 'notifiedAt'>);
+        } else {
+          addTask({ ...taskData, parentId } as Omit<Task, 'id' | 'createdAt' | 'rejectionCount' | 'isMuted' | 'completedAt' | 'lastRejectedAt' | 'notifiedAt'>);
+        }
+      }
+      
+      onFinished?.();
+      if (!task) {
+        form.reset(defaultValues);
+      }
+    } catch (error) {
+      console.error('Error submitting form:', error);
+      toast({
+        title: "Error",
+        description: "Failed to save the task. Please try again.",
+        variant: "destructive"
+      });
     }
   };
 
@@ -354,9 +398,7 @@ export function TaskForm({ task, onFinished, parentId, defaultValues: propDefaul
                             !field.value && "text-muted-foreground"
                         )}
                         >
-                        {field.value ? (
-                            format(field.value, "PPP, h:mm a")
-                        ) : (
+                        {field.value ? safeDateFormat(field.value, "PPP, h:mm a", "Invalid date") : (
                             <span>Pick a date</span>
                         )}
                         <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
