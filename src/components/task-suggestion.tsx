@@ -325,8 +325,14 @@ export function TaskSuggestion() {
     );
   }
 
-  const subtasksOfSuggested = currentTask ? tasks.filter(t => t.parentId === currentTask.id && !t.completedAt) : [];
-  const hasPendingSubtasks = subtasksOfSuggested.length > 0;
+  // Enhanced subtask display with completion tracking
+  const subtasksOfSuggested = currentTask ? tasks.filter(t => t.parentId === currentTask.id) : [];
+  const pendingSubtasks = subtasksOfSuggested.filter(t => !t.completedAt);
+  const completedSubtasks = subtasksOfSuggested.filter(t => t.completedAt);
+  const hasPendingSubtasks = pendingSubtasks.length > 0;
+  const subtaskProgress = subtasksOfSuggested.length > 0 
+    ? Math.round((completedSubtasks.length / subtasksOfSuggested.length) * 100) 
+    : 0;
 
   return (
     <div className="w-full space-y-6">
@@ -517,11 +523,33 @@ export function TaskSuggestion() {
                             </CardFooter>
                             {subtasksOfSuggested.length > 0 && (
                                 <CardContent>
+                                    {/* Progress indicator for subtasks */}
+                                    <div className="mb-3 space-y-2">
+                                        <div className="flex items-center justify-between text-sm">
+                                            <span className="text-muted-foreground">Subtask Progress</span>
+                                            <span className="font-medium">{subtaskProgress}%</span>
+                                        </div>
+                                        <div className="w-full bg-muted rounded-full h-2">
+                                            <div 
+                                                className="bg-primary rounded-full h-2 transition-all duration-300"
+                                                style={{ width: `${subtaskProgress}%` }}
+                                            />
+                                        </div>
+                                        <div className="text-xs text-muted-foreground">
+                                            {completedSubtasks.length} of {subtasksOfSuggested.length} completed
+                                        </div>
+                                    </div>
+                                    
                                     <Accordion type="single" collapsible defaultValue="subtasks" className="w-full">
                                     <AccordionItem value="subtasks">
                                         <AccordionTrigger>
                                         <div className="flex items-center gap-2 text-sm">
                                             View Sub-tasks ({subtasksOfSuggested.length})
+                                            {hasPendingSubtasks && (
+                                                <Badge variant="secondary" className="text-xs">
+                                                    {pendingSubtasks.length} pending
+                                                </Badge>
+                                            )}
                                         </div>
                                         </AccordionTrigger>
                                         <AccordionContent>
