@@ -117,18 +117,19 @@ export function SubtaskList({
   const subtasksToDisplay = subtasks;
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-2">
         {subtasksToDisplay.map((subtask, index) => (
           <div key={subtask.id} className="relative">
             {editingSubtaskId === subtask.id && (isSharedView ? canEdit : true) ? (
-              <Card className="bg-secondary border-l-4 border-l-primary">
-                <CardContent className="p-4">
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-sm font-semibold">Edit Subtask</h3>
+              <Card className="bg-secondary/50 border-l-4 border-l-primary shadow-sm">
+                <CardContent className="p-3">
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-sm font-semibold text-foreground">Edit Subtask</h3>
                     <Button
                       variant="ghost"
                       size="sm"
                       onClick={() => setEditingSubtaskId(null)}
+                      className="h-8 px-2 text-xs"
                     >
                       Cancel
                     </Button>
@@ -150,149 +151,136 @@ export function SubtaskList({
                 </CardContent>
               </Card>
             ) : (
-              <Card className={`border-l-4 ${subtask.completedAt ? 'border-l-green-500 bg-green-50/50' : 'border-l-primary'} transition-all duration-200 hover:shadow-md`}>
-                <CardContent className="p-4">
-                  <div className="flex items-start justify-between gap-3">
+              <Card className={`
+                border-l-4 transition-all duration-200 hover:shadow-md group overflow-hidden
+                ${subtask.completedAt 
+                  ? 'border-l-green-500 bg-green-50/30 border-green-200/50' 
+                  : 'border-l-primary hover:border-l-primary/80'
+                }
+              `}>
+                <CardContent className="p-3">
+                  <div className="flex items-start gap-3">
+                    {/* Subtask number indicator */}
+                    <div className={`
+                      flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold mt-0.5
+                      ${subtask.completedAt 
+                        ? 'bg-green-100 text-green-700 border-2 border-green-300' 
+                        : 'bg-primary/10 text-primary border-2 border-primary/20'
+                      }
+                    `}>
+                      {subtask.completedAt ? '✓' : index + 1}
+                    </div>
+
+                    {/* Content area */}
                     <div className="flex-1 min-w-0">
-                      {/* Subtask number and title */}
-                      <div className="flex items-start gap-3 mb-2">
-                        <div className="flex-shrink-0 w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center text-xs font-medium text-primary mt-0.5">
-                          {index + 1}
-                        </div>
-                        <div className="flex-1">
-                          <h4 className={`font-semibold text-base leading-tight ${subtask.completedAt ? 'line-through text-muted-foreground' : ''}`}>
-                            {subtask.title}
-                          </h4>
-                          {subtask.description && (
-                            <p className={`text-sm mt-1 leading-relaxed ${subtask.completedAt ? 'line-through text-muted-foreground' : 'text-muted-foreground'}`}>
-                              {subtask.description}
-                            </p>
-                          )}
-                        </div>
+                      {/* Title and description */}
+                      <div className="mb-2">
+                        <h4 className={`
+                          font-semibold text-sm leading-tight mb-1
+                          ${subtask.completedAt ? 'line-through text-muted-foreground' : 'text-foreground'}
+                        `}>
+                          {subtask.title}
+                        </h4>
+                        {subtask.description && (
+                          <p className={`
+                            text-xs leading-relaxed line-clamp-2
+                            ${subtask.completedAt ? 'line-through text-muted-foreground/70' : 'text-muted-foreground'}
+                          `}>
+                            {subtask.description}
+                          </p>
+                        )}
                       </div>
 
-                      {/* Subtask metadata */}
-                      <div className="flex items-center gap-2 ml-9 flex-wrap">
-                        <Badge 
-                          variant="secondary" 
-                          className="text-xs"
-                        >
-                          {subtask.category}
-                        </Badge>
+                      {/* Mobile-optimized metadata */}
+                      <div className="flex items-center gap-1.5 flex-wrap mb-2">
                         <Badge
                           variant={
                             subtask.priority === 'Critical' ? 'destructive' :
                             subtask.priority === 'High' ? 'default' :
                             subtask.priority === 'Medium' ? 'outline' : 'secondary'
                           }
-                          className="text-xs"
+                          className="text-xs px-1.5 py-0.5 h-5"
                         >
                           {subtask.priority}
                         </Badge>
-                        <Badge variant="outline" className="text-xs">
-                          {subtask.duration} min
+                        
+                        <Badge variant="secondary" className="text-xs px-1.5 py-0.5 h-5">
+                          {subtask.category}
                         </Badge>
-                        <Badge variant="outline" className="text-xs">
-                          {subtask.timeOfDay}
+                        
+                        <Badge variant="outline" className="text-xs px-1.5 py-0.5 h-5">
+                          ⏱️ {subtask.duration}m
                         </Badge>
+                        
+                        <Badge variant="outline" className="text-xs px-1.5 py-0.5 h-5">
+                          🕒 {subtask.timeOfDay}
+                        </Badge>
+                        
                         {subtask.completedAt && (
-                          <Badge variant="secondary" className="text-xs bg-green-100 text-green-800">
-                            Completed
+                          <Badge className="text-xs px-1.5 py-0.5 h-5 bg-green-100 text-green-800 border-green-200">
+                            ✓ Done
                           </Badge>
                         )}
                       </div>
+
+                      {/* Mobile-optimized action buttons */}
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1">
+                          {/* Complete/Reopen button */}
+                          {!subtask.completedAt ? (
+                            <Button
+                              onClick={() => handleSubtaskComplete(subtask.id)}
+                              disabled={completingSubtasks.has(subtask.id)}
+                              size="sm"
+                              className="h-7 px-2 text-xs bg-green-600 hover:bg-green-700 text-white"
+                            >
+                              {completingSubtasks.has(subtask.id) ? (
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                              ) : (
+                                <>
+                                  <Check className="h-3 w-3 mr-1" />
+                                  Done
+                                </>
+                              )}
+                            </Button>
+                          ) : (
+                            isHistoryView && (
+                              <Button
+                                onClick={() => handleSubtaskReopen(subtask.id)}
+                                size="sm"
+                                variant="outline"
+                                className="h-7 px-2 text-xs"
+                              >
+                                <RotateCcw className="h-3 w-3 mr-1" />
+                                Reopen
+                              </Button>
+                            )
+                          )}
+                        </div>
+
+                        {/* Edit and delete buttons - show on hover or always on mobile */}
+                        {(isSharedView ? canEdit : true) && !isHistoryView && (
+                          <div className="flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity duration-200">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setEditingSubtaskId(subtask.id)}
+                              className="h-7 w-7 p-0"
+                            >
+                              <Edit className="h-3 w-3" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleSubtaskDelete(subtask.id)}
+                              className="h-7 w-7 p-0 text-destructive hover:text-destructive"
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        )}
+                      </div>
                     </div>
-
-                    {/* Actions */}
-                    {!isSharedView && !isHistoryView && (
-                      <div className="flex gap-1 flex-shrink-0">
-                        {subtask.completedAt ? (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleSubtaskReopen(subtask.id)}
-                            className="h-8 px-2 text-orange-600 hover:text-orange-700"
-                          >
-                            <RotateCcw className="h-3 w-3 mr-1" />
-                            <span className="text-xs">Reopen</span>
-                          </Button>
-                        ) : (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleSubtaskComplete(subtask.id)}
-                            disabled={completingSubtasks.has(subtask.id)}
-                            className="h-8 px-2 text-green-600 hover:text-green-700"
-                          >
-                            {completingSubtasks.has(subtask.id) ? (
-                              <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-                            ) : (
-                              <Check className="h-3 w-3 mr-1" />
-                            )}
-                            <span className="text-xs">Complete</span>
-                          </Button>
-                        )}
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setEditingSubtaskId(subtask.id)}
-                          className="h-8 w-8 p-0"
-                        >
-                          <Edit className="h-3 w-3" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleSubtaskDelete(subtask.id)}
-                          className="h-8 w-8 p-0 text-destructive hover:text-destructive"
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    )}
-
-                    {/* Shared view edit actions */}
-                    {isSharedView && canEdit && !isHistoryView && (
-                      <div className="flex gap-1 flex-shrink-0">
-                        {subtask.completedAt ? (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleSubtaskReopen(subtask.id)}
-                            className="h-8 px-2 text-orange-600 hover:text-orange-700"
-                          >
-                            <RotateCcw className="h-3 w-3 mr-1" />
-                            <span className="text-xs">Reopen</span>
-                          </Button>
-                        ) : (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleSubtaskComplete(subtask.id)}
-                            className="h-8 px-2 text-green-600 hover:text-green-700"
-                          >
-                            <Check className="h-3 w-3 mr-1" />
-                            <span className="text-xs">Complete</span>
-                          </Button>
-                        )}
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setEditingSubtaskId(subtask.id)}
-                          className="h-8 w-8 p-0"
-                        >
-                          <Edit className="h-3 w-3" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleSubtaskDelete(subtask.id)}
-                          className="h-8 w-8 p-0 text-destructive hover:text-destructive"
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    )}
                   </div>
                 </CardContent>
               </Card>
@@ -300,37 +288,46 @@ export function SubtaskList({
           </div>
         ))}
 
-        {!isHistoryView && isAdding && (canEdit || !isSharedView) && (
-            <Card className="bg-secondary/50 border-l-4 border-l-primary border-dashed">
-                <CardContent className="p-4">
-                    <h3 className="text-sm font-semibold mb-4 flex items-center gap-2">
-                      <PlusCircle className="h-4 w-4" />
-                      New Sub-task for "{parentTask.title}"
-                    </h3>
-                    <TaskForm 
-                        onFinished={handleFormFinish}
-                        parentId={parentTask.id}
-                        defaultValues={{
-                            category: parentTask.category,
-                            timeOfDay: parentTask.timeOfDay,
-                        }}
-                    />
+        {/* Add new subtask button - mobile optimized */}
+        {!isHistoryView && (isSharedView ? canEdit : true) && (
+          <div className="pt-2">
+            {isAdding ? (
+              <Card className="bg-primary/5 border-dashed border-2 border-primary/30">
+                <CardContent className="p-3">
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-sm font-semibold text-foreground">Add Subtask</h3>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setIsAdding(false)}
+                      className="h-8 px-2 text-xs"
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                  <TaskForm
+                    parentTaskId={parentTask.id}
+                    onFinished={handleFormFinish}
+                    defaultValues={{
+                      category: parentTask.category,
+                      priority: parentTask.priority,
+                      timeOfDay: parentTask.timeOfDay,
+                    }}
+                  />
                 </CardContent>
-            </Card>
-        )}
-
-        {!isHistoryView && !isAdding && (canEdit || !isSharedView) && (
-            <div className="pt-2">
-              <Button 
-                variant="ghost" 
-                size="sm" 
+              </Card>
+            ) : (
+              <Button
                 onClick={() => setIsAdding(true)}
-                className="w-full border-2 border-dashed border-muted-foreground/30 hover:border-primary/50 hover:bg-primary/5"
+                variant="outline"
+                size="sm"
+                className="w-full h-10 border-dashed border-2 hover:border-primary hover:bg-primary/5 transition-colors duration-200"
               >
-                  <PlusCircle className="mr-2 h-4 w-4" />
-                  Add Sub-task
+                <PlusCircle className="h-4 w-4 mr-2" />
+                Add Subtask
               </Button>
-            </div>
+            )}
+          </div>
         )}
     </div>
   );

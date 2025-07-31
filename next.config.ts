@@ -22,6 +22,33 @@ const nextConfig: NextConfig = {
     // Reduce hydration warnings
     optimizePackageImports: ['lucide-react'],
   },
+  // PWA Configuration
+  headers: async () => {
+    return [
+      {
+        source: '/sw.js',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=0, must-revalidate',
+          },
+          {
+            key: 'Service-Worker-Allowed',
+            value: '/',
+          },
+        ],
+      },
+      {
+        source: '/manifest.json',
+        headers: [
+          {
+            key: 'Content-Type',
+            value: 'application/manifest+json',
+          },
+        ],
+      },
+    ];
+  },
   // Suppress hydration warnings in development
   onDemandEntries: {
     // period (in ms) where the server will keep pages in the buffer
@@ -29,6 +56,8 @@ const nextConfig: NextConfig = {
     // number of pages that should be kept simultaneously without being disposed
     pagesBufferLength: 2,
   },
+  // Enable standalone mode for better PWA performance
+  output: 'standalone',
 };
 
 export default nextConfig;

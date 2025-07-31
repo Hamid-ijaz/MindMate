@@ -15,7 +15,10 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from '@/components/ui/form';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Trash2, Plus, Bell, BellOff } from 'lucide-react';
+import { NotificationSettings } from '@/components/notification-settings';
+import { CalendarConnections } from '@/components/calendar-connections';
+import { ThemePicker } from '@/components/theme-picker';
+import { Trash2, Plus, Bell, BellOff, Palette } from 'lucide-react';
 import { Separator } from "@/components/ui/separator";
 import { Loader2 } from "lucide-react";
 import { pageVariants, cardVariants, staggerContainer } from '@/lib/animations';
@@ -70,6 +73,21 @@ function SettingsSkeleton() {
               <Skeleton className="h-10 w-full" />
               <Skeleton className="h-10 w-full" />
             </div>
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle>Theme & Appearance</CardTitle>
+          <CardDescription>Customize the look and feel of your workspace.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center justify-between">
+            <div className="space-y-1">
+              <Skeleton className="h-4 w-24" />
+              <Skeleton className="h-3 w-48" />
+            </div>
+            <Skeleton className="h-10 w-10" />
+          </div>
         </CardContent>
       </Card>
     </div>
@@ -272,6 +290,32 @@ export default function SettingsPage() {
             </Card>
             </motion.div>
 
+            {/* Theme & Appearance Settings */}
+            <motion.div variants={cardVariants}>
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Palette className="h-5 w-5" />
+                  Theme & Appearance
+                </CardTitle>
+                <CardDescription>Customize the look and feel of your workspace.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-1">
+                      <p className="text-sm font-medium">Theme Selector</p>
+                      <p className="text-xs text-muted-foreground">
+                        Choose between light, dark mode and different color themes
+                      </p>
+                    </div>
+                    <ThemePicker />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            </motion.div>
+
             <motion.div variants={cardVariants}>
             <Card>
                 <CardHeader>
@@ -340,6 +384,22 @@ export default function SettingsPage() {
                     </Form>
                 </CardContent>
             </Card>
+            </motion.div>
+
+            <motion.div variants={cardVariants}>
+              <NotificationSettings />
+            </motion.div>
+
+            <motion.div variants={cardVariants}>
+              <Card>
+                <CardHeader>
+                  <CardTitle>Calendar Integration</CardTitle>
+                  <CardDescription>Connect external calendars to sync your tasks and events.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <CalendarConnections />
+                </CardContent>
+              </Card>
             </motion.div>
         </motion.div>
       )}

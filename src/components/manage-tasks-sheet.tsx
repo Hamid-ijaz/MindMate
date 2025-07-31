@@ -59,6 +59,7 @@ export function AddTaskButton({ isMobile, className, ...props }: AddTaskButtonPr
             <Button 
                 onClick={() => setIsSheetOpen(true)}
                 className={cn("rounded-full h-14 w-14 shadow-lg", className)}
+                data-add-task-trigger
                 {...props}
             >
               <PlusCircle className="h-6 w-6" />
@@ -68,7 +69,12 @@ export function AddTaskButton({ isMobile, className, ...props }: AddTaskButtonPr
     }
 
     return (
-        <Button onClick={() => setIsSheetOpen(true)} className={className} {...props}>
+        <Button 
+            onClick={() => setIsSheetOpen(true)} 
+            className={className} 
+            data-add-task-trigger
+            {...props}
+        >
           <PlusCircle className="mr-2 h-4 w-4" />
           <span>Add Task</span>
         </Button>
