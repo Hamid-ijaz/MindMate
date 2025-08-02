@@ -13,7 +13,20 @@ import { useState } from "react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./ui/tooltip";
 
 export function NotificationHistory() {
-  const { notifications, unreadCount, markAllAsRead, markAsRead, clearAllNotifications } = useNotifications();
+  // Handle case where component is rendered outside of NotificationProvider
+  let notifications, unreadCount, markAllAsRead, markAsRead, clearAllNotifications;
+  try {
+    const context = useNotifications();
+    notifications = context.notifications;
+    unreadCount = context.unreadCount;
+    markAllAsRead = context.markAllAsRead;
+    markAsRead = context.markAsRead;
+    clearAllNotifications = context.clearAllNotifications;
+  } catch (error) {
+    // If we're not in a provider context, return null to avoid rendering
+    return null;
+  }
+  
   const router = useRouter();
   const [isClearing, setIsClearing] = useState(false);
 

@@ -24,9 +24,7 @@ import {
 } from 'lucide-react';
 import { ThemePicker } from './theme-picker';
 import { ThemePickerDialog } from './theme-picker-dialog';
-import dynamic from 'next/dynamic';
-
-const NotificationHistory = dynamic(() => import('./notification-history').then(mod => mod.NotificationHistory), { ssr: false });
+import { NotificationHistory } from './notification-history';
 import { PWAInstallPrompt } from './pwa-install-prompt';
 import { KeyboardShortcutsHelp } from './keyboard-shortcuts-help';
 import { ClientOnly } from './ui/client-only';
