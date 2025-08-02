@@ -106,7 +106,9 @@ function TaskPageSkeleton() {
     );
 }
 
-export default function TaskPage() {
+import { NotificationProvider } from '@/contexts/notification-context';
+
+function TaskPageInner() {
     const { id } = useParams();
     const router = useRouter();
     const { toast } = useToast();
@@ -551,6 +553,14 @@ export default function TaskPage() {
             )}
         </div>
     );
+}
+
+export default function TaskPageWrapper(props: any) {
+  return (
+    <NotificationProvider>
+      <TaskPageInner {...props} />
+    </NotificationProvider>
+  );
 }
 
 

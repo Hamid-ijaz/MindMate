@@ -94,7 +94,9 @@ function SettingsSkeleton() {
   );
 }
 
-export default function SettingsPage() {
+import { NotificationProvider } from '@/contexts/notification-context';
+
+function SettingsPageInner() {
   const { user, updateUser, loading: authLoading } = useAuth();
   const { toast } = useToast();
   const { taskCategories, setTaskCategories, taskDurations, setTaskDurations, isLoading: tasksLoading } = useTasks();
@@ -404,5 +406,13 @@ export default function SettingsPage() {
         </motion.div>
       )}
     </motion.div>
+  );
+}
+
+export default function SettingsPageWrapper(props: any) {
+  return (
+    <NotificationProvider>
+      <SettingsPageInner {...props} />
+    </NotificationProvider>
   );
 }
