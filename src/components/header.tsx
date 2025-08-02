@@ -9,6 +9,7 @@ import { Logo } from './logo';
 import { AddTaskButton } from './manage-tasks-sheet';
 import { useAuth } from '@/contexts/auth-context';
 import { useTasks } from '@/contexts/task-context';
+import { useNotes } from '@/contexts/note-context';
 import { useKeyboardShortcuts } from '@/hooks/use-keyboard-shortcuts';
 import { Button } from './ui/button';
 import { Skeleton } from './ui/skeleton';
@@ -19,7 +20,7 @@ import {
   Notebook, Calendar, Target, BarChart3, Menu, X,
   User, LogOut, Bell, Keyboard, ChevronDown, Plus,
   Zap, Search, Command as CommandIcon, Palette, BookOpen, Timer,
-  TrendingUp, Activity, CheckCircle2, Clock, Globe
+  TrendingUp, Activity, CheckCircle2, Clock, Globe, CheckSquare, StickyNote
 } from 'lucide-react';
 import { ThemePicker } from './theme-picker';
 import { ThemePickerDialog } from './theme-picker-dialog';
@@ -79,7 +80,8 @@ interface QuickAction {
 export function Header() {
   const pathname = usePathname();
   const { isAuthenticated, user, logout, loading } = useAuth();
-  const { setIsSheetOpen } = useTasks();
+  const { setIsSheetOpen, tasks } = useTasks();
+  const { notes } = useNotes();
   const { formatShortcut, getPrimaryModifier, matchesShortcut, getModifiers } = useKeyboardShortcuts();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isShortcutsHelpOpen, setIsShortcutsHelpOpen] = useState(false);
@@ -97,7 +99,7 @@ export function Header() {
 
   const isAuthPage = pathname === '/login' || pathname === '/signup';
 
-  // Enhanced navigation items
+  // Enhanced navigation items with Calendar moved to secondary
   const navigationItems: NavItem[] = [
     // Primary workspace items
     { 
@@ -108,27 +110,27 @@ export function Header() {
       description: 'Overview of your tasks and progress'
     },
     { 
+      label: 'Notes', 
+      href: '/notes', 
+      icon: Notebook, 
+      category: 'primary',
+      description: 'Capture ideas and information'
+    },
+    
+    // Secondary workspace items with Calendar and Goals moved here
+    { 
       label: 'Calendar', 
       href: '/calendar', 
       icon: Calendar, 
-      category: 'primary',
+      category: 'secondary',
       description: 'Schedule and time management'
     },
     { 
       label: 'Goals', 
       href: '/goals', 
       icon: Target, 
-      category: 'primary',
-      description: 'Track your objectives and milestones'
-    },
-    
-    // Secondary workspace items
-    { 
-      label: 'Notes', 
-      href: '/notes', 
-      icon: Notebook, 
       category: 'secondary',
-      description: 'Capture ideas and information'
+      description: 'Track your objectives and milestones'
     },
     { 
       label: 'Analytics', 
@@ -701,9 +703,9 @@ export function Header() {
         </AnimatePresence>
       </header>
 
-      {/* Command Palette */}
+      {/* Enhanced Command Palette with Search */}
       <CommandDialog open={isCommandOpen} onOpenChange={setIsCommandOpen}>
-        <CommandInput placeholder="Type a command or search..." />
+        <CommandInput placeholder="Search tasks, notes, or type a command..." />
         <CommandList>
           <CommandEmpty>No results found.</CommandEmpty>
           
@@ -725,6 +727,59 @@ export function Header() {
             })}
           </CommandGroup>
           
+          <CommandSeparator />
+
+          {/* Task Search Results */}
+          {tasks && tasks.length > 0 && (
+            <CommandGroup heading="Tasks">
+              {tasks
+                .filter(task => !task.completedAt)
+                .slice(0, 8) // Limit results
+                .map((task) => (
+                  <CommandItem
+                    key={task.id}
+                    onSelect={() => {
+                      window.location.href = `/task/${task.id}`;
+                      setIsCommandOpen(false);
+                    }}
+                  >
+                    <CheckSquare className="h-4 w-4 mr-2" />
+                    <div className="flex flex-col">
+                      <span className="font-medium">{task.title}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {task.category} • {task.priority} Priority • {task.duration}m
+                      </span>
+                    </div>
+                  </CommandItem>
+                ))}
+            </CommandGroup>
+          )}
+
+          {/* Note Search Results */}
+          {notes && notes.length > 0 && (
+            <CommandGroup heading="Notes">
+              {notes
+                .slice(0, 6) // Limit results
+                .map((note) => (
+                  <CommandItem
+                    key={note.id}
+                    onSelect={() => {
+                      window.location.href = `/notes?id=${note.id}`;
+                      setIsCommandOpen(false);
+                    }}
+                  >
+                    <StickyNote className="h-4 w-4 mr-2" />
+                    <div className="flex flex-col">
+                      <span className="font-medium">{note.title || 'Untitled Note'}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {note.content ? note.content.substring(0, 50) + '...' : 'No content'}
+                      </span>
+                    </div>
+                  </CommandItem>
+                ))}
+            </CommandGroup>
+          )}
+
           <CommandSeparator />
           
           <CommandGroup heading="Navigation">

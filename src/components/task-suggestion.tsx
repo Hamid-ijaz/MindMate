@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { Priority, Task, TimeOfDay } from "@/lib/types";
-import { AlertCircle, Check, Sparkles, X, Loader2, Wand2, Edit, CalendarIcon, Repeat, ExternalLink, ChevronLeft, ChevronRight } from "lucide-react";
+import { AlertCircle, Check, Sparkles, X, Loader2, Wand2, Edit, CalendarIcon, Repeat, ExternalLink, ChevronLeft, ChevronRight, Target, List, Clock } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { getRandomQuote } from "@/lib/motivational-quotes";
 import { MAX_REJECTIONS_BEFORE_PROMPT, REJECTION_HOURS } from "@/lib/constants";
@@ -33,6 +33,12 @@ import { ShareDialog } from '@/components/share-dialog';
 import { useAuth } from "@/contexts/auth-context";
 import { motion, AnimatePresence } from "framer-motion";
 import { slideInFromTop, carouselSlide, staggerContainer, staggerItem, cardHover } from "@/lib/animations";
+
+// Animation variants for the component
+const slideInFromTopVariant = {
+  initial: { opacity: 0, y: -20 },
+  animate: { opacity: 1, y: 0 }
+};
 
 
 export function TaskSuggestion() {
@@ -320,7 +326,7 @@ export function TaskSuggestion() {
             <p className="text-muted-foreground mt-2 text-center">No tasks match your current priority. Try a different priority or see other available tasks below.</p>
           </CardContent>
         </Card>
-        {otherVisibleTasks && otherVisibleTasks.length > 0 && <OtherTasksList tasks={otherVisibleTasks} />}
+        {/* {otherVisibleTasks && otherVisibleTasks.length > 0 && <OtherTasksList tasks={otherVisibleTasks} />} */}
       </div>
     );
   }
@@ -335,249 +341,363 @@ export function TaskSuggestion() {
     : 0;
 
   return (
-    <div className="w-full space-y-6">
-      {/* Compact Priority Selector - Made Smaller */}
+    <div className="w-full space-y-4">
+      {/* Mobile-Friendly Priority Selector */}
       <motion.div 
-        variants={slideInFromTop}
+        variants={slideInFromTopVariant}
         initial="initial"
         animate="animate"
-        className="flex justify-center px-2 mb-4"
+        className="flex justify-start px-2 mb-4 overflow-x-auto scrollbar-thin"
       >
-        <Card className="w-fit p-1 bg-gradient-to-r from-primary/5 to-accent/5 border-primary/20 shadow-md">
-          <div className="flex gap-1">
-            {(['Critical', 'High', 'Medium', 'Low'] as Priority[]).map((priority) => {
-              const count = tasks.filter(t => !t.completedAt && !t.isMuted && !t.parentId && t.priority === priority).length;
-              return (
-                <Button
-                  key={priority}
-                  variant={currentPriority === priority ? "default" : "ghost"}
-                  size="sm"
-                  onClick={() => setCurrentPriority(priority)}
-                  className={cn(
-                    "relative h-8 px-2 sm:px-3 min-w-0 transition-all duration-300 text-xs",
-                    currentPriority === priority && "shadow-md scale-105"
-                  )}
-                  disabled={count === 0}
-                >
-                  <span className="flex items-center gap-1 min-w-0">
-                    <div className={cn(
-                      "w-1.5 h-1.5 rounded-full flex-shrink-0",
-                      priority === 'Critical' && "bg-red-500",
-                      priority === 'High' && "bg-orange-500", 
-                      priority === 'Medium' && "bg-yellow-500",
-                      priority === 'Low' && "bg-green-500"
-                    )} />
-                    <span className="truncate text-xs">{priority}</span>
-                  </span>
-                  {count > 0 && (
-                    <Badge 
-                      variant="secondary" 
-                      className="ml-1 h-4 min-w-4 text-xs p-0 flex items-center justify-center flex-shrink-0"
-                    >
-                      {count}
-                    </Badge>
-                  )}
-                </Button>
-              );
-            })}
-          </div>
-        </Card>
+        <div className="flex gap-1 bg-muted/30 rounded-lg p-1 shadow-sm border min-w-fit">
+          {(['Critical', 'High', 'Medium', 'Low'] as Priority[]).map((priority) => {
+            const count = tasks.filter(t => !t.completedAt && !t.isMuted && !t.parentId && t.priority === priority).length;
+            const isActive = currentPriority === priority;
+            return (
+              <Button
+                key={priority}
+                variant={isActive ? "default" : "ghost"}
+                size="sm"
+                onClick={() => setCurrentPriority(priority)}
+                className={cn(
+                  "h-7 px-1.5 md:px-2 text-xs font-medium transition-all duration-200 min-w-0 flex-shrink-0",
+                  isActive && "bg-primary text-primary-foreground shadow-sm",
+                  !isActive && "hover:bg-background/50",
+                  count === 0 && "opacity-50 cursor-not-allowed"
+                )}
+                disabled={count === 0}
+              >
+                <div className={cn(
+                  "w-2 h-2 rounded-full mr-1 flex-shrink-0",
+                  priority === 'Critical' && "bg-red-500",
+                  priority === 'High' && "bg-orange-500", 
+                  priority === 'Medium' && "bg-yellow-500",
+                  priority === 'Low' && "bg-green-500"
+                )} />
+                <span className="truncate hidden sm:inline">{priority}</span>
+                <span className="truncate sm:hidden">{priority.charAt(0)}</span>
+                {count > 0 && (
+                  <Badge 
+                    variant="secondary" 
+                    className="ml-1 h-3 min-w-3 text-xs px-1 bg-background/20"
+                  >
+                    {count}
+                  </Badge>
+                )}
+              </Button>
+            );
+          })}
+        </div>
       </motion.div>
 
-      {/* Fixed Height Carousel Container */}
-      <div className="relative">
-        <Carousel setApi={setApi} className="w-full" opts={{ loop: possibleTasks.length > 1 }}>
-          <CarouselContent>
+      {/* Modern Carousel with Fixed Navigation */}
+      <div className="relative group">
+        <Carousel 
+          setApi={setApi} 
+          className="w-full" 
+          opts={{ 
+            loop: possibleTasks.length > 1,
+            align: "start",
+            skipSnaps: false,
+            dragFree: false,
+            containScroll: "trimSnaps"
+          }}
+        >
+          <CarouselContent className="-ml-2 md:-ml-4">
             {possibleTasks.map((task, index) => (
-              <CarouselItem key={task.id}>
+              <CarouselItem key={task.id} className="pl-2 md:pl-4">
                 <motion.div
-                  initial={{ opacity: 0, scale: 0.95 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  transition={{ delay: index * 0.1 }}
-                  className="min-h-[350px]" // Consistent height
+                  initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  transition={{ 
+                    delay: index * 0.1,
+                    type: "spring",
+                    stiffness: 260,
+                    damping: 20
+                  }}
+                  className="h-full"
                 >
-                  <Card className="shadow-xl border-2 hover:border-primary/30 transition-all duration-300 h-full flex flex-col">
-                    <CardHeader className="pb-4">
-                      <div className="flex justify-between items-start pb-3">
-                        <CardDescription className="text-lg font-medium text-primary flex items-center gap-2">
-                          <Sparkles className="w-5 h-5" />
-                          Ready for this one?
-                        </CardDescription>
+                  <Card className={cn(
+                    "h-full flex flex-col shadow-lg border transition-all duration-300",
+                    "bg-gradient-to-br from-card via-card/98 to-muted/20",
+                    "hover:shadow-xl hover:shadow-primary/5 hover:scale-[1.02]",
+                    "border-border/50 hover:border-primary/30 group/card"
+                  )}>
+                    {/* Compact Header */}
+                    <CardHeader className="pb-3 space-y-2 flex-shrink-0">
+                      <div className="flex justify-between items-start">
                         <div className="flex items-center gap-2">
-                          <Badge variant="outline" className="shrink-0">
-                            {index + 1} of {possibleTasks.length}
-                          </Badge>
-                          <ItemActionsDropdown
-                            item={task}
-                            itemType="task"
-                            onShare={() => setShareDialog({isOpen: true, task})}
-                            onEdit={() => startEditingTask(task.id)}
-                            onDelete={() => deleteTask(task.id)}
-                            showExternalLink={true}
-                            size="sm"
-                          />
+                          <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center">
+                            <Sparkles className="w-3 h-3 text-primary" />
+                          </div>
+                          <CardDescription className="text-sm font-medium text-primary">
+                            Task {index + 1} of {possibleTasks.length}
+                          </CardDescription>
                         </div>
+                        
+                        <ItemActionsDropdown
+                          item={task}
+                          itemType="task"
+                          onShare={() => setShareDialog({isOpen: true, task})}
+                          onEdit={() => startEditingTask(task.id)}
+                          onDelete={() => deleteTask(task.id)}
+                          showExternalLink={true}
+                          size="sm"
+                        />
                       </div>
 
-                                {/* Make title clickable if it's a URL */}
-                                {(() => {
-                                  const urlRegex = /^(https?:\/\/)?((([a-z\d]([a-z\d-]*[a-z\d])*)\.)+[a-z]{2,}|((\d{1,3}\.){3}\d{1,3}))(\:\d+)?(\/[\-a-z\d%_.~+]*)*(\?[;&a-z\d%_.~+=-]*)?(#[\-a-z\d_]*)?$/i;
-                                  if (urlRegex.test(task.title)) {
-                                    const url = task.title.startsWith('http') ? task.title : `https://${task.title}`;
-                                    return (
-                                      <CardTitle className="text-2xl pt-2 break-word">
-                                        <a href={url} target="_blank" rel="noopener noreferrer" className="underline text-blue-600 hover:text-blue-800">
-                                          {task.title}
-                                        </a>
-                                      </CardTitle>
-                                    );
-                                  }
-                                  return (
-                                    <CardTitle className="text-2xl pt-2 break-word">{task.title}</CardTitle>
-                                  );
-                                })()}
-                                {task.description && <CardDescription className="pt-2">{task.description}</CardDescription>}
-                            </CardHeader>
-                            <CardContent>
-                                <div className="flex flex-wrap gap-2">
-                                    <Badge variant="outline">{task.category}</Badge>
-                                    <Badge variant="outline" color={task.priority === 'Critical' ? 'destructive' : task.priority === 'High' ? 'warning' : task.priority === 'Medium' ? 'primary' : 'secondary'}>{task.priority} Priority</Badge>
-                                    <Badge variant="outline">{task.duration} min</Badge>
-                                    <Badge variant="outline">{task.timeOfDay}</Badge>
-                                    {task.rejectionCount > 0 && <Badge variant="destructive" className="animate-pulse">{task.rejectionCount}x Skipped</Badge>}
-                                    {task.reminderAt && (
-                                        <Badge variant="outline" className="flex items-center gap-1">
-                                            <CalendarIcon className="h-3 w-3" />
-                                            {safeDateFormat(task.reminderAt, "MMM d, h:mm a", "Invalid date")}
-                                        </Badge>
-                                    )}
-                                    {task.recurrence && task.recurrence.frequency !== 'none' && (
-                                        <TooltipProvider>
-                                        <Tooltip>
-                                            <TooltipTrigger asChild>
-                                            <Badge variant="outline" className="flex items-center gap-1 cursor-default capitalize">
-                                                <Repeat className="h-3 w-3" />
-                                                {task.recurrence.frequency}
-                                            </Badge>
-                                            </TooltipTrigger>
-                                            <TooltipContent>
-                                                {task.recurrence.endDate ? 
-                                                  `Repeats ${task.recurrence.frequency} until ${safeDateFormat(task.recurrence.endDate, "MMM d, yyyy", "Invalid date")}` :
-                                                  `Repeats ${task.recurrence.frequency}`
-                                                }
-                                            </TooltipContent>
-                                        </Tooltip>
-                                        </TooltipProvider>
-                                    )}
-                                </div>
-                                <div className="mt-4 flex justify-center items-center gap-2">
-                                    <Button variant="ghost" size="sm" onClick={handleRewordClick} disabled={isPending || isAccepting || isRejecting}>
-                                        {isPending ? (
-                                            <>
-                                                <Loader2 className="h-4 w-4 animate-spin" />
-                                                <span className="hidden sm:inline">Thinking...</span>
-                                            </>
-                                        ) : (
-                                            <>
-                                                <Wand2 className="h-4 w-4" />
-                                                <span className="hidden sm:inline">Divide task</span>
-                                            </>
-                                        )}
-                                    </Button>
-                                    <Button variant="ghost" size="sm" onClick={() => startEditingTask(task.id)} disabled={isPending || isAccepting || isRejecting}>
-                                        <Edit className="h-4 w-4" />
-                                        <span className="hidden sm:inline">Edit</span>
-                                    </Button>
-                                     <Button variant="ghost" size="sm" asChild>
-                                        <Link href={`/task/${task.id}`}>
-                                            <ExternalLink className="h-4 w-4"/>
-                                            <span className="hidden sm:inline">View</span>
-                                        </Link>
-                                     </Button>
-                                </div>
-                            </CardContent>
-                            <CardFooter className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-6">
-                                <Button variant="destructive" size="lg" onClick={handleReject} className="sm:col-span-1" disabled={isRejecting || isAccepting}>
-                                {isRejecting ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <X className="mr-2 h-5 w-5" />} Not Now
-                                </Button>
-                                {hasPendingSubtasks ? (
-                                    <TooltipProvider>
-                                        <Tooltip>
-                                            <TooltipTrigger asChild>
-                                                <span className="sm:col-span-2" tabIndex={0}>
-                                                <Button size="lg" className="w-full bg-green-500 hover:bg-green-600 text-white" disabled>
-                                                        <Check className="mr-2 h-5 w-5" /> Let's Do It
-                                                </Button>
-                                                </span>
-                                            </TooltipTrigger>
-                                            <TooltipContent>
-                                                <p>Complete all sub-tasks first</p>
-                                            </TooltipContent>
-                                        </Tooltip>
-                                    </TooltipProvider>
-                                ) : (
-                                    <Button size="lg" className="sm:col-span-2 bg-green-500 hover:bg-green-600 text-white" onClick={handleAccept} disabled={isAccepting || isRejecting}>
-                                        {isAccepting ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <Check className="mr-2 h-5 w-5" />} Let's Do It
-                                    </Button>
-                                )}
-                            </CardFooter>
-                            {subtasksOfSuggested.length > 0 && (
-                                <CardContent className="pt-3">
-                                    {/* Compact Progress indicator for subtasks */}
-                                    <div className="mb-3 space-y-2">
-                                        <div className="flex items-center justify-between text-sm">
-                                            <span className="text-muted-foreground text-xs">Subtask Progress</span>
-                                            <span className="font-medium text-xs">{subtaskProgress}%</span>
-                                        </div>
-                                        <div className="w-full bg-muted rounded-full h-1.5">
-                                            <div 
-                                                className="bg-primary rounded-full h-1.5 transition-all duration-300"
-                                                style={{ width: `${subtaskProgress}%` }}
-                                            />
-                                        </div>
-                                        <div className="text-xs text-muted-foreground">
-                                            {completedSubtasks.length} of {subtasksOfSuggested.length} completed
-                                        </div>
-                                    </div>
-                                    
-                                    {/* Collapsible Subtasks - Hidden by Default */}
-                                    <Accordion type="single" collapsible className="w-full">
-                                    <AccordionItem value="subtasks">
-                                        <AccordionTrigger className="text-sm py-2">
-                                        <div className="flex items-center gap-2">
-                                            <span className="text-xs">View Sub-tasks ({subtasksOfSuggested.length})</span>
-                                            {hasPendingSubtasks && (
-                                                <Badge variant="secondary" className="text-xs px-1.5 py-0">
-                                                    {pendingSubtasks.length} pending
-                                                </Badge>
-                                            )}
-                                        </div>
-                                        </AccordionTrigger>
-                                        <AccordionContent>
-                                        <SubtaskList parentTask={task} subtasks={subtasksOfSuggested} />
-                                        </AccordionContent>
-                                    </AccordionItem>
-                                    </Accordion>
-                                </CardContent>
+                      {/* Task Title */}
+                      {(() => {
+                        const urlRegex = /^(https?:\/\/)?((([a-z\d]([a-z\d-]*[a-z\d])*)\.)+[a-z]{2,}|((\d{1,3}\.){3}\d{1,3}))(\:\d+)?(\/[\-a-z\d%_.~+]*)*(\?[;&a-z\d%_.~+=-]*)?(#[\-a-z\d_]*)?$/i;
+                        if (urlRegex.test(task.title)) {
+                          const url = task.title.startsWith('http') ? task.title : `https://${task.title}`;
+                          return (
+                            <CardTitle className="text-lg sm:text-xl leading-tight break-words line-clamp-2">
+                              <a 
+                                href={url} 
+                                target="_blank" 
+                                rel="noopener noreferrer" 
+                                className="underline text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 transition-colors"
+                              >
+                                {task.title}
+                              </a>
+                            </CardTitle>
+                          );
+                        }
+                        return (
+                          <CardTitle className="text-lg sm:text-xl leading-tight break-words line-clamp-2">
+                            {task.title}
+                          </CardTitle>
+                        );
+                      })()}
+                      
+                      {task.description && (
+                        <CardDescription className="text-sm leading-relaxed text-muted-foreground line-clamp-2">
+                          {task.description}
+                        </CardDescription>
+                      )}
+                    </CardHeader>
+
+                    {/* Content - Flexible Space */}
+                    <CardContent className="flex-1 pb-3 flex flex-col justify-between min-h-0">
+                      <div className="space-y-4">
+                        {/* Compact Badges */}
+                        <div className="flex flex-wrap gap-1.5">
+                          <Badge variant="secondary" className="text-xs px-2 py-0.5">
+                            {task.category}
+                          </Badge>
+                          <Badge 
+                            variant="outline" 
+                            className={cn(
+                              "text-xs px-2 py-0.5 font-medium",
+                              task.priority === 'Critical' && "border-red-500 text-red-600 bg-red-50 dark:bg-red-950/20",
+                              task.priority === 'High' && "border-orange-500 text-orange-600 bg-orange-50 dark:bg-orange-950/20",
+                              task.priority === 'Medium' && "border-yellow-500 text-yellow-600 bg-yellow-50 dark:bg-yellow-950/20",
+                              task.priority === 'Low' && "border-green-500 text-green-600 bg-green-50 dark:bg-green-950/20"
                             )}
-                            </Card>
+                          >
+                            {task.priority}
+                          </Badge>
+                          <Badge variant="outline" className="text-xs px-2 py-0.5">
+                            <Clock className="w-3 h-3 mr-1" />
+                            {task.duration}m
+                          </Badge>
+                          <Badge variant="outline" className="text-xs px-2 py-0.5">
+                            {task.timeOfDay}
+                          </Badge>
+                          {task.rejectionCount > 0 && (
+                            <Badge variant="destructive" className="text-xs px-2 py-0.5 animate-pulse">
+                              {task.rejectionCount}x Skipped
+                            </Badge>
+                          )}
+                        </div>
+
+                        {/* Action Buttons */}
+                        <div className="flex justify-center gap-2">
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            onClick={handleRewordClick} 
+                            disabled={isPending || isAccepting || isRejecting}
+                            className="h-8 px-3 text-xs hover:bg-primary/5"
+                          >
+                            {isPending ? (
+                              <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                            ) : (
+                              <Wand2 className="h-3 w-3 mr-1" />
+                            )}
+                            Break Down
+                          </Button>
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            onClick={() => startEditingTask(task.id)} 
+                            disabled={isPending || isAccepting || isRejecting}
+                            className="h-8 px-3 text-xs hover:bg-accent/5"
+                          >
+                            <Edit className="h-3 w-3 mr-1" />
+                            Edit
+                          </Button>
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            asChild
+                            className="h-8 px-3 text-xs hover:bg-blue-50 dark:hover:bg-blue-950/20"
+                          >
+                            <Link href={`/task/${task.id}`}>
+                              <ExternalLink className="h-3 w-3 mr-1"/>
+                              View
+                            </Link>
+                          </Button>
+                        </div>
+                      </div>
+                    </CardContent>
+
+                    {/* Footer - Fixed Height for Consistency */}
+                    <div className="mt-auto">
+                      <CardFooter className="p-4 pt-0">
+                        <div className="w-full space-y-3">
+                          {/* Main Action Buttons */}
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              onClick={handleReject} 
+                              className="sm:col-span-1 border-red-200 text-red-600 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-950/20 h-9" 
+                              disabled={isRejecting || isAccepting}
+                            >
+                              {isRejecting ? (
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              ) : (
+                                <X className="mr-2 h-4 w-4" />
+                              )} 
+                              Not Now
+                            </Button>
+                            
+                            {hasPendingSubtasks ? (
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <span className="sm:col-span-2">
+                                      <Button 
+                                        size="sm" 
+                                        className="w-full h-9 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white opacity-50 cursor-not-allowed" 
+                                        disabled
+                                      >
+                                        <Check className="mr-2 h-4 w-4" /> 
+                                        Complete Subtasks First
+                                      </Button>
+                                    </span>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    <p>Complete {pendingSubtasks.length} remaining subtasks first</p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            ) : (
+                              <Button 
+                                size="sm" 
+                                className="sm:col-span-2 h-9 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white hover:scale-105 transition-all duration-200" 
+                                onClick={handleAccept} 
+                                disabled={isAccepting || isRejecting}
+                              >
+                                {isAccepting ? (
+                                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                ) : (
+                                  <Check className="mr-2 h-4 w-4" />
+                                )} 
+                                Let's Do It!
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      </CardFooter>
+                    </div>
+                  </Card>
                 </motion.div>
-                    </CarouselItem>
-                ))}
-            </CarouselContent>
-            
-            {/* Fixed Position Navigation Buttons - Always centered vertically */}
-            {possibleTasks.length > 1 && (
-              <>
-                <CarouselPrevious className="absolute left-4 top-1/2 -translate-y-1/2 z-10 h-12 w-12 border-2 border-primary/20 bg-background/80 backdrop-blur-sm hover:bg-primary hover:text-primary-foreground shadow-lg transition-all duration-200 hover:scale-110" />
-                <CarouselNext className="absolute right-4 top-1/2 -translate-y-1/2 z-10 h-12 w-12 border-2 border-primary/20 bg-background/80 backdrop-blur-sm hover:bg-primary hover:text-primary-foreground shadow-lg transition-all duration-200 hover:scale-110" />
-              </>
-            )}
+              </CarouselItem>
+            ))}
+          </CarouselContent>
+          
+          {/* Enhanced Navigation - Improved Mobile */}
+          {possibleTasks.length > 1 && (
+            <>
+              <CarouselPrevious className={cn(
+                "absolute left-1 sm:left-2 top-1/2 -translate-y-1/2 z-10",
+                "h-8 w-8 sm:h-10 sm:w-10 border-2 border-primary/20 bg-background/95 backdrop-blur-sm",
+                "hover:bg-primary hover:text-primary-foreground hover:border-primary",
+                "shadow-lg hover:shadow-xl transition-all duration-200",
+                "hover:scale-110 active:scale-95 touch-manipulation",
+                "opacity-70 group-hover:opacity-100"
+              )} />
+              <CarouselNext className={cn(
+                "absolute right-1 sm:right-2 top-1/2 -translate-y-1/2 z-10",
+                "h-8 w-8 sm:h-10 sm:w-10 border-2 border-primary/20 bg-background/95 backdrop-blur-sm",
+                "hover:bg-primary hover:text-primary-foreground hover:border-primary",
+                "shadow-lg hover:shadow-xl transition-all duration-200",
+                "hover:scale-110 active:scale-95 touch-manipulation",
+                "opacity-70 group-hover:opacity-100"
+              )} />
+            </>
+          )}
         </Carousel>
+        
+        {/* Improved Slide Indicators */}
+        {possibleTasks.length > 1 && (
+          <div className="flex justify-center mt-3 gap-1.5">
+            {possibleTasks.map((_, index) => (
+              <button
+                key={index}
+                className={cn(
+                  "transition-all duration-200 rounded-full",
+                  index === currentSlide 
+                    ? "bg-primary w-6 h-2" 
+                    : "bg-muted-foreground/30 hover:bg-muted-foreground/50 w-2 h-2"
+                )}
+                onClick={() => api?.scrollTo(index)}
+                aria-label={`Go to slide ${index + 1}`}
+              />
+            ))}
+          </div>
+        )}
       </div>
+
+      {/* Separate Subtasks Card - Shows for current task only */}
+      {currentTask && subtasksOfSuggested.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+          className="mt-4"
+        >
+          <Card className="border-border/50 shadow-md">
+            <CardHeader className="pb-3">
+              <div className="flex items-center gap-2">
+                <List className="w-4 h-4 text-primary" />
+                <CardTitle className="text-base font-medium">
+                  Subtasks for "{currentTask.title}"
+                </CardTitle>
+                <Badge variant="secondary" className="text-xs px-2 py-0.5">
+                  {subtasksOfSuggested.length}
+                </Badge>
+                {hasPendingSubtasks && (
+                  <Badge variant="outline" className="text-xs px-2 py-0.5 border-orange-200 text-orange-600 bg-orange-50 dark:border-orange-800 dark:text-orange-400 dark:bg-orange-950/20">
+                    {pendingSubtasks.length} pending
+                  </Badge>
+                )}
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                <SubtaskList parentTask={currentTask} subtasks={subtasksOfSuggested} />
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+      )}
     
 
-    {otherVisibleTasks && otherVisibleTasks.length > 0 && <OtherTasksList tasks={otherVisibleTasks} />}
+    {/* {otherVisibleTasks && otherVisibleTasks.length > 0 && <OtherTasksList tasks={otherVisibleTasks} />} */}
     
     <AlertDialog open={showRejectionPrompt} onOpenChange={setShowRejectionPrompt}>
         <AlertDialogContent>

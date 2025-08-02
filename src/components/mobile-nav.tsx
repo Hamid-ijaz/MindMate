@@ -10,7 +10,7 @@ import { Badge } from './ui/badge';
 import { NotificationBadge } from './ui/notification-badge';
 import { 
   MessageSquare, ListChecks, HomeIcon, ListTodo, 
-  Notebook, Calendar, Target, Plus, Search,
+  Notebook, Calendar, Plus, Search,
   TrendingUp, Clock
 } from 'lucide-react';
 import { AddTaskButton } from './manage-tasks-sheet';
@@ -34,8 +34,8 @@ export function MobileNav() {
 
   const navItems: MobileNavItem[] = [
     { label: 'Home', href: '/', icon: HomeIcon },
-    { label: 'Calendar', href: '/calendar', icon: Calendar },
-    { label: 'Goals', href: '/goals', icon: Target },
+    { label: 'Notes', href: '/notes', icon: Notebook },
+    { label: 'Chat', href: '/chat', icon: MessageSquare },
     { label: 'Pending', href: '/pending', icon: Clock, badge: 5 },
     { label: 'Analytics', href: '/analytics', icon: TrendingUp, isNew: true },
   ];

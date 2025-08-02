@@ -9,6 +9,7 @@ import { useNotes } from "@/contexts/note-context";
 import { useNotifications } from "@/contexts/notification-context";
 import { useAuth } from "@/contexts/auth-context";
 import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
+import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -48,6 +49,7 @@ const getWeatherData = () => ({
   temperature: 22,
   condition: "sunny",
   humidity: 45,
+  location: "New York, NY",
   suggestion: "Perfect weather for outdoor tasks!"
 });
 
@@ -157,11 +159,12 @@ interface WidgetConfig {
 }
 
 export default function EnhancedDashboard() {
-  const { tasks, addTask, acceptTask, updateTask } = useTasks();
+  const { tasks, addTask, acceptTask, updateTask, taskCategories } = useTasks();
   const { notes } = useNotes();
   const { notifications, snoozeNotification, setRecurringNotification, deleteNotification } = useNotifications();
   const { user } = useAuth();
   const { getModifiers } = useKeyboardShortcuts();
+  const { toast } = useToast();
 
   // Dashboard state
   const [currentView, setCurrentView] = useState<'minimal' | 'detailed' | 'analytics'>('detailed');
@@ -233,7 +236,7 @@ export default function EnhancedDashboard() {
         userEmail: note.userEmail,
         title: note.title || "Task from Note",
         description: note.content.replace(/<[^>]*>/g, ''), // Strip HTML tags
-        category: "Personal" as TaskCategory,
+        category: (taskCategories[0] || "Personal") as TaskCategory,
         priority: "Medium" as Priority,
         duration: 30 as TaskDuration,
         timeOfDay: "Morning" as TimeOfDay,
@@ -416,6 +419,13 @@ export default function EnhancedDashboard() {
     }) || [];
   }, [notes, search, date, contentType]);
 
+  // Calculate completion rate
+  const completionRate = useMemo(() => {
+    const totalTasks = filteredTasks.length;
+    const completedTasks = filteredTasks.filter(t => t.completedAt).length;
+    return totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 0;
+  }, [filteredTasks]);
+
   // Combined and sorted items for unified view with enhanced sorting
   const unifiedItems = useMemo(() => {
     const items = [
@@ -488,13 +498,51 @@ export default function EnhancedDashboard() {
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
-  // Voice recording simulation
+  // Voice recording with actual speech recognition
   const handleVoiceRecord = () => {
+    if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+      toast({
+        title: "Speech Recognition Not Supported",
+        description: "Your browser doesn't support speech recognition.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    const recognition = new SpeechRecognition();
+    
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognition.lang = 'en-US';
+
     setVoiceRecording(true);
-    setTimeout(() => {
+
+    recognition.onresult = (event: any) => {
+      const transcript = event.results[0][0].transcript;
+      setNewTaskText(transcript);
       setVoiceRecording(false);
-      setNewTaskText("Review project proposal and send feedback to team");
-    }, 3000);
+      toast({
+        title: "Voice Captured",
+        description: "Task text has been transcribed successfully.",
+      });
+    };
+
+    recognition.onerror = (event: any) => {
+      console.error('Speech recognition error:', event.error);
+      setVoiceRecording(false);
+      toast({
+        title: "Voice Recognition Error",
+        description: "Could not capture voice. Please try again.",
+        variant: "destructive"
+      });
+    };
+
+    recognition.onend = () => {
+      setVoiceRecording(false);
+    };
+
+    recognition.start();
   };
 
   // Quick task creation
@@ -515,525 +563,276 @@ export default function EnhancedDashboard() {
   return (
     <PullToRefresh onRefresh={handleRefresh}>
       <div className="w-full max-w-6xl mx-auto py-4 md:py-8 px-2 md:px-0">
-        {/* Compact Search Interface - Smaller & Positioned Better */}
+        {/* Ultra-Modern Compact Search Interface */}
         <motion.div 
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="mb-4"
+          className="mb-6"
         >
           {!showSearchBar ? (
-            <div className="flex justify-start">
-              <Card className="w-fit shadow-md">
-                <CardContent className="p-2">
-                  <Button
-                    variant="outline"
-                    onClick={() => setShowSearchBar(true)}
-                    className="flex items-center gap-2 h-8 px-3 text-sm"
-                  >
-                    <Search className="w-3 h-3" />
-                    <span className="hidden sm:inline">Search...</span>
-                    <div className="hidden md:flex items-center gap-1 text-xs text-muted-foreground bg-muted/50 px-1.5 py-0.5 rounded">
-                      <span>{modifiers.cmd}</span>
-                      <span>K</span>
-                    </div>
-                  </Button>
-                </CardContent>
-              </Card>
+            <div className="flex justify-between items-center">
+              {/* Quick Stats on the left */}
+              <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                <div className="flex items-center gap-1">
+                  <CheckSquare className="w-4 h-4 text-green-600" />
+                  <span>{filteredTasks.filter(t => t.completedAt && isToday(new Date(t.completedAt))).length} done today</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <Clock className="w-4 h-4 text-orange-600" />
+                  <span>{filteredTasks.filter(t => !t.completedAt && !t.isMuted).length} pending</span>
+                </div>
+              </div>
+              
+              <Button
+                variant="outline"
+                onClick={() => setShowSearchBar(true)}
+                className="h-10 px-4 bg-background/50 backdrop-blur-sm border-2 border-primary/20 hover:border-primary/40 hover:bg-primary/5 transition-all duration-200 shadow-sm hover:shadow-md group"
+              >
+                <Search className="w-4 h-4 mr-2 text-muted-foreground group-hover:text-primary transition-colors" />
+                <span className="text-sm font-medium">Search</span>
+                <div className="hidden md:flex items-center gap-1 text-xs text-muted-foreground bg-muted/60 px-2 py-1 rounded ml-2">
+                  <span>{modifiers.cmd}</span>
+                  <span>K</span>
+                </div>
+              </Button>
             </div>
           ) : (
-            <Card className={cn(
-              "overflow-hidden transition-all duration-500 shadow-2xl",
-              "bg-gradient-to-br from-card/95 via-card to-muted/10 backdrop-blur-xl border-2",
-              "border-primary/40 shadow-primary/10 bg-gradient-to-br from-primary/5 via-card to-muted/20"
-            )}>
+            <Card className="border-2 border-primary/30 shadow-xl backdrop-blur-sm bg-background/95">
               <CardContent className="p-0">
-                {/* Modern Search Header */}
-                <div className="p-4 sm:p-6 pb-4">
-                  <div className="space-y-4">
-                    {/* Title Row */}
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className="relative">
-                          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary/20 to-primary/10 flex items-center justify-center">
-                            <Search className="w-5 h-5 text-primary" />
-                          </div>
-                          <motion.div
-                            initial={{ scale: 0 }}
-                            animate={{ scale: 1 }}
-                            className="absolute -top-1 -right-1 w-4 h-4 bg-green-500 rounded-full flex items-center justify-center"
-                          >
-                            <div className="w-2 h-2 bg-white rounded-full" />
-                          </motion.div>
-                        </div>
-                        <div>
-                          <h2 className="text-xl sm:text-2xl font-bold text-foreground">
-                            Smart Search
-                          </h2>
-                          <p className="text-sm text-muted-foreground hidden sm:block">
-                            Find tasks, notes, and content instantly
-                          </p>
-                        </div>
+                {/* Streamlined Search Header */}
+                <div className="p-4 pb-3 border-b border-border/50">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                        <Search className="w-4 h-4 text-primary" />
                       </div>
-                      
-                      {/* Quick Stats */}
-                      <div className="hidden md:flex items-center gap-4 opacity-70">
-                        <div className="text-center">
-                          <div className="text-lg font-bold text-primary">{tasks.length}</div>
-                          <div className="text-xs text-muted-foreground">Tasks</div>
-                        </div>
-                        <div className="text-center">
-                          <div className="text-lg font-bold text-green-600">{notes.length}</div>
-                          <div className="text-xs text-muted-foreground">Notes</div>
-                        </div>
+                      <div>
+                        <h2 className="text-lg font-semibold text-foreground">Search & Filter</h2>
+                        <p className="text-xs text-muted-foreground">
+                          {tasks.length} tasks • {notes.length} notes
+                        </p>
                       </div>
                     </div>
                     
-                    {/* Enhanced Search Input */}
-                    <div className="relative group">
-                      <div className="absolute inset-0 bg-gradient-to-r from-primary/10 via-transparent to-primary/10 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                      <div className="relative">
-                        <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground group-focus-within:text-primary transition-colors" />
-                        <Input
-                          placeholder="🔍 Search tasks, notes, or anything..."
-                          value={search}
-                          onChange={e => setSearch(e.target.value)}
-                          className={cn(
-                            "w-full h-14 pl-12 pr-16 text-base font-medium border-2 rounded-2xl transition-all duration-300",
-                            "bg-background/80 backdrop-blur-sm placeholder:text-muted-foreground/70",
-                            "focus:border-primary/60 focus:ring-4 focus:ring-primary/10 focus:bg-background/95",
-                            "border-primary/30 bg-background/95"
-                          )}
-                          autoFocus
-                        />
-                        <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1">
-                          {search && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-8 w-8 p-0 hover:bg-destructive/10 rounded-full"
-                              onClick={() => setSearch("")}
-                            >
-                              <X className="w-4 h-4" />
-                            </Button>
-                          )}
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-8 w-8 p-0 hover:bg-muted rounded-full"
-                            onClick={() => setShowSearchBar(false)}
-                          >
-                            <X className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 w-8 p-0"
+                      onClick={() => {
+                        setShowSearchBar(false);
+                        setSearch("");
+                        setShowFilters(false);
+                      }}
+                    >
+                      <X className="w-4 h-4" />
+                    </Button>
+                  </div>
+                  
+                  {/* Enhanced Search Input */}
+                  <div className="relative mt-3">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Search tasks, notes, or anything..."
+                      value={search}
+                      onChange={e => setSearch(e.target.value)}
+                      className="pl-10 pr-10 h-10 bg-background/50 border-border/50 focus:border-primary/50 focus:ring-2 focus:ring-primary/10"
+                      autoFocus
+                    />
+                    {search && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="absolute right-2 top-1/2 -translate-y-1/2 h-6 w-6 p-0"
+                        onClick={() => setSearch("")}
+                      >
+                        <X className="w-3 h-3" />
+                      </Button>
+                    )}
                   </div>
                 </div>
 
-              {/* Advanced Controls Panel */}
-              <AnimatePresence>
-                {showSearchBar && (
-                  <motion.div
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: "auto" }}
-                    exit={{ opacity: 0, height: 0 }}
-                    transition={{ duration: 0.3, ease: "easeInOut" }}
-                    className="border-t border-border/30 bg-gradient-to-r from-muted/30 to-muted/20"
-                  >
-                    <div className="p-4 sm:p-6 space-y-6">
-                        {/* View Controls & Actions - More Compact */}
-                        <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-end">
-                          {/* View Toggle - Compact */}
-                          <div className="flex-shrink-0">
-                            <label className="text-xs font-medium text-muted-foreground mb-1 block">View</label>
-                            <div className="flex border rounded-md p-0.5 bg-background/50 backdrop-blur-sm w-fit">
-                              <Button
-                                variant={searchView === 'unified' ? 'default' : 'ghost'}
-                                size="sm"
-                                onClick={() => setSearchView('unified')}
-                                className="h-7 px-2 rounded text-xs"
-                              >
-                                <LayoutGrid className="w-3 h-3 mr-1" />
-                                Unified
-                              </Button>
-                              <Button
-                                variant={searchView === 'separated' ? 'default' : 'ghost'}
-                                size="sm" 
-                                onClick={() => setSearchView('separated')}
-                                className="h-7 px-2 rounded text-xs"
-                              >
-                                <Grid className="w-3 h-3 mr-1" />
-                                Grouped
-                              </Button>
-                            </div>
-                          </div>
-                          
-                          {/* Layout Control - Compact */}
-                          <div className="flex-shrink-0">
-                            <label className="text-xs font-medium text-muted-foreground mb-1 block">Layout</label>
-                            <Select value={cardsPerRow.toString()} onValueChange={(value) => setCardsPerRow(parseInt(value) as 1 | 2 | 3 | 4 | 5)}>
-                              <SelectTrigger className="h-7 w-20 border rounded-md bg-background/50 backdrop-blur-sm text-xs">
+                {/* Compact Controls */}
+                <div className="p-4 space-y-4">
+                  <div className="flex flex-wrap gap-3 items-center">
+                    {/* View Toggle */}
+                    <div className="flex border rounded-lg p-0.5 bg-muted/30">
+                      <Button
+                        variant={searchView === 'unified' ? 'default' : 'ghost'}
+                        size="sm"
+                        onClick={() => setSearchView('unified')}
+                        className="h-7 px-3 text-xs"
+                      >
+                        <LayoutGrid className="w-3 h-3 mr-1" />
+                        Unified
+                      </Button>
+                      <Button
+                        variant={searchView === 'separated' ? 'default' : 'ghost'}
+                        size="sm" 
+                        onClick={() => setSearchView('separated')}
+                        className="h-7 px-3 text-xs"
+                      >
+                        <Grid className="w-3 h-3 mr-1" />
+                        Grouped
+                      </Button>
+                    </div>
+                    
+                    {/* Layout Control */}
+                    <Select value={cardsPerRow.toString()} onValueChange={(value) => setCardsPerRow(parseInt(value) as 1 | 2 | 3 | 4 | 5)}>
+                      <SelectTrigger className="h-7 w-20 text-xs border-border/50 bg-background/50">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="1">1 Col</SelectItem>
+                        <SelectItem value="2">2 Cols</SelectItem>
+                        <SelectItem value="3">3 Cols</SelectItem>
+                        <SelectItem value="4">4 Cols</SelectItem>
+                        <SelectItem value="5">5 Cols</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    
+                    {/* Filters Toggle */}
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => setShowFilters(f => !f)}
+                      className={cn(
+                        "h-7 px-3 text-xs transition-all",
+                        showFilters && "bg-primary/10 border-primary/30 text-primary"
+                      )}
+                    >
+                      <Filter className="w-3 h-3 mr-1" />
+                      Filters
+                      {showFilters && <div className="w-1 h-1 bg-primary rounded-full ml-1" />}
+                    </Button>
+                    
+                    {/* Clear All */}
+                    <Button 
+                      variant="ghost" 
+                      size="sm"
+                      onClick={() => { 
+                        setSearch(""); 
+                        setShowFilters(false);
+                        setCategory("");
+                        setPriority("");
+                        setDate("");
+                        setContentType('all');
+                        setSortBy('date');
+                      }}
+                      className="h-7 px-3 text-xs text-muted-foreground hover:text-destructive"
+                    >
+                      Clear All
+                    </Button>
+                  </div>
+                  
+                  {/* Results Summary */}
+                  <div className="text-xs text-muted-foreground">
+                    {searchView === 'unified' 
+                      ? `${unifiedItems.length} results found`
+                      : `${filteredTasks.length} tasks • ${filteredNotes.length} notes`
+                    }
+                  </div>
+                </div>
+
+                {/* Advanced Filters Panel */}
+                <AnimatePresence>
+                  {showFilters && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: "auto" }}
+                      exit={{ opacity: 0, height: 0 }}
+                      transition={{ duration: 0.2 }}
+                      className="border-t border-border/50 bg-muted/20"
+                    >
+                      <div className="p-4 space-y-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                          {/* Content Type */}
+                          <div>
+                            <label className="text-xs font-medium text-muted-foreground mb-1 block">Content</label>
+                            <Select value={contentType} onValueChange={(value: 'all' | 'tasks' | 'notes') => setContentType(value)}>
+                              <SelectTrigger className="h-8 text-xs">
                                 <SelectValue />
                               </SelectTrigger>
-                              <SelectContent className="w-28" align="end">
-                                <SelectItem value="1">1 Col</SelectItem>
-                                <SelectItem value="2">2 Cols</SelectItem>
-                                <SelectItem value="3">3 Cols</SelectItem>
-                                <SelectItem value="4">4 Cols</SelectItem>
-                                <SelectItem value="5">5 Cols</SelectItem>
+                              <SelectContent>
+                                <SelectItem value="all">All Content</SelectItem>
+                                <SelectItem value="tasks">Tasks Only</SelectItem>
+                                <SelectItem value="notes">Notes Only</SelectItem>
                               </SelectContent>
                             </Select>
                           </div>
-                        
-                          {/* Action Buttons - Aligned Right */}
-                          <div className="flex gap-2 ml-auto">
-                            <Button 
-                              variant="outline" 
-                              onClick={() => setShowFilters(f => !f)}
-                              className={cn(
-                                "h-7 px-2 border rounded-md bg-background/50 backdrop-blur-sm transition-all text-xs",
-                                showFilters && "bg-primary/10 border-primary/30 text-primary shadow-sm"
-                              )}
-                            >
-                              <Filter className="w-3 h-3 mr-1" />
-                              Filters
-                              {showFilters && <div className="w-1 h-1 bg-primary rounded-full ml-1" />}
-                            </Button>
-                            
-                            <Button 
-                              variant="outline" 
-                              onClick={() => { 
-                                setShowSearchBar(false); 
-                                setSearch(""); 
-                                setShowFilters(false);
-                                setCategory("");
-                                setPriority("");
-                                setDate("");
-                                setContentType('all');
-                                setSortBy('date');
-                              }}
-                              className="h-7 px-2 border rounded-md bg-background/50 backdrop-blur-sm hover:bg-destructive/5 hover:border-destructive/30 text-xs"
-                            >
-                              <X className="w-3 h-3 mr-1" />
-                              Close
-                            </Button>
-                          </div>
-                        </div>
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-              
-              {/* Advanced Filter Panel */}
-              <AnimatePresence>
-                {showFilters && (
-                  <motion.div
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: "auto" }}
-                    exit={{ opacity: 0, height: 0 }}
-                    transition={{ duration: 0.3, ease: "easeInOut" }}
-                    className="overflow-hidden border-t border-border/30"
-                  >
-                    <div className="p-4 sm:p-6 bg-gradient-to-br from-muted/20 to-muted/10">
-                      <div className="space-y-6">
-                        {/* Filter Header */}
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
-                              <Filter className="w-4 h-4 text-primary" />
-                            </div>
-                            <div>
-                              <h3 className="font-semibold text-foreground">Advanced Filters</h3>
-                              <p className="text-sm text-muted-foreground">Refine your search results</p>
-                            </div>
-                          </div>
-                          <Badge variant="outline" className="text-xs">
-                            {Object.values({category, priority, date, contentType: contentType !== 'all' ? contentType : '', sortBy: sortBy !== 'date' ? sortBy : ''}).filter(Boolean).length} active
-                          </Badge>
-                        </div>
-                        
-                        {/* Filter Grid */}
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
-                          {/* Content Type Filter */}
-                          <div className="space-y-2">
-                            <label className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                              <LayoutGrid className="w-3 h-3" />
-                              Content Type
-                            </label>
-                            <Select value={contentType} onValueChange={(value: 'all' | 'tasks' | 'notes') => setContentType(value)}>
-                              <SelectTrigger className="h-11 focus:ring-2 focus:ring-primary/20 border-2 rounded-xl bg-background/50 backdrop-blur-sm">
-                                <div className="flex items-center gap-2 w-full">
-                                  {contentType === "tasks" && <CheckSquare className="w-4 h-4 text-blue-500" />}
-                                  {contentType === "notes" && <StickyNote className="w-4 h-4 text-green-500" />}
-                                  {contentType === "all" && <LayoutGrid className="w-4 h-4 text-purple-500" />}
-                                  <SelectValue placeholder="All Content" />
-                                </div>
-                              </SelectTrigger>
-                              <SelectContent className="w-[var(--radix-select-trigger-width)] min-w-[180px]">
-                                <SelectItem value="all" className="py-3">
-                                  <div className="flex items-center gap-3">
-                                    <LayoutGrid className="w-4 h-4 text-purple-500" />
-                                    <div>
-                                      <span className="font-medium">All Content</span>
-                                      <div className="text-xs text-muted-foreground">Tasks & Notes</div>
-                                    </div>
-                                  </div>
-                                </SelectItem>
-                                <SelectItem value="tasks" className="py-3">
-                                  <div className="flex items-center gap-3">
-                                    <CheckSquare className="w-4 h-4 text-blue-500" />
-                                    <div>
-                                      <span className="font-medium">Tasks Only</span>
-                                      <div className="text-xs text-muted-foreground">Todo items</div>
-                                    </div>
-                                  </div>
-                                </SelectItem>
-                                <SelectItem value="notes" className="py-3">
-                                  <div className="flex items-center gap-3">
-                                    <StickyNote className="w-4 h-4 text-green-500" />
-                                    <div>
-                                      <span className="font-medium">Notes Only</span>
-                                      <div className="text-xs text-muted-foreground">Written content</div>
-                                    </div>
-                                  </div>
-                                </SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-
-                          {/* Category Filter */}
-                          <div className="space-y-2">
-                            <label className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                              <div className="w-3 h-3 rounded-full bg-gradient-to-r from-blue-500 to-purple-500" />
-                              Category
-                            </label>
+                          
+                          {/* Category Filter - Dynamic */}
+                          <div>
+                            <label className="text-xs font-medium text-muted-foreground mb-1 block">Category</label>
                             <Select value={category} onValueChange={setCategory}>
-                              <SelectTrigger className="h-11 focus:ring-2 focus:ring-primary/20 border-2 rounded-xl bg-background/50 backdrop-blur-sm">
-                                <div className="flex items-center gap-2 w-full">
-                                  {category === "Work" && <span className="text-blue-500">💼</span>}
-                                  {category === "Personal" && <span className="text-purple-500">🏠</span>}
-                                  {category === "Health" && <span className="text-green-500">❤️</span>}
-                                  {category === "Other" && <span className="text-gray-500">📂</span>}
-                                  <SelectValue placeholder="All Categories" />
-                                </div>
+                              <SelectTrigger className="h-8 text-xs">
+                                <SelectValue placeholder="All Categories" />
                               </SelectTrigger>
-                              <SelectContent className="w-[var(--radix-select-trigger-width)] min-w-[180px]">
-                                <SelectItem value="all-categories" className="py-3">
-                                  <div className="flex items-center gap-3">
-                                    <span className="text-lg">📁</span>
-                                    <div>
-                                      <span className="font-medium">All Categories</span>
-                                      <div className="text-xs text-muted-foreground">No filter</div>
-                                    </div>
-                                  </div>
-                                </SelectItem>
-                                <SelectItem value="Work" className="py-3">
-                                  <div className="flex items-center gap-3">
-                                    <span className="text-lg">💼</span>
-                                    <div>
-                                      <span className="font-medium">Work</span>
-                                      <div className="text-xs text-muted-foreground">Professional tasks</div>
-                                    </div>
-                                  </div>
-                                </SelectItem>
-                                <SelectItem value="Personal" className="py-3">
-                                  <div className="flex items-center gap-3">
-                                    <span className="text-lg">🏠</span>
-                                    <div>
-                                      <span className="font-medium">Personal</span>
-                                      <div className="text-xs text-muted-foreground">Life & hobbies</div>
-                                    </div>
-                                  </div>
-                                </SelectItem>
-                                <SelectItem value="Health" className="py-3">
-                                  <div className="flex items-center gap-3">
-                                    <span className="text-lg">❤️</span>
-                                    <div>
-                                      <span className="font-medium">Health</span>
-                                      <div className="text-xs text-muted-foreground">Wellness & fitness</div>
-                                    </div>
-                                  </div>
-                                </SelectItem>
-                                <SelectItem value="Other" className="py-3">
-                                  <div className="flex items-center gap-3">
-                                    <span className="text-lg">📂</span>
-                                    <div>
-                                      <span className="font-medium">Other</span>
-                                      <div className="text-xs text-muted-foreground">Miscellaneous</div>
-                                    </div>
-                                  </div>
-                                </SelectItem>
+                              <SelectContent>
+                                <SelectItem value="">All Categories</SelectItem>
+                                {taskCategories.map((cat) => (
+                                  <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                                ))}
                               </SelectContent>
                             </Select>
                           </div>
                           
                           {/* Priority Filter */}
-                          <div className="space-y-2">
-                            <label className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                              <div className="w-3 h-3 rounded-full bg-gradient-to-r from-red-500 to-orange-500" />
-                              Priority
-                            </label>
+                          <div>
+                            <label className="text-xs font-medium text-muted-foreground mb-1 block">Priority</label>
                             <Select value={priority} onValueChange={setPriority}>
-                              <SelectTrigger className="h-11 focus:ring-2 focus:ring-primary/20 border-2 rounded-xl bg-background/50 backdrop-blur-sm">
-                                <div className="flex items-center gap-2 w-full overflow-hidden min-w-0">
-                                  {priority === "Critical" && <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse flex-shrink-0" />}
-                                  {priority === "High" && <div className="w-3 h-3 bg-orange-500 rounded-full flex-shrink-0" />}
-                                  {priority === "Medium" && <div className="w-3 h-3 bg-yellow-500 rounded-full flex-shrink-0" />}
-                                  {priority === "Low" && <div className="w-3 h-3 bg-green-500 rounded-full flex-shrink-0" />}
-                                  <SelectValue placeholder="All Priorities" className="truncate flex-1 min-w-0" />
-                                </div>
+                              <SelectTrigger className="h-8 text-xs">
+                                <SelectValue placeholder="All Priorities" />
                               </SelectTrigger>
-                              <SelectContent className="w-[var(--radix-select-trigger-width)] min-w-[180px]">
-                                <SelectItem value="all-priorities" className="py-3">
-                                  <div className="flex items-center gap-3">
-                                    <div className="w-3 h-3 bg-gray-400 rounded-full" />
-                                    <div>
-                                      <span className="font-medium">All Priorities</span>
-                                      <div className="text-xs text-muted-foreground">No filter</div>
-                                    </div>
-                                  </div>
-                                </SelectItem>
-                                <SelectItem value="Critical" className="py-3">
-                                  <div className="flex items-center gap-3">
-                                    <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse" />
-                                    <div>
-                                      <span className="font-medium text-red-600">Critical</span>
-                                      <div className="text-xs text-muted-foreground">Urgent & important</div>
-                                    </div>
-                                    <span className="text-sm ml-auto">🔥</span>
-                                  </div>
-                                </SelectItem>
-                                <SelectItem value="High" className="py-3">
-                                  <div className="flex items-center gap-3">
-                                    <div className="w-3 h-3 bg-orange-500 rounded-full" />
-                                    <div>
-                                      <span className="font-medium text-orange-600">High</span>
-                                      <div className="text-xs text-muted-foreground">Important tasks</div>
-                                    </div>
-                                    <span className="text-sm ml-auto">⚡</span>
-                                  </div>
-                                </SelectItem>
-                                <SelectItem value="Medium" className="py-3">
-                                  <div className="flex items-center gap-3">
-                                    <div className="w-3 h-3 bg-yellow-500 rounded-full" />
-                                    <div>
-                                      <span className="font-medium text-yellow-600">Medium</span>
-                                      <div className="text-xs text-muted-foreground">Standard priority</div>
-                                    </div>
-                                    <span className="text-sm ml-auto">📋</span>
-                                  </div>
-                                </SelectItem>
-                                <SelectItem value="Low" className="py-3">
-                                  <div className="flex items-center gap-3">
-                                    <div className="w-3 h-3 bg-green-500 rounded-full" />
-                                    <div>
-                                      <span className="font-medium text-green-600">Low</span>
-                                      <div className="text-xs text-muted-foreground">When time allows</div>
-                                    </div>
-                                    <span className="text-sm ml-auto">🌱</span>
-                                  </div>
-                                </SelectItem>
+                              <SelectContent>
+                                <SelectItem value="">All Priorities</SelectItem>
+                                <SelectItem value="Critical">Critical</SelectItem>
+                                <SelectItem value="High">High</SelectItem>
+                                <SelectItem value="Medium">Medium</SelectItem>
+                                <SelectItem value="Low">Low</SelectItem>
                               </SelectContent>
                             </Select>
                           </div>
                           
-                          {/* Date Filter */}
-                          <div className="space-y-2">
-                            <label className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                              <CalendarIcon className="w-3 h-3" />
-                              Due Date
-                            </label>
-                            <div className="relative">
-                              <CalendarIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                              <Input
-                                type="date"
-                                value={date}
-                                onChange={e => setDate(e.target.value)}
-                                className="h-11 pl-10 focus:ring-2 focus:ring-primary/20 border-2 rounded-xl bg-background/50 backdrop-blur-sm"
-                                placeholder="Select date"
-                              />
-                            </div>
-                          </div>
-
-                          {/* Sort Filter */}
-                          <div className="space-y-2">
-                            <label className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                              <SortAsc className="w-3 h-3" />
-                              Sort By
-                            </label>
+                          {/* Sort By */}
+                          <div>
+                            <label className="text-xs font-medium text-muted-foreground mb-1 block">Sort By</label>
                             <Select value={sortBy} onValueChange={(value: 'date' | 'priority' | 'alphabetical') => setSortBy(value)}>
-                              <SelectTrigger className="h-11 focus:ring-2 focus:ring-primary/20 border-2 rounded-xl bg-background/50 backdrop-blur-sm">
-                                <div className="flex items-center gap-2 w-full">
-                                  {sortBy === "date" && <CalendarIcon className="w-4 h-4 text-blue-500" />}
-                                  {sortBy === "priority" && <SortAsc className="w-4 h-4 text-orange-500" />}
-                                  {sortBy === "alphabetical" && <Edit3 className="w-4 h-4 text-green-500" />}
-                                  <SelectValue placeholder="Date Created" />
-                                </div>
+                              <SelectTrigger className="h-8 text-xs">
+                                <SelectValue />
                               </SelectTrigger>
-                              <SelectContent className="w-[var(--radix-select-trigger-width)] min-w-[180px]">
-                                <SelectItem value="date" className="py-3">
-                                  <div className="flex items-center gap-3">
-                                    <CalendarIcon className="w-4 h-4 text-blue-500" />
-                                    <div>
-                                      <span className="font-medium">Date Created</span>
-                                      <div className="text-xs text-muted-foreground">Newest first</div>
-                                    </div>
-                                  </div>
-                                </SelectItem>
-                                <SelectItem value="priority" className="py-3">
-                                  <div className="flex items-center gap-3">
-                                    <SortAsc className="w-4 h-4 text-orange-500" />
-                                    <div>
-                                      <span className="font-medium">Priority</span>
-                                      <div className="text-xs text-muted-foreground">Critical first</div>
-                                    </div>
-                                  </div>
-                                </SelectItem>
-                                <SelectItem value="alphabetical" className="py-3">
-                                  <div className="flex items-center gap-3">
-                                    <Edit3 className="w-4 h-4 text-green-500" />
-                                    <div>
-                                      <span className="font-medium">Alphabetical</span>
-                                      <div className="text-xs text-muted-foreground">A to Z</div>
-                                    </div>
-                                  </div>
-                                </SelectItem>
+                              <SelectContent>
+                                <SelectItem value="date">Date Created</SelectItem>
+                                <SelectItem value="priority">Priority</SelectItem>
+                                <SelectItem value="alphabetical">A-Z</SelectItem>
                               </SelectContent>
                             </Select>
                           </div>
                         </div>
-
-                        {/* Filter Actions */}
-                        <div className="flex items-center justify-between pt-4 border-t border-border/30">
-                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                            <div className="w-2 h-2 bg-primary rounded-full animate-pulse" />
-                            <span>Filters applied instantly</span>
-                          </div>
-                          <Button 
-                            variant="outline" 
-                            size="sm"
-                            onClick={() => {
-                              setCategory("");
-                              setPriority("");
-                              setDate("");
-                              setContentType('all');
-                              setSortBy('date');
-                            }}
-                            className="h-9 px-4 border-2 rounded-lg bg-background/50 backdrop-blur-sm hover:bg-destructive/5 hover:border-destructive/30"
-                          >
-                            <X className="w-4 h-4 mr-2" />
-                            Reset All
-                          </Button>
+                        
+                        {/* Date Filter */}
+                        <div>
+                          <label className="text-xs font-medium text-muted-foreground mb-1 block">Created Before</label>
+                          <Input
+                            type="date"
+                            value={date}
+                            onChange={e => setDate(e.target.value)}
+                            className="h-8 text-xs max-w-40"
+                          />
                         </div>
                       </div>
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </CardContent>
-          </Card>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </CardContent>
+            </Card>
           )}
         </motion.div>
+
+        
+        {/* Analytics Cards - Always Visible */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-6">
+          {/* Content will be added here */}
+        </div>
 
         {/* Task Suggestion & Quick Actions Row - Better Space Management */}
         {!showSearchBar && (
@@ -1048,14 +847,44 @@ export default function EnhancedDashboard() {
               <TaskSuggestion />
             </motion.div>
 
-            {/* Quick Actions - Compact Version - Takes 1 column */}
+            {/* Productivity Stats - Compact Version - Takes 1 column */}
             <motion.div 
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.2 }}
               className="lg:col-span-1"
             >
-              <QuickActions className="h-fit" />
+              <Card className="h-fit">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Activity className="w-4 h-4 text-primary" />
+                    Today's Stats
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="text-center p-2 bg-green-50 dark:bg-green-950/20 rounded-lg">
+                      <div className="text-lg font-semibold text-green-600 dark:text-green-400">
+                        {filteredTasks.filter(t => t.completedAt && isToday(new Date(t.completedAt))).length}
+                      </div>
+                      <div className="text-xs text-green-600/80 dark:text-green-400/80">Completed</div>
+                    </div>
+                    <div className="text-center p-2 bg-blue-50 dark:bg-blue-950/20 rounded-lg">
+                      <div className="text-lg font-semibold text-blue-600 dark:text-blue-400">
+                        {filteredTasks.filter(t => !t.completedAt && !t.isMuted).length}
+                      </div>
+                      <div className="text-xs text-blue-600/80 dark:text-blue-400/80">Pending</div>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-xs">
+                      <span className="text-muted-foreground">Progress</span>
+                      <span className="font-medium">{Math.round(completionRate)}%</span>
+                    </div>
+                    <Progress value={completionRate} className="h-2" />
+                  </div>
+                </CardContent>
+              </Card>
             </motion.div>
           </div>
         )}
@@ -1412,7 +1241,7 @@ export default function EnhancedDashboard() {
                           key={task.id}
                           className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg hover:bg-muted transition-colors cursor-pointer"
                           whileHover={{ scale: 1.02 }}
-                          onClick={() => acceptTask(task.id)}
+                          onClick={() => window.location.href = `/task/${task.id}`}
                         >
                           <div className={cn(
                             "w-2 h-2 rounded-full",
@@ -1584,6 +1413,11 @@ export default function EnhancedDashboard() {
                     </div>
                   </div>
                   
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <MapPinIcon className="w-3 h-3" />
+                    <span>{weather.location}</span>
+                  </div>
+                  
                   <div className="p-3 bg-muted/50 rounded-lg">
                     <p className="text-sm">{weather.suggestion}</p>
                   </div>
@@ -1675,6 +1509,36 @@ export default function EnhancedDashboard() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.6 }}
           >
+            {/* Category Breakdown Card */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <LayoutGrid className="w-4 h-4" />
+                  Categories
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2">
+                  {taskCategories.slice(0, 4).map((category, index) => {
+                    const categoryTasks = filteredTasks.filter(t => t.category === category && !t.completedAt);
+                    const completedCategoryTasks = filteredTasks.filter(t => t.category === category && t.completedAt);
+                    const total = categoryTasks.length + completedCategoryTasks.length;
+                    const progress = total > 0 ? (completedCategoryTasks.length / total) * 100 : 0;
+                    
+                    return (
+                      <div key={category} className="space-y-1">
+                        <div className="flex justify-between text-xs">
+                          <span className="truncate">{category}</span>
+                          <span className="text-muted-foreground">{categoryTasks.length}</span>
+                        </div>
+                        <Progress value={progress} className="h-1" />
+                      </div>
+                    );
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+
             <Card>
               <CardHeader>
                 <CardTitle className="text-base">Weekly Progress</CardTitle>
@@ -1692,7 +1556,7 @@ export default function EnhancedDashboard() {
               </CardContent>
             </Card>
 
-            <Card>
+            {/* <Card>
               <CardHeader>
                 <CardTitle className="text-base">Category Distribution</CardTitle>
               </CardHeader>
@@ -1709,7 +1573,7 @@ export default function EnhancedDashboard() {
                   ))}
                 </div>
               </CardContent>
-            </Card>
+            </Card> */}
 
             <Card>
               <CardHeader>

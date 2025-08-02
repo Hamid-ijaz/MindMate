@@ -63,7 +63,7 @@ export default function NotesPage() {
     const { isAuthenticated } = useAuth();
     const [editingNote, setEditingNote] = useState<Note | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
-    const [viewMode, setViewMode] = useState<'grid' | 'masonry'>('grid');
+    const [viewMode, setViewMode] = useState<'grid' | 'masonry'>('masonry');
     const [filterPeriod, setFilterPeriod] = useState<'all' | 'today' | 'week' | 'month'>('all');
     const [showCreateNote, setShowCreateNote] = useState(false);
 
