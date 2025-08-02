@@ -48,6 +48,8 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
   const [taskDurations, setTaskDurations] = useState<TaskDuration[]>(DEFAULT_DURATIONS);
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
+  
+  // Use notification context safely - it will provide defaults during SSR
   const { sendNotification } = useNotifications();
   const pushNotifications = usePushNotificationHelper();
 

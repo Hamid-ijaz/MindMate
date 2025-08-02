@@ -215,6 +215,8 @@ export default function EnhancedDashboard() {
 
   // Set cards per row based on screen size after component mounts
   useEffect(() => {
+    if (typeof window === 'undefined') return;
+    
     const updateCardsPerRow = () => {
       const width = window.innerWidth;
       if (width < 640) setCardsPerRow(1); // sm

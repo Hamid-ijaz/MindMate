@@ -47,13 +47,6 @@ export const metadata: Metadata = {
     ],
   },
   manifest: '/manifest.json',
-  viewport: {
-    width: 'device-width',
-    initialScale: 1,
-    maximumScale: 1,
-    userScalable: false,
-    viewportFit: 'cover'
-  },
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
@@ -62,6 +55,14 @@ export const metadata: Metadata = {
   formatDetection: {
     telephone: false
   },
+};
+
+export const viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+  viewportFit: 'cover'
 };
 
 function AppInitializer({ children }: { children: React.ReactNode }) {

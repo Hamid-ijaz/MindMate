@@ -11,17 +11,19 @@ const API_BASE_URL = process.env.NODE_ENV === 'production'
  * Send a task reminder notification
  * Replaces the Firebase callable function
  */
-export async function sendTaskReminder(taskId: string, userId: string, authToken?: string) {
+export async function sendTaskReminder(taskId: string, userId: string, title: string, message: string, authToken?: string) {
   try {
-    const response = await fetch(`${API_BASE_URL}/api/sendTaskReminder`, {
+    const response = await fetch(`${API_BASE_URL}/api/notifications/send-task-reminder`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        ...(authToken && { 'Authorization': `Bearer ${authToken}` })
       },
       body: JSON.stringify({
         taskId,
         userId,
-        authToken, // In a real app, pass the Firebase Auth token here
+        title,
+        message
       }),
     });
 
@@ -38,15 +40,44 @@ export async function sendTaskReminder(taskId: string, userId: string, authToken
 }
 
 /**
- * Manually trigger overdue task check
- * Useful for testing or admin purposes
+ * Check for overdue tasks for a specific user
  */
-export async function triggerOverdueCheck() {
+export async function checkOverdueTasks(userId: string, authToken?: string) {
   try {
-    const response = await fetch(`${API_BASE_URL}/api/triggerOverdueCheck`, {
+    const response = await fetch(`${API_BASE_URL}/api/notifications/check-overdue-tasks`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        ...(authToken && { 'Authorization': `Bearer ${authToken}` })
+      },
+      body: JSON.stringify({
+        userId
+      }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Failed to check overdue tasks');
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error('Error checking overdue tasks:', error);
+    throw error;
+  }
+}
+
+/**
+ * Manually trigger overdue task check for all users
+ * This is typically called by cron jobs or admin functions
+ */
+export async function triggerOverdueCheck(authToken?: string) {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/notifications/trigger-overdue-check`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(authToken && { 'Authorization': `Bearer ${authToken}` })
       },
     });
 
@@ -67,7 +98,7 @@ export async function triggerOverdueCheck() {
  */
 export async function healthCheck() {
   try {
-    const response = await fetch(`${API_BASE_URL}/api/checkOverdueTasks`, {
+    const response = await fetch(`${API_BASE_URL}/api/notifications/check-overdue-tasks?userId=health-check`, {
       method: 'GET',
     });
 

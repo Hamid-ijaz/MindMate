@@ -44,7 +44,7 @@ const slideInFromTopVariant = {
 export function TaskSuggestion() {
     const { tasks, acceptTask, rejectTask, muteTask, addTask, isLoading: tasksLoading, startEditingTask, deleteTask } = useTasks();
     const { deleteNotification } = useNotifications();
-  const { handleTaskCompletion } = useCompletionAudio();
+    const { handleTaskCompletion } = useCompletionAudio();
   const { user } = useAuth();
   const [currentPriority, setCurrentPriority] = useState<Priority>('Medium');
 
