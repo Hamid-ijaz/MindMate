@@ -180,7 +180,7 @@ export function EditNoteDialog({ note, isOpen, onClose, shareToken, sharedBy }: 
     return (
         <Dialog open={isOpen} onOpenChange={(open) => !open && handleClose()}>
             <DialogContent 
-                className="p-0 gap-0 max-w-full h-full md:h-auto md:max-h-[95vh] md:max-w-4xl md:rounded-2xl overflow-hidden"
+                className="p-0 gap-0 max-w-full h-full md:h-auto md:max-h-[90vh] md:max-w-4xl md:rounded-2xl overflow-hidden flex flex-col"
                 style={{ 
                     borderColor: color || 'hsl(var(--border))',
                     backgroundColor: color ? `${color}15` : undefined
@@ -310,11 +310,11 @@ export function EditNoteDialog({ note, isOpen, onClose, shareToken, sharedBy }: 
                     </div>
                 </div>
 
-                {/* Enhanced Content Area */}
-                <div className="flex-1 min-h-0 flex flex-col">
-                    <div className="px-4 sm:px-6">
-                        <Tabs defaultValue="content" className="w-full">
-                            <TabsList className="grid w-full grid-cols-2 rounded-xl bg-muted/50 h-12">
+                {/* Enhanced Content Area - Improved Mobile Layout */}
+                <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+                    <div className="px-4 sm:px-6 flex-1 min-h-0 flex flex-col">
+                        <Tabs defaultValue="content" className="w-full flex-1 flex flex-col">
+                            <TabsList className="grid w-full grid-cols-2 rounded-xl bg-muted/50 h-12 flex-shrink-0">
                                 <TabsTrigger 
                                     value="content" 
                                     className="rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm transition-all"
@@ -334,7 +334,9 @@ export function EditNoteDialog({ note, isOpen, onClose, shareToken, sharedBy }: 
                                 </TabsTrigger>
                             </TabsList>
                             
-                            <TabsContent value="content" className="mt-6 flex-1">
+                            <TabsContent value="content" className="mt-6 flex-1 min-h-0 flex flex-col"
+                                         style={{ minHeight: 'calc(100vh - 300px)' }} // Ensure minimum height on mobile
+                            >
                                 <div className="space-y-4">
                                     {/* Enhanced Toolbar */}
                                     <div className="flex items-center justify-between p-3 bg-muted/30 rounded-xl border backdrop-blur-sm">
@@ -349,14 +351,14 @@ export function EditNoteDialog({ note, isOpen, onClose, shareToken, sharedBy }: 
                                         </div>
                                     </div>
                                     
-                                    {/* Rich Text Editor */}
-                                    <div className="relative min-h-[300px] md:min-h-[400px] p-4 rounded-xl border-2 border-dashed border-muted-foreground/20 focus-within:border-primary/30 transition-colors bg-background/50 backdrop-blur-sm">
+                                    {/* Rich Text Editor - More Responsive */}
+                                    <div className="relative flex-1 min-h-[200px] md:min-h-[250px] p-4 rounded-xl border-2 border-dashed border-muted-foreground/20 focus-within:border-primary/30 transition-colors bg-background/50 backdrop-blur-sm">
                                         <div
                                             ref={contentRef}
                                             suppressContentEditableWarning={true}
                                             contentEditable
                                             dangerouslySetInnerHTML={{ __html: note?.content || '' }}
-                                            className="w-full h-full min-h-[250px] md:min-h-[350px] border-none focus:outline-none resize-none bg-transparent leading-relaxed"
+                                            className="w-full h-full min-h-[200px] md:min-h-[250px] border-none focus:outline-none resize-none bg-transparent leading-relaxed overflow-y-auto"
                                             style={{ 
                                                 fontSize: `${fontSize}px`,
                                                 color: 'hsl(var(--foreground))'
@@ -386,8 +388,8 @@ export function EditNoteDialog({ note, isOpen, onClose, shareToken, sharedBy }: 
                                 </div>
                             </TabsContent>
                             
-                            <TabsContent value="audio" className="mt-6">
-                                <div className="p-4 rounded-xl border-2 border-dashed border-muted-foreground/20 bg-background/50 backdrop-blur-sm">
+                            <TabsContent value="audio" className="mt-6 flex-1 min-h-0">
+                                <div className="p-4 rounded-xl border-2 border-dashed border-muted-foreground/20 bg-background/50 backdrop-blur-sm min-h-[200px]">
                                     <AudioRecorder
                                         onAudioSave={handleAudioSave}
                                         onAudioDelete={handleAudioDelete}
@@ -401,53 +403,53 @@ export function EditNoteDialog({ note, isOpen, onClose, shareToken, sharedBy }: 
                     </div>
                 </div>
 
-                {/* Enhanced Footer */}
-                <div className="p-4 sm:p-6 border-t bg-muted/30 backdrop-blur-sm">
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                            {/* Quick Actions */}
-                            <div className="flex items-center gap-1">
+                {/* Enhanced Footer - Always Visible */}
+                <div className="p-3 sm:p-4 border-t bg-muted/30 backdrop-blur-sm flex-shrink-0">
+                    <div className="flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-2 min-w-0">
+                            {/* Quick Actions - Compact */}
+                            <div className="hidden sm:flex items-center gap-1">
                                 <Button 
                                     variant="outline" 
                                     size="sm"
-                                    className="h-9 px-3 rounded-lg"
+                                    className="h-8 px-2 rounded-lg text-xs"
                                 >
-                                    <Palette className="w-4 h-4 mr-2" />
-                                    <span className="hidden sm:inline">Style</span>
+                                    <Palette className="w-3 h-3 mr-1" />
+                                    <span className="hidden md:inline">Style</span>
                                 </Button>
                                 <Button 
                                     variant="outline" 
                                     size="sm"
-                                    className="h-9 px-3 rounded-lg"
+                                    className="h-8 px-2 rounded-lg text-xs"
                                 >
-                                    <ImageIcon className="w-4 h-4 mr-2" />
-                                    <span className="hidden sm:inline">Image</span>
+                                    <ImageIcon className="w-3 h-3 mr-1" />
+                                    <span className="hidden md:inline">Image</span>
                                 </Button>
                             </div>
                             
-                            {/* Word count and info */}
-                            <div className="hidden md:flex items-center gap-2 text-xs text-muted-foreground">
+                            {/* Word count and info - Hidden on small screens */}
+                            <div className="hidden md:flex items-center gap-2 text-xs text-muted-foreground min-w-0">
                                 <Separator orientation="vertical" className="h-4" />
-                                <span>
+                                <span className="truncate">
                                     {note?.content ? note.content.replace(/<[^>]*>/g, '').split(' ').filter(w => w.length > 0).length : 0} words
                                 </span>
                                 {shareToken && sharedBy && (
                                     <>
                                         <span>•</span>
-                                        <span>Shared by {sharedBy.name}</span>
+                                        <span className="truncate">Shared by {sharedBy.name}</span>
                                     </>
                                 )}
                             </div>
                         </div>
                         
-                        {/* Close button */}
+                        {/* Close button - Always visible */}
                         <Button 
                             variant="ghost" 
                             onClick={handleClose}
-                            className="h-9 px-4 rounded-lg"
+                            className="h-8 px-3 rounded-lg flex-shrink-0"
                         >
-                            <X className="w-4 h-4 mr-2" />
-                            Close
+                            <X className="w-4 h-4 mr-1" />
+                            <span className="text-xs">Close</span>
                         </Button>
                     </div>
                 </div>

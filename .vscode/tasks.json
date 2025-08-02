@@ -8,6 +8,14 @@
 			"group": "build",
 			"isBackground": false,
 			"problemMatcher": []
+		},
+		{
+			"type": "shell",
+			"label": "Start Development Server",
+			"command": "npm run dev",
+			"group": "build",
+			"isBackground": true,
+			"problemMatcher": []
 		}
 	]
 }

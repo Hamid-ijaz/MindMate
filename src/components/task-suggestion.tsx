@@ -336,15 +336,15 @@ export function TaskSuggestion() {
 
   return (
     <div className="w-full space-y-6">
-      {/* Modern Priority Selector - Mobile Responsive */}
+      {/* Compact Priority Selector - Made Smaller */}
       <motion.div 
         variants={slideInFromTop}
         initial="initial"
         animate="animate"
-        className="flex justify-center px-2"
+        className="flex justify-center px-2 mb-4"
       >
-        <Card className="w-full max-w-4xl p-1 bg-gradient-to-r from-primary/5 to-accent/5 border-primary/20">
-          <div className="grid grid-cols-2 sm:flex sm:flex-wrap lg:grid lg:grid-cols-4 gap-1">
+        <Card className="w-fit p-1 bg-gradient-to-r from-primary/5 to-accent/5 border-primary/20 shadow-md">
+          <div className="flex gap-1">
             {(['Critical', 'High', 'Medium', 'Low'] as Priority[]).map((priority) => {
               const count = tasks.filter(t => !t.completedAt && !t.isMuted && !t.parentId && t.priority === priority).length;
               return (
@@ -354,25 +354,25 @@ export function TaskSuggestion() {
                   size="sm"
                   onClick={() => setCurrentPriority(priority)}
                   className={cn(
-                    "relative h-9 px-2 sm:px-4 min-w-0 flex-1 sm:flex-none transition-all duration-300 text-xs sm:text-sm",
-                    currentPriority === priority && "shadow-lg scale-105"
+                    "relative h-8 px-2 sm:px-3 min-w-0 transition-all duration-300 text-xs",
+                    currentPriority === priority && "shadow-md scale-105"
                   )}
                   disabled={count === 0}
                 >
-                  <span className="flex items-center gap-1 sm:gap-2 min-w-0">
+                  <span className="flex items-center gap-1 min-w-0">
                     <div className={cn(
-                      "w-2 h-2 rounded-full flex-shrink-0",
+                      "w-1.5 h-1.5 rounded-full flex-shrink-0",
                       priority === 'Critical' && "bg-red-500",
                       priority === 'High' && "bg-orange-500", 
                       priority === 'Medium' && "bg-yellow-500",
                       priority === 'Low' && "bg-green-500"
                     )} />
-                    <span className="truncate">{priority}</span>
+                    <span className="truncate text-xs">{priority}</span>
                   </span>
                   {count > 0 && (
                     <Badge 
                       variant="secondary" 
-                      className="ml-1 sm:ml-2 h-4 sm:h-5 min-w-4 sm:min-w-5 text-xs p-0 flex items-center justify-center flex-shrink-0"
+                      className="ml-1 h-4 min-w-4 text-xs p-0 flex items-center justify-center flex-shrink-0"
                     >
                       {count}
                     </Badge>
@@ -394,9 +394,9 @@ export function TaskSuggestion() {
                   initial={{ opacity: 0, scale: 0.95 }}
                   animate={{ opacity: 1, scale: 1 }}
                   transition={{ delay: index * 0.1 }}
-                  className="min-h-[400px]" // Fixed minimum height
+                  className="min-h-[350px]" // Consistent height
                 >
-                  <Card className="shadow-xl border-2 hover:border-primary/30 transition-all duration-300 h-full">
+                  <Card className="shadow-xl border-2 hover:border-primary/30 transition-all duration-300 h-full flex flex-col">
                     <CardHeader className="pb-4">
                       <div className="flex justify-between items-start pb-3">
                         <CardDescription className="text-lg font-medium text-primary flex items-center gap-2">
@@ -522,16 +522,16 @@ export function TaskSuggestion() {
                                 )}
                             </CardFooter>
                             {subtasksOfSuggested.length > 0 && (
-                                <CardContent>
-                                    {/* Progress indicator for subtasks */}
+                                <CardContent className="pt-3">
+                                    {/* Compact Progress indicator for subtasks */}
                                     <div className="mb-3 space-y-2">
                                         <div className="flex items-center justify-between text-sm">
-                                            <span className="text-muted-foreground">Subtask Progress</span>
-                                            <span className="font-medium">{subtaskProgress}%</span>
+                                            <span className="text-muted-foreground text-xs">Subtask Progress</span>
+                                            <span className="font-medium text-xs">{subtaskProgress}%</span>
                                         </div>
-                                        <div className="w-full bg-muted rounded-full h-2">
+                                        <div className="w-full bg-muted rounded-full h-1.5">
                                             <div 
-                                                className="bg-primary rounded-full h-2 transition-all duration-300"
+                                                className="bg-primary rounded-full h-1.5 transition-all duration-300"
                                                 style={{ width: `${subtaskProgress}%` }}
                                             />
                                         </div>
@@ -540,13 +540,14 @@ export function TaskSuggestion() {
                                         </div>
                                     </div>
                                     
-                                    <Accordion type="single" collapsible defaultValue="subtasks" className="w-full">
+                                    {/* Collapsible Subtasks - Hidden by Default */}
+                                    <Accordion type="single" collapsible className="w-full">
                                     <AccordionItem value="subtasks">
-                                        <AccordionTrigger>
-                                        <div className="flex items-center gap-2 text-sm">
-                                            View Sub-tasks ({subtasksOfSuggested.length})
+                                        <AccordionTrigger className="text-sm py-2">
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-xs">View Sub-tasks ({subtasksOfSuggested.length})</span>
                                             {hasPendingSubtasks && (
-                                                <Badge variant="secondary" className="text-xs">
+                                                <Badge variant="secondary" className="text-xs px-1.5 py-0">
                                                     {pendingSubtasks.length} pending
                                                 </Badge>
                                             )}
