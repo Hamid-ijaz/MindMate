@@ -3,12 +3,12 @@ import webpush from 'web-push';
 
 // Configure VAPID keys (you should set these as environment variables)
 const vapidKeys = {
-  publicKey: process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || 'BEl62iUYgUivxIkv69yViEuiBIa40HI8PzJqJGb3b3_3bW-bBw8Y7vhM9qJ8PJwOEwGh1L3A4K4YxYK0e6R3cHE',
-  privateKey: process.env.VAPID_PRIVATE_KEY || 'your-private-vapid-key-here'
+  publicKey: process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || 'BKzpVHtE7e5HZtyN-ZzfnWQh8JMN3XW2btzp4PPdEqoofR_51byv1858Vmj5Aufc62w59PxBZWVb_PNbU9ehsRQ',
+  privateKey: process.env.VAPID_PRIVATE_KEY || 'wBh74X3AO3rerrBHhSTQhtB176H7h5U17snwWfagcFA'
 };
 
 webpush.setVapidDetails(
-  'mailto:your-email@example.com',
+  'mailto:hamid.ijaz91@gmail.com',
   vapidKeys.publicKey,
   vapidKeys.privateKey
 );
