@@ -8,14 +8,6 @@ interface PushSubscription {
     p256dh: string;
     auth: string;
   };
-  userId?: string;
-  userEmail?: string;
-  deviceInfo?: {
-    userAgent: string;
-    platform: string;
-    vendor: string;
-  };
-  subscribedAt?: number;
 }
 
 interface NotificationOptions {
@@ -29,16 +21,12 @@ interface NotificationOptions {
     title: string;
     icon?: string;
   }>;
-  tag?: string;
-  requireInteraction?: boolean;
-  silent?: boolean;
 }
 
 export function usePushNotifications() {
   const [isSupported, setIsSupported] = useState(false);
   const [subscription, setSubscription] = useState<PushSubscription | null>(null);
   const [permission, setPermission] = useState<NotificationPermission>('default');
-  const [isLoading, setIsLoading] = useState(false);
   const { user } = useAuth();
   const { toast } = useToast();
 
@@ -77,7 +65,6 @@ export function usePushNotifications() {
       return false;
     }
 
-    setIsLoading(true);
     try {
       const permission = await Notification.requestPermission();
       setPermission(permission);
@@ -104,47 +91,33 @@ export function usePushNotifications() {
         variant: "destructive",
       });
       return false;
-    } finally {
-      setIsLoading(false);
     }
   }, [isSupported, toast]);
 
   const subscribe = useCallback(async (): Promise<boolean> => {
-    if (!isSupported || permission !== 'granted' || !user) {
+    if (!isSupported || permission !== 'granted') {
       return false;
     }
 
-    setIsLoading(true);
     try {
       const registration = await navigator.serviceWorker.ready;
       
-      // Get VAPID public key from environment
-      const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
-      
-      if (!vapidPublicKey) {
-        throw new Error('VAPID public key not configured');
-      }
+      // VAPID public key - replace with your actual VAPID public key
+      const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || 
+        'BClZogjGDfG3ht4zgQKr34G0zVVfy9FYNaXFSPg8_BirjgANcp3g6ABT2MIg52aN302mlY2ykKz6jlBsZttiKgL8';
       
       const subscription = await registration.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: urlBase64ToUint8Array(vapidPublicKey),
       });
 
-      // Convert subscription to our format with user info
+      // Convert subscription to our format
       const subscriptionData: PushSubscription = {
         endpoint: subscription.endpoint,
         keys: {
           p256dh: arrayBufferToBase64(subscription.getKey('p256dh')!),
           auth: arrayBufferToBase64(subscription.getKey('auth')!),
         },
-        userId: user.uid,
-        userEmail: user.email,
-        deviceInfo: {
-          userAgent: navigator.userAgent,
-          platform: navigator.platform,
-          vendor: navigator.vendor,
-        },
-        subscribedAt: Date.now(),
       };
 
       setSubscription(subscriptionData);
@@ -166,15 +139,10 @@ export function usePushNotifications() {
         variant: "destructive",
       });
       return false;
-    } finally {
-      setIsLoading(false);
     }
-  }, [isSupported, permission, toast, user]);
+  }, [isSupported, permission, toast]);
 
   const unsubscribe = useCallback(async (): Promise<boolean> => {
-    if (!user) return false;
-
-    setIsLoading(true);
     try {
       const registration = await navigator.serviceWorker.ready;
       const subscription = await registration.pushManager.getSubscription();
@@ -198,16 +166,12 @@ export function usePushNotifications() {
         description: "Failed to unsubscribe from push notifications.",
         variant: "destructive",
       });
-    } finally {
-      setIsLoading(false);
     }
 
     return false;
-  }, [toast, user]);
+  }, [toast]);
 
   const getSubscription = useCallback(async () => {
-    if (!user) return;
-
     try {
       const registration = await navigator.serviceWorker.ready;
       const subscription = await registration.pushManager.getSubscription();
@@ -219,15 +183,13 @@ export function usePushNotifications() {
             p256dh: arrayBufferToBase64(subscription.getKey('p256dh')!),
             auth: arrayBufferToBase64(subscription.getKey('auth')!),
           },
-          userId: user.uid,
-          userEmail: user.email,
         };
         setSubscription(subscriptionData);
       }
     } catch (error) {
       console.error('Error getting subscription:', error);
     }
-  }, [user]);
+  }, []);
 
   const sendNotification = useCallback(async (options: NotificationOptions) => {
     if (!isSupported || permission !== 'granted') {
@@ -242,10 +204,8 @@ export function usePushNotifications() {
         badge: options.badge || '/icon-192.png',
         data: options.data,
         actions: options.actions,
-        tag: options.tag,
-        requireInteraction: options.requireInteraction !== false,
-        silent: options.silent || false,
-        timestamp: Date.now(),
+        requireInteraction: true,
+        silent: false,
       });
 
       return true;
@@ -255,24 +215,14 @@ export function usePushNotifications() {
     }
   }, [isSupported, permission]);
 
-  const testNotification = useCallback(async () => {
-    return await sendNotification({
-      title: "Test Notification",
-      body: "This is how your task reminders will appear!",
-      data: { test: true },
-    });
-  }, [sendNotification]);
-
   return {
     isSupported,
     permission,
     subscription,
-    isLoading,
     requestPermission,
     subscribe,
     unsubscribe,
     sendNotification,
-    testNotification,
   };
 }
 
@@ -312,15 +262,10 @@ async function saveSubscription(subscription: PushSubscription) {
     });
 
     if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Failed to save subscription: ${errorText}`);
+      throw new Error('Failed to save subscription');
     }
-
-    const result = await response.json();
-    console.log('Subscription saved successfully:', result);
   } catch (error) {
     console.error('Error saving subscription:', error);
-    throw error;
   }
 }
 
@@ -334,14 +279,9 @@ async function removeSubscription() {
     });
 
     if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Failed to remove subscription: ${errorText}`);
+      throw new Error('Failed to remove subscription');
     }
-
-    const result = await response.json();
-    console.log('Subscription removed successfully:', result);
   } catch (error) {
     console.error('Error removing subscription:', error);
-    throw error;
   }
 }
