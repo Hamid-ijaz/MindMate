@@ -25,31 +25,39 @@ export function getDefaultPriority(): 'Low' | 'Medium' | 'High' | 'Critical' {
  * Safely copy text to clipboard with fallback support
  */
 export async function copyToClipboard(text: string): Promise<boolean> {
+  if (typeof window === 'undefined' || typeof navigator === 'undefined') {
+    return false;
+  }
+
   try {
-    // Modern clipboard API
+    // Modern clipboard API (only in secure contexts)
     if (navigator.clipboard && window.isSecureContext) {
       await navigator.clipboard.writeText(text);
       return true;
     }
     
     // Fallback for older browsers or non-secure contexts
-    const textArea = document.createElement('textarea');
-    textArea.value = text;
-    textArea.style.position = 'fixed';
-    textArea.style.left = '-999999px';
-    textArea.style.top = '-999999px';
-    document.body.appendChild(textArea);
-    textArea.focus();
-    textArea.select();
-    
-    try {
-      const successful = document.execCommand('copy');
-      document.body.removeChild(textArea);
-      return successful;
-    } catch (err) {
-      document.body.removeChild(textArea);
-      return false;
+    if (typeof document !== 'undefined') {
+      const textArea = document.createElement('textarea');
+      textArea.value = text;
+      textArea.style.position = 'fixed';
+      textArea.style.left = '-999999px';
+      textArea.style.top = '-999999px';
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+      
+      try {
+        const successful = document.execCommand('copy');
+        document.body.removeChild(textArea);
+        return successful;
+      } catch (err) {
+        document.body.removeChild(textArea);
+        return false;
+      }
     }
+    
+    return false;
   } catch (err) {
     console.warn('Clipboard copy failed:', err);
     return false;
@@ -60,5 +68,43 @@ export async function copyToClipboard(text: string): Promise<boolean> {
  * Check if clipboard API is supported
  */
 export function isClipboardSupported(): boolean {
+  if (typeof window === 'undefined' || typeof navigator === 'undefined') {
+    return false;
+  }
   return !!(navigator.clipboard && window.isSecureContext);
+}
+
+/**
+ * Safely create a Date object from a timestamp or date value
+ */
+export function safeDate(value?: number | string | Date): Date | null {
+  if (!value) return null;
+  
+  try {
+    const date = new Date(value);
+    if (isNaN(date.getTime())) {
+      console.warn('Invalid date value:', value);
+      return null;
+    }
+    return date;
+  } catch (error) {
+    console.error('Date creation error:', error);
+    return null;
+  }
+}
+
+/**
+ * Safely format a date with fallback
+ */
+export function safeDateFormat(value?: number | string | Date, formatStr: string = "MMM d, yyyy", fallback: string = "Invalid date"): string {
+  const date = safeDate(value);
+  if (!date) return fallback;
+  
+  try {
+    const { format } = require('date-fns');
+    return format(date, formatStr);
+  } catch (error) {
+    console.error('Date formatting error:', error);
+    return fallback;
+  }
 }

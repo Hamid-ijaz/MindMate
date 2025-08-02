@@ -16,7 +16,7 @@ import {
   writeBatch
 } from 'firebase/firestore';
 import { db } from './firebase';
-import type { Task, User, Accomplishment, Note } from './types';
+import type { Task, User, Accomplishment, Note, SharedItem, ShareHistoryEntry, SharePermission, ShareCollaborator, ShareAnalytics } from './types';
 
 // Collection names
 export const COLLECTIONS = {
@@ -25,6 +25,7 @@ export const COLLECTIONS = {
   ACCOMPLISHMENTS: 'accomplishments',
   USER_SETTINGS: 'userSettings',
   NOTES: 'notes',
+  SHARED_ITEMS: 'sharedItems',
 } as const;
 
 // User operations
@@ -117,6 +118,21 @@ export const taskService = {
     const querySnapshot = await getDocs(q);
     
     return querySnapshot.docs.map(deserializeTaskFromFirestore);
+  },
+
+  async getTask(taskId: string): Promise<Task | null> {
+    try {
+      const taskRef = doc(db, COLLECTIONS.TASKS, taskId);
+      const taskSnap = await getDoc(taskRef);
+      
+      if (taskSnap.exists()) {
+        return deserializeTaskFromFirestore(taskSnap);
+      }
+      return null;
+    } catch (error) {
+      console.error('Error fetching task:', error);
+      return null;
+    }
   },
 
   async addTask(userEmail: string, task: Omit<Task, 'id' | 'userEmail'>): Promise<string> {
@@ -268,10 +284,31 @@ export const noteService = {
             return {
                 ...data,
                 id: doc.id,
-                createdAt: data.createdAt.toMillis(),
-                updatedAt: data.updatedAt.toMillis(),
+                createdAt: typeof data.createdAt?.toMillis === 'function' ? data.createdAt.toMillis() : data.createdAt || Date.now(),
+                updatedAt: typeof data.updatedAt?.toMillis === 'function' ? data.updatedAt.toMillis() : data.updatedAt || Date.now(),
             } as Note;
         });
+    },
+
+    async getNote(noteId: string): Promise<Note | null> {
+        try {
+            const noteRef = doc(db, COLLECTIONS.NOTES, noteId);
+            const noteSnap = await getDoc(noteRef);
+            
+            if (noteSnap.exists()) {
+                const data = noteSnap.data();
+                return {
+                    ...data,
+                    id: noteSnap.id,
+                    createdAt: typeof data.createdAt?.toMillis === 'function' ? data.createdAt.toMillis() : data.createdAt || Date.now(),
+                    updatedAt: typeof data.updatedAt?.toMillis === 'function' ? data.updatedAt.toMillis() : data.updatedAt || Date.now(),
+                } as Note;
+            }
+            return null;
+        } catch (error) {
+            console.error('Error fetching note:', error);
+            return null;
+        }
     },
 
     async addNote(note: Omit<Note, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> {
@@ -364,5 +401,511 @@ export const userSettingsService = {
       userEmail,
       updatedAt: Timestamp.now()
     }, { merge: true });
+  }
+};
+
+// Sharing and collaboration operations
+export const sharingService = {
+  // Generate a unique share token
+  generateShareToken(): string {
+    return Math.random().toString(36).substr(2, 16) + Date.now().toString(36);
+  },
+
+  // Create or get existing share link
+  async createOrGetShareLink(
+    itemId: string, 
+    itemType: 'task' | 'note', 
+    ownerEmail: string, 
+    permission: SharePermission
+  ): Promise<{ shareToken: string; url: string; isNew: boolean }> {
+    const sharedItemsRef = collection(db, COLLECTIONS.SHARED_ITEMS);
+    
+    // Check if a share link already exists for this item with the same permission
+    const existingQuery = query(
+      sharedItemsRef,
+      where('itemId', '==', itemId),
+      where('itemType', '==', itemType),
+      where('ownerEmail', '==', ownerEmail),
+      where('permission', '==', permission),
+      where('isActive', '==', true)
+    );
+    
+    const existingDocs = await getDocs(existingQuery);
+    
+    if (!existingDocs.empty) {
+      // Return existing share link
+      const existingDoc = existingDocs.docs[0];
+      const data = existingDoc.data() as SharedItem;
+      const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000';
+      const url = `${baseUrl}/share/${itemType}/${itemId}?token=${data.shareToken}&permission=${permission}`;
+      
+      return {
+        shareToken: data.shareToken,
+        url,
+        isNew: false
+      };
+    }
+
+    // Create new share link
+    const shareToken = this.generateShareToken();
+    const sharedItemRef = doc(sharedItemsRef);
+    
+    // Get owner info for better display
+    const ownerInfo = await userService.getUser(ownerEmail);
+    const ownerName = ownerInfo ? `${ownerInfo.firstName} ${ownerInfo.lastName}` : ownerEmail.split('@')[0];
+    
+    const sharedItem: Omit<SharedItem, 'id'> = {
+      itemId,
+      itemType,
+      ownerEmail,
+      ownerName,
+      permission,
+      shareToken,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      isActive: true,
+      viewCount: 0,
+      collaborators: [],
+      allowComments: true,
+      allowDownload: true,
+      history: [{
+        id: Date.now().toString(),
+        userId: ownerEmail,
+        userName: ownerName,
+        action: 'link_created',
+        timestamp: Date.now(),
+        details: `Share link created with ${permission} permission`
+      }]
+    };
+
+    await setDoc(sharedItemRef, {
+      ...sharedItem,
+      createdAt: Timestamp.now(),
+      updatedAt: Timestamp.now(),
+    });
+
+    const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000';
+    const url = `${baseUrl}/share/${itemType}/${itemId}?token=${shareToken}&permission=${permission}`;
+
+    return {
+      shareToken,
+      url,
+      isNew: true
+    };
+  },
+
+  // Get shared item by token
+  async getSharedItemByToken(token: string): Promise<SharedItem | null> {
+    const sharedItemsRef = collection(db, COLLECTIONS.SHARED_ITEMS);
+    const q = query(sharedItemsRef, where('shareToken', '==', token), where('isActive', '==', true));
+    const querySnapshot = await getDocs(q);
+    
+    if (querySnapshot.empty) return null;
+    
+    const doc = querySnapshot.docs[0];
+    const data = doc.data();
+    
+    return {
+      ...data,
+      id: doc.id,
+      createdAt: data.createdAt?.toMillis() || Date.now(),
+      updatedAt: data.updatedAt?.toMillis() || Date.now(),
+      expiresAt: data.expiresAt?.toMillis(),
+      viewCount: data.viewCount || 0,
+      collaborators: data.collaborators || [],
+      allowComments: data.allowComments ?? true,
+      allowDownload: data.allowDownload ?? true,
+    } as SharedItem;
+  },
+
+  // Record a view action
+  async recordView(token: string, userEmail?: string, userName?: string): Promise<void> {
+    const sharedItemsRef = collection(db, COLLECTIONS.SHARED_ITEMS);
+    const q = query(sharedItemsRef, where('shareToken', '==', token));
+    const querySnapshot = await getDocs(q);
+    
+    if (querySnapshot.empty) return;
+    
+    const docRef = querySnapshot.docs[0].ref;
+    const sharedItem = querySnapshot.docs[0].data() as SharedItem;
+    
+    const historyEntry: ShareHistoryEntry = {
+      id: Date.now().toString(),
+      userId: userEmail || 'anonymous',
+      userName: userName || (userEmail ? userEmail.split('@')[0] : 'Anonymous User'),
+      action: 'viewed',
+      timestamp: Date.now(),
+      details: `Viewed the shared ${sharedItem.itemType}`
+    };
+    
+    const updatedHistory = [...(sharedItem.history || []), historyEntry];
+    
+    await updateDoc(docRef, {
+      viewCount: (sharedItem.viewCount || 0) + 1,
+      lastViewedAt: Date.now(),
+      history: updatedHistory,
+      updatedAt: Timestamp.now(),
+    });
+  },
+
+  // Add collaborator with specific permission
+  async addCollaborator(
+    token: string, 
+    collaboratorEmail: string, 
+    permission: SharePermission,
+    addedBy: string
+  ): Promise<void> {
+    const sharedItemsRef = collection(db, COLLECTIONS.SHARED_ITEMS);
+    const q = query(sharedItemsRef, where('shareToken', '==', token));
+    const querySnapshot = await getDocs(q);
+    
+    if (querySnapshot.empty) return;
+    
+    const docRef = querySnapshot.docs[0].ref;
+    const sharedItem = querySnapshot.docs[0].data() as SharedItem;
+    
+    // Get collaborator info
+    const collaboratorInfo = await userService.getUser(collaboratorEmail);
+    const collaboratorName = collaboratorInfo ? `${collaboratorInfo.firstName} ${collaboratorInfo.lastName}` : collaboratorEmail.split('@')[0];
+    
+    const newCollaborator: ShareCollaborator = {
+      email: collaboratorEmail,
+      name: collaboratorName,
+      permission,
+      addedAt: Date.now(),
+      addedBy
+    };
+    
+    const updatedCollaborators = [...(sharedItem.collaborators || []), newCollaborator];
+    
+    const historyEntry: ShareHistoryEntry = {
+      id: Date.now().toString(),
+      userId: addedBy,
+      action: 'collaborator_added',
+      timestamp: Date.now(),
+      details: `Added ${collaboratorName} with ${permission} permission`
+    };
+    
+    const updatedHistory = [...(sharedItem.history || []), historyEntry];
+    
+    await updateDoc(docRef, {
+      collaborators: updatedCollaborators,
+      history: updatedHistory,
+      updatedAt: Timestamp.now(),
+    });
+  },
+
+  // Remove collaborator
+  async removeCollaborator(token: string, collaboratorEmail: string, removedBy: string): Promise<void> {
+    const sharedItemsRef = collection(db, COLLECTIONS.SHARED_ITEMS);
+    const q = query(sharedItemsRef, where('shareToken', '==', token));
+    const querySnapshot = await getDocs(q);
+    
+    if (querySnapshot.empty) return;
+    
+    const docRef = querySnapshot.docs[0].ref;
+    const sharedItem = querySnapshot.docs[0].data() as SharedItem;
+    
+    const collaboratorToRemove = sharedItem.collaborators?.find(c => c.email === collaboratorEmail);
+    const updatedCollaborators = (sharedItem.collaborators || []).filter(c => c.email !== collaboratorEmail);
+    
+    const historyEntry: ShareHistoryEntry = {
+      id: Date.now().toString(),
+      userId: removedBy,
+      action: 'collaborator_removed',
+      timestamp: Date.now(),
+      details: `Removed ${collaboratorToRemove?.name || collaboratorEmail} from collaborators`
+    };
+    
+    const updatedHistory = [...(sharedItem.history || []), historyEntry];
+    
+    await updateDoc(docRef, {
+      collaborators: updatedCollaborators,
+      history: updatedHistory,
+      updatedAt: Timestamp.now(),
+    });
+  },
+
+  // Get all shared items for an owner
+  async getSharedItemsByOwner(ownerEmail: string): Promise<SharedItem[]> {
+    const sharedItemsRef = collection(db, COLLECTIONS.SHARED_ITEMS);
+    const q = query(
+      sharedItemsRef, 
+      where('ownerEmail', '==', ownerEmail),
+      where('isActive', '==', true),
+      orderBy('createdAt', 'desc')
+    );
+    const querySnapshot = await getDocs(q);
+    
+    return querySnapshot.docs.map(doc => {
+      const data = doc.data();
+      return {
+        ...data,
+        id: doc.id,
+        createdAt: data.createdAt?.toMillis() || Date.now(),
+        updatedAt: data.updatedAt?.toMillis() || Date.now(),
+        expiresAt: data.expiresAt?.toMillis(),
+        viewCount: data.viewCount || 0,
+        collaborators: data.collaborators || [],
+        allowComments: data.allowComments ?? true,
+        allowDownload: data.allowDownload ?? true,
+      } as SharedItem;
+    });
+  },
+
+  // Add history entry to shared item with enhanced tracking
+  async addHistoryEntry(
+    token: string, 
+    entry: Omit<ShareHistoryEntry, 'id' | 'timestamp'>,
+    updateItemTimestamp: boolean = true
+  ): Promise<void> {
+    const sharedItemsRef = collection(db, COLLECTIONS.SHARED_ITEMS);
+    const q = query(sharedItemsRef, where('shareToken', '==', token));
+    const querySnapshot = await getDocs(q);
+    
+    if (querySnapshot.empty) return;
+    
+    const docRef = querySnapshot.docs[0].ref;
+    const sharedItem = querySnapshot.docs[0].data() as SharedItem;
+    
+    const historyEntry: ShareHistoryEntry = {
+      ...entry,
+      id: Date.now().toString(),
+      timestamp: Date.now(),
+    };
+    
+    const updatedHistory = [...(sharedItem.history || []), historyEntry];
+    const updateData: any = {
+      history: updatedHistory,
+      updatedAt: Timestamp.now(),
+    };
+    
+    // Track edit actions
+    if (entry.action.includes('edit') || entry.action.includes('update') || entry.action.includes('change')) {
+      updateData.lastEditedAt = Date.now();
+      updateData.lastEditedBy = entry.userId;
+    }
+    
+    await updateDoc(docRef, updateData);
+  },
+
+  // Revoke share access
+  async revokeShareAccess(shareToken: string): Promise<void> {
+    const sharedItemsRef = collection(db, COLLECTIONS.SHARED_ITEMS);
+    const q = query(sharedItemsRef, where('shareToken', '==', shareToken));
+    const querySnapshot = await getDocs(q);
+    
+    if (querySnapshot.empty) return;
+    
+    const docRef = querySnapshot.docs[0].ref;
+    const sharedItem = querySnapshot.docs[0].data() as SharedItem;
+    
+    const historyEntry: ShareHistoryEntry = {
+      id: Date.now().toString(),
+      userId: sharedItem.ownerEmail,
+      userName: sharedItem.ownerName,
+      action: 'access_revoked',
+      timestamp: Date.now(),
+      details: 'Share access has been revoked'
+    };
+    
+    const updatedHistory = [...(sharedItem.history || []), historyEntry];
+    
+    await updateDoc(docRef, {
+      isActive: false,
+      history: updatedHistory,
+      updatedAt: Timestamp.now(),
+    });
+  },
+
+  // Update share permission
+  async updateSharePermission(shareToken: string, newPermission: SharePermission): Promise<void> {
+    const sharedItemsRef = collection(db, COLLECTIONS.SHARED_ITEMS);
+    const q = query(sharedItemsRef, where('shareToken', '==', shareToken));
+    const querySnapshot = await getDocs(q);
+    
+    if (querySnapshot.empty) return;
+    
+    const docRef = querySnapshot.docs[0].ref;
+    const sharedItem = querySnapshot.docs[0].data() as SharedItem;
+    
+    const historyEntry: ShareHistoryEntry = {
+      id: Date.now().toString(),
+      userId: sharedItem.ownerEmail,
+      userName: sharedItem.ownerName,
+      action: 'permission_changed',
+      timestamp: Date.now(),
+      fieldChanged: 'permission',
+      oldValue: sharedItem.permission,
+      newValue: newPermission,
+      details: `Permission changed from ${sharedItem.permission} to ${newPermission}`
+    };
+    
+    const updatedHistory = [...(sharedItem.history || []), historyEntry];
+    
+    await updateDoc(docRef, {
+      permission: newPermission,
+      history: updatedHistory,
+      updatedAt: Timestamp.now(),
+    });
+  },
+
+  // Generate new share token (regenerate link)
+  async regenerateShareToken(oldToken: string): Promise<string> {
+    const sharedItemsRef = collection(db, COLLECTIONS.SHARED_ITEMS);
+    const q = query(sharedItemsRef, where('shareToken', '==', oldToken));
+    const querySnapshot = await getDocs(q);
+    
+    if (querySnapshot.empty) throw new Error('Share not found');
+    
+    const docRef = querySnapshot.docs[0].ref;
+    const sharedItem = querySnapshot.docs[0].data() as SharedItem;
+    const newToken = this.generateShareToken();
+    
+    const historyEntry: ShareHistoryEntry = {
+      id: Date.now().toString(),
+      userId: sharedItem.ownerEmail,
+      userName: sharedItem.ownerName,
+      action: 'link_regenerated',
+      timestamp: Date.now(),
+      details: 'Share link was regenerated for security'
+    };
+    
+    const updatedHistory = [...(sharedItem.history || []), historyEntry];
+    
+    await updateDoc(docRef, {
+      shareToken: newToken,
+      history: updatedHistory,
+      updatedAt: Timestamp.now(),
+    });
+    
+    return newToken;
+  },
+
+  // Get sharing analytics
+  async getShareAnalytics(token: string): Promise<ShareAnalytics> {
+    const sharedItem = await this.getSharedItemByToken(token);
+    
+    if (!sharedItem) {
+      throw new Error('Share not found');
+    }
+    
+    const history = sharedItem.history || [];
+    const uniqueViewers = new Set(history.filter(h => h.action === 'viewed').map(h => h.userId)).size;
+    const uniqueEditors = new Set(history.filter(h => h.action.includes('edit')).map(h => h.userId)).size;
+    
+    const actionCounts = history.reduce((acc, entry) => {
+      acc[entry.action] = (acc[entry.action] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+    
+    const topActions = Object.entries(actionCounts)
+      .map(([action, count]) => ({ action, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 5);
+    
+    return {
+      totalViews: sharedItem.viewCount,
+      uniqueViewers,
+      totalEdits: history.filter(h => h.action.includes('edit')).length,
+      uniqueEditors,
+      topActions,
+      recentActivity: history.slice(-10).reverse() // Last 10 activities
+    };
+  },
+
+  // Check if item is expired
+  isShareExpired(sharedItem: SharedItem): boolean {
+    if (!sharedItem.expiresAt) return false;
+    return Date.now() > sharedItem.expiresAt;
+  },
+
+  // Validate share access with enhanced permissions
+  async validateShareAccess(
+    token: string, 
+    requiredPermission: SharePermission = 'view',
+    userEmail?: string
+  ): Promise<{
+    isValid: boolean;
+    sharedItem?: SharedItem;
+    userPermission?: SharePermission;
+    error?: string;
+  }> {
+    const sharedItem = await this.getSharedItemByToken(token);
+    
+    if (!sharedItem) {
+      return { isValid: false, error: 'Share link not found or has been revoked' };
+    }
+    
+    if (!sharedItem.isActive) {
+      return { isValid: false, error: 'Share link has been deactivated' };
+    }
+    
+    if (this.isShareExpired(sharedItem)) {
+      return { isValid: false, error: 'Share link has expired' };
+    }
+    
+    // Check if user is owner
+    if (userEmail === sharedItem.ownerEmail) {
+      return { isValid: true, sharedItem, userPermission: 'edit' };
+    }
+    
+    // Check if user is a collaborator with specific permissions
+    const collaborator = sharedItem.collaborators?.find(c => c.email === userEmail);
+    if (collaborator) {
+      const userPermission = collaborator.permission;
+      if (requiredPermission === 'edit' && userPermission === 'view') {
+        return { 
+          isValid: false, 
+          error: 'You only have view access to this item',
+          userPermission 
+        };
+      }
+      return { isValid: true, sharedItem, userPermission };
+    }
+    
+    // Use general share permission
+    const userPermission = sharedItem.permission;
+    if (requiredPermission === 'edit' && userPermission === 'view') {
+      return { 
+        isValid: false, 
+        error: 'This share link only allows viewing',
+        userPermission
+      };
+    }
+    
+    return { isValid: true, sharedItem, userPermission };
+  },
+
+  // Update share settings
+  async updateShareSettings(
+    token: string, 
+    settings: Partial<Pick<SharedItem, 'allowComments' | 'allowDownload' | 'expiresAt'>>
+  ): Promise<void> {
+    const sharedItemsRef = collection(db, COLLECTIONS.SHARED_ITEMS);
+    const q = query(sharedItemsRef, where('shareToken', '==', token));
+    const querySnapshot = await getDocs(q);
+    
+    if (querySnapshot.empty) return;
+    
+    const docRef = querySnapshot.docs[0].ref;
+    const sharedItem = querySnapshot.docs[0].data() as SharedItem;
+    
+    const historyEntry: ShareHistoryEntry = {
+      id: Date.now().toString(),
+      userId: sharedItem.ownerEmail,
+      userName: sharedItem.ownerName,
+      action: 'settings_updated',
+      timestamp: Date.now(),
+      details: `Share settings updated: ${Object.keys(settings).join(', ')}`
+    };
+    
+    const updatedHistory = [...(sharedItem.history || []), historyEntry];
+    
+    await updateDoc(docRef, {
+      ...settings,
+      history: updatedHistory,
+      updatedAt: Timestamp.now(),
+    });
   }
 };

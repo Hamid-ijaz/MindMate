@@ -1,15 +1,22 @@
 "use client";
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { copyToClipboard, isClipboardSupported } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 
 export function useClipboard() {
   const [isCopied, setIsCopied] = useState(false);
+  const [isSupported, setIsSupported] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
   const { toast } = useToast();
 
+  useEffect(() => {
+    setIsMounted(true);
+    setIsSupported(isClipboardSupported());
+  }, []);
+
   const copy = useCallback(async (text: string) => {
-    if (!isClipboardSupported()) {
+    if (!isMounted || !isSupported) {
       toast({
         title: "Clipboard Not Supported",
         description: "Your browser doesn't support copying to clipboard. Please copy manually.",
@@ -45,11 +52,11 @@ export function useClipboard() {
       });
       return false;
     }
-  }, [toast]);
+  }, [toast, isMounted, isSupported]);
 
   return {
     copy,
     isCopied,
-    isSupported: isClipboardSupported(),
+    isSupported: isMounted && isSupported,
   };
 } 

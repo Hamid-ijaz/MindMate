@@ -7,6 +7,7 @@ import { Toaster } from '@/components/ui/toaster';
 import { ThemeProvider } from '@/contexts/theme-context';
 import { ManageTasksSheet } from '@/components/manage-tasks-sheet';
 import { MobileNav } from '@/components/mobile-nav';
+import { KeyboardNavigation } from '@/components/keyboard-navigation';
 import { NotificationProvider } from '@/contexts/notification-context';
 import { NoteProvider } from '@/contexts/note-context';
 import { ErrorBoundary } from '@/components/error-boundary';
@@ -36,12 +37,31 @@ export const metadata: Metadata = {
   icons: {
     icon: [
       { url: '/favicon.svg', type: 'image/svg+xml' },
-      { url: '/favicon.ico', type: 'image/x-icon' }
+      { url: '/favicon.ico', type: 'image/x-icon' },
+      { url: '/icon-192.png', sizes: '192x192', type: 'image/png' },
+      { url: '/icon-512.png', sizes: '512x512', type: 'image/png' }
     ],
     shortcut: '/favicon.ico',
-    apple: '/apple-icon.png',
+    apple: [
+      { url: '/icon-192.png', sizes: '192x192', type: 'image/png' }
+    ],
   },
-  manifest: '/site.webmanifest',
+  manifest: '/manifest.json',
+  viewport: {
+    width: 'device-width',
+    initialScale: 1,
+    maximumScale: 1,
+    userScalable: false,
+    viewportFit: 'cover'
+  },
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'default',
+    title: 'MindMate'
+  },
+  formatDetection: {
+    telephone: false
+  },
 };
 
 function AppInitializer({ children }: { children: React.ReactNode }) {
@@ -63,6 +83,25 @@ export default function RootLayout({
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link href="https://fonts.googleapis.com/css2?family=Inter&display=swap" rel="stylesheet" />
+        
+        {/* PWA Meta Tags */}
+        <meta name="application-name" content="MindMate" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+        <meta name="apple-mobile-web-app-title" content="MindMate" />
+        <meta name="format-detection" content="telephone=no" />
+        <meta name="mobile-web-app-capable" content="yes" />
+        <meta name="msapplication-config" content="/browserconfig.xml" />
+        <meta name="msapplication-TileColor" content="#3b82f6" />
+        <meta name="msapplication-tap-highlight" content="no" />
+        
+        <link rel="apple-touch-icon" href="/icon-192.png" />
+        <link rel="apple-touch-icon" sizes="192x192" href="/icon-192.png" />
+        <link rel="mask-icon" href="/favicon.svg" color="#3b82f6" />
+        <link rel="shortcut icon" href="/favicon.ico" />
+        
+        <meta name="theme-color" content="#3b82f6" />
+        
         <script
           dangerouslySetInnerHTML={{
             __html: `
@@ -83,6 +122,19 @@ export default function RootLayout({
                 }
                 getTheme();
               })();
+              
+              // Register Service Worker
+              if ('serviceWorker' in navigator) {
+                window.addEventListener('load', function() {
+                  navigator.serviceWorker.register('/sw.js')
+                    .then(function(registration) {
+                      console.log('SW registered: ', registration);
+                    })
+                    .catch(function(registrationError) {
+                      console.log('SW registration failed: ', registrationError);
+                    });
+                });
+              }
             `,
           }}
         />
@@ -102,6 +154,7 @@ export default function RootLayout({
                       </div>
                       <Toaster />
                       <ManageTasksSheet />
+                      <KeyboardNavigation />
                     </AppInitializer>
                   </NotificationProvider>
                 </NoteProvider>

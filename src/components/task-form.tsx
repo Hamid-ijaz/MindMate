@@ -70,6 +70,8 @@ interface TaskFormProps {
   onFinished?: () => void;
   parentId?: string;
   defaultValues?: Partial<TaskFormValues>;
+  customSaveHandler?: (taskData: Partial<Task>) => Promise<void>;
+  customAddHandler?: (taskData: Omit<Task, 'id' | 'createdAt' | 'rejectionCount' | 'isMuted' | 'completedAt' | 'lastRejectedAt' | 'notifiedAt'>) => Promise<void>;
 }
 
 const urlRegex = new RegExp(
@@ -77,7 +79,7 @@ const urlRegex = new RegExp(
 );
 
 
-export function TaskForm({ task, onFinished, parentId, defaultValues: propDefaults }: TaskFormProps) {
+export function TaskForm({ task, onFinished, parentId, defaultValues: propDefaults, customSaveHandler, customAddHandler }: TaskFormProps) {
   const { addTask, updateTask, taskCategories, taskDurations } = useTasks();
   const [isSummarizing, startSummarizeTransition] = useTransition();
   const [isEnhancing, startEnhanceTransition] = useTransition();
@@ -86,10 +88,32 @@ export function TaskForm({ task, onFinished, parentId, defaultValues: propDefaul
   const defaultValues: Partial<TaskFormValues> = task ? {
     ...task,
     duration: Number(task.duration) as TaskDuration,
-    reminderAt: task.reminderAt ? new Date(task.reminderAt) : undefined,
+    reminderAt: task.reminderAt ? (() => {
+      try {
+        const date = new Date(task.reminderAt);
+        if (isNaN(date.getTime())) {
+          return undefined;
+        }
+        return date;
+      } catch (error) {
+        console.error('Date parsing error:', error);
+        return undefined;
+      }
+    })() : undefined,
     recurrence: task.recurrence ? {
         ...task.recurrence,
-        endDate: task.recurrence.endDate ? new Date(task.recurrence.endDate) : undefined,
+        endDate: task.recurrence.endDate ? (() => {
+          try {
+            const date = new Date(task.recurrence.endDate);
+            if (isNaN(date.getTime())) {
+              return undefined;
+            }
+            return date;
+          } catch (error) {
+            console.error('Date parsing error:', error);
+            return undefined;
+          }
+        })() : undefined,
     } : { frequency: 'none' },
   } : {
     title: "",
@@ -151,7 +175,7 @@ export function TaskForm({ task, onFinished, parentId, defaultValues: propDefaul
     });
   }
 
-  const onSubmit = (data: TaskFormValues) => {
+  const onSubmit = async (data: TaskFormValues) => {
     const taskData = {
         ...data,
         reminderAt: data.reminderAt ? data.reminderAt.getTime() : undefined,
@@ -161,14 +185,34 @@ export function TaskForm({ task, onFinished, parentId, defaultValues: propDefaul
         } : undefined,
     }
 
-    if (task) {
-      updateTask(task.id, taskData as Partial<Task>);
-    } else {
-      addTask({ ...taskData, parentId } as Omit<Task, 'id' | 'createdAt' | 'rejectionCount' | 'isMuted' | 'completedAt' | 'lastRejectedAt'>);
-    }
-    onFinished?.();
-    if (!task) {
-      form.reset(defaultValues);
+    try {
+      if (task) {
+        // Update existing task
+        if (customSaveHandler) {
+          await customSaveHandler(taskData as Partial<Task>);
+        } else {
+          updateTask(task.id, taskData as Partial<Task>);
+        }
+      } else {
+        // Add new task
+        if (customAddHandler) {
+          await customAddHandler({ ...taskData, parentId } as Omit<Task, 'id' | 'createdAt' | 'rejectionCount' | 'isMuted' | 'completedAt' | 'lastRejectedAt' | 'notifiedAt'>);
+        } else {
+          addTask({ ...taskData, parentId } as Omit<Task, 'id' | 'createdAt' | 'rejectionCount' | 'isMuted' | 'completedAt' | 'lastRejectedAt' | 'notifiedAt'>);
+        }
+      }
+      
+      onFinished?.();
+      if (!task) {
+        form.reset(defaultValues);
+      }
+    } catch (error) {
+      console.error('Error submitting form:', error);
+      toast({
+        title: "Error",
+        description: "Failed to save the task. Please try again.",
+        variant: "destructive"
+      });
     }
   };
 
@@ -213,10 +257,22 @@ export function TaskForm({ task, onFinished, parentId, defaultValues: propDefaul
               <FormLabel>Task Title</FormLabel>
               <div className="flex items-center gap-2">
                 <FormControl>
-                    <Input placeholder="e.g., Draft the project proposal" {...field} onBlur={handleTitleBlur} />
+                    <Input 
+                      placeholder="e.g., Draft the project proposal" 
+                      {...field} 
+                      onBlur={handleTitleBlur}
+                      className="text-sm sm:text-base" 
+                    />
                 </FormControl>
-                <Button variant="outline" size="icon" type="button" onClick={handleEnhanceClick} disabled={isEnhancing}>
-                    {isEnhancing ? <Loader2 className="animate-spin"/> : <Wand2 />}
+                <Button 
+                  variant="outline" 
+                  size="icon" 
+                  type="button" 
+                  onClick={handleEnhanceClick} 
+                  disabled={isEnhancing}
+                  className="h-9 w-9 sm:h-10 sm:w-10 flex-shrink-0"
+                >
+                    {isEnhancing ? <Loader2 className="animate-spin h-3 w-3 sm:h-4 sm:w-4"/> : <Wand2 className="h-3 w-3 sm:h-4 sm:w-4" />}
                 </Button>
               </div>
               <FormMessage />
@@ -231,16 +287,20 @@ export function TaskForm({ task, onFinished, parentId, defaultValues: propDefaul
               <FormLabel>Description (Optional)</FormLabel>
                <div className="relative">
                 <FormControl>
-                  <Textarea placeholder="Add any details or notes here" {...field} />
+                  <Textarea 
+                    placeholder="Add any details or notes here" 
+                    {...field} 
+                    className="min-h-[80px] sm:min-h-[100px] text-sm sm:text-base resize-none"
+                  />
                 </FormControl>
                 {isSummarizing && (
                     <div className="absolute inset-0 flex items-center justify-center bg-background/80 backdrop-blur-sm rounded-md">
-                        <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                        <Loader2 className="h-5 w-5 sm:h-6 sm:w-6 animate-spin text-primary" />
                     </div>
                 )}
                </div>
                {!parentId && (
-                <FormDescription>
+                <FormDescription className="text-xs sm:text-sm">
                   Use bullet points (e.g., `- item`) to auto-create sub-tasks.
                 </FormDescription>
                )}
@@ -248,22 +308,22 @@ export function TaskForm({ task, onFinished, parentId, defaultValues: propDefaul
             </FormItem>
           )}
         />
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
           <FormField
             control={form.control}
             name="category"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Category</FormLabel>
+                <FormLabel className="text-sm sm:text-base">Category</FormLabel>
                 <Select onValueChange={field.onChange} value={field.value}>
                   <FormControl>
-                    <SelectTrigger>
+                    <SelectTrigger className="h-9 sm:h-10 text-sm sm:text-base">
                       <SelectValue placeholder="Select a category" />
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
                     {taskCategories.map((cat) => (
-                      <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                      <SelectItem key={cat} value={cat} className="text-sm sm:text-base">{cat}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -276,16 +336,16 @@ export function TaskForm({ task, onFinished, parentId, defaultValues: propDefaul
             name="priority"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Priority</FormLabel>
+                <FormLabel className="text-sm sm:text-base">Priority</FormLabel>
                 <Select onValueChange={field.onChange} value={field.value}>
                   <FormControl>
-                    <SelectTrigger>
+                    <SelectTrigger className="h-9 sm:h-10 text-sm sm:text-base">
                       <SelectValue placeholder="How urgent is this task?" />
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
                     {priorities.map((level) => (
-                      <SelectItem key={level} value={level}>{level}</SelectItem>
+                      <SelectItem key={level} value={level} className="text-sm sm:text-base">{level}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -298,16 +358,16 @@ export function TaskForm({ task, onFinished, parentId, defaultValues: propDefaul
             name="duration"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Estimated Duration</FormLabel>
+                <FormLabel className="text-sm sm:text-base">Estimated Duration</FormLabel>
                 <Select onValueChange={field.onChange} value={String(field.value)}>
                   <FormControl>
-                    <SelectTrigger>
+                    <SelectTrigger className="h-9 sm:h-10 text-sm sm:text-base">
                       <SelectValue placeholder="Select a duration" />
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
                     {taskDurations.map((dur) => (
-                      <SelectItem key={dur} value={String(dur)}>{dur} minutes</SelectItem>
+                      <SelectItem key={dur} value={String(dur)} className="text-sm sm:text-base">{dur} minutes</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -320,16 +380,16 @@ export function TaskForm({ task, onFinished, parentId, defaultValues: propDefaul
             name="timeOfDay"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Preferred Time of Day</FormLabel>
+                <FormLabel className="text-sm sm:text-base">Preferred Time of Day</FormLabel>
                 <Select onValueChange={field.onChange} value={field.value}>
                   <FormControl>
-                    <SelectTrigger>
+                    <SelectTrigger className="h-9 sm:h-10 text-sm sm:text-base">
                       <SelectValue placeholder="When is it best to do this?" />
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
                     {timesOfDay.map((time) => (
-                      <SelectItem key={time} value={time}>{time}</SelectItem>
+                      <SelectItem key={time} value={time} className="text-sm sm:text-base">{time}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -354,9 +414,7 @@ export function TaskForm({ task, onFinished, parentId, defaultValues: propDefaul
                             !field.value && "text-muted-foreground"
                         )}
                         >
-                        {field.value ? (
-                            format(field.value, "PPP, h:mm a")
-                        ) : (
+                        {field.value ? format(field.value, "PPP, h:mm a") : (
                             <span>Pick a date</span>
                         )}
                         <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
@@ -482,11 +540,23 @@ export function TaskForm({ task, onFinished, parentId, defaultValues: propDefaul
             </div>
         </div>
 
-        <div className="flex justify-end gap-2 pt-4">
+        <div className="flex flex-col-reverse sm:flex-row justify-end gap-2 sm:gap-2 pt-4 mt-6 border-t border-border/30">
             {onFinished && (
-                <Button variant="ghost" type="button" onClick={onFinished}>Cancel</Button>
+                <Button 
+                  variant="ghost" 
+                  type="button" 
+                  onClick={onFinished}
+                  className="w-full sm:w-auto h-10 sm:h-9 text-sm touch-manipulation"
+                >
+                  Cancel
+                </Button>
             )}
-            <Button type="submit">{task ? "Save Changes" : parentId ? "Add Sub-task" : "Add Task"}</Button>
+            <Button 
+              type="submit"
+              className="w-full sm:w-auto h-10 sm:h-9 text-sm font-medium touch-manipulation bg-primary hover:bg-primary/90"
+            >
+              {task ? "Save Changes" : parentId ? "Add Sub-task" : "Add Task"}
+            </Button>
         </div>
       </form>
     </Form>

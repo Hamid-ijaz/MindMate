@@ -1,0 +1,72 @@
+@tailwind utilities;
+
+@layer utilities {
+  /* Text clamping utilities for mobile */
+  .line-clamp-2 {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  
+  .line-clamp-3 {
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  /* Mobile card animations */
+  .mobile-card-hover {
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  
+  .mobile-card-hover:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  }
+
+  /* Touch-friendly interactive elements */
+  .touch-target {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  /* Scale animation for touch feedback */
+  .scale-98 {
+    transform: scale(0.98);
+  }
+
+  /* Mobile-optimized badge spacing */
+  .badge-mobile {
+    font-size: 0.65rem;
+    padding: 0.125rem 0.375rem;
+    line-height: 1.2;
+  }
+
+  /* Gradient backgrounds for priority indicators */
+  .priority-critical {
+    background: linear-gradient(135deg, #ef4444, #dc2626);
+  }
+  
+  .priority-high {
+    background: linear-gradient(135deg, #f97316, #ea580c);
+  }
+  
+  .priority-medium {
+    background: linear-gradient(135deg, #eab308, #ca8a04);
+  }
+  
+  .priority-low {
+    background: linear-gradient(135deg, #22c55e, #16a34a);
+  }
+
+  /* Enhanced mobile shadows */
+  .mobile-shadow {
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.06);
+  }
+  
+  .mobile-shadow-lg {
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  }
+}
