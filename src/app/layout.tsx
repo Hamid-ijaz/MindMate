@@ -144,9 +144,9 @@ export default function RootLayout({
         <ErrorBoundary>
           <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
             <AuthProvider>
-              <TaskProvider>
-                <NoteProvider>
-                  <NotificationProvider>
+              <NotificationProvider>
+                <TaskProvider>
+                  <NoteProvider>
                     <AppInitializer>
                       <div className="relative flex min-h-screen flex-col">
                         <Header />
@@ -157,9 +157,9 @@ export default function RootLayout({
                       <ManageTasksSheet />
                       <KeyboardNavigation />
                     </AppInitializer>
-                  </NotificationProvider>
-                </NoteProvider>
-              </TaskProvider>
+                  </NoteProvider>
+                </TaskProvider>
+              </NotificationProvider>
             </AuthProvider>
           </ThemeProvider>
         </ErrorBoundary>
