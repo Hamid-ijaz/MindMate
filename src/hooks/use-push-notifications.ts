@@ -137,7 +137,7 @@ export function usePushNotifications() {
           p256dh: arrayBufferToBase64(subscription.getKey('p256dh')!),
           auth: arrayBufferToBase64(subscription.getKey('auth')!),
         },
-        userId: user.uid,
+        userId: user.email, // Use email as consistent identifier
         userEmail: user.email,
         deviceInfo: {
           userAgent: navigator.userAgent,
@@ -181,7 +181,7 @@ export function usePushNotifications() {
 
       if (subscription) {
         await subscription.unsubscribe();
-        await removeSubscription();
+        await removeSubscription(user.email);
         setSubscription(null);
 
         toast({
@@ -219,7 +219,7 @@ export function usePushNotifications() {
             p256dh: arrayBufferToBase64(subscription.getKey('p256dh')!),
             auth: arrayBufferToBase64(subscription.getKey('auth')!),
           },
-          userId: user.uid,
+          userId: user.email, // Use email as consistent identifier
           userEmail: user.email,
         };
         setSubscription(subscriptionData);
@@ -303,7 +303,7 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
 
 async function saveSubscription(subscription: PushSubscription) {
   try {
-    const response = await fetch('/api/push/subscribe', {
+    const response = await fetch('/api/push/manage', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -312,8 +312,8 @@ async function saveSubscription(subscription: PushSubscription) {
     });
 
     if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Failed to save subscription: ${errorText}`);
+      const errorData = await response.json();
+      throw new Error(`Failed to save subscription: ${errorData.error || 'Unknown error'}`);
     }
 
     const result = await response.json();
@@ -324,18 +324,23 @@ async function saveSubscription(subscription: PushSubscription) {
   }
 }
 
-async function removeSubscription() {
+async function removeSubscription(userEmail?: string) {
   try {
-    const response = await fetch('/api/push/unsubscribe', {
-      method: 'POST',
+    const queryParams = new URLSearchParams();
+    if (userEmail) {
+      queryParams.append('userEmail', userEmail);
+    }
+
+    const response = await fetch(`/api/push/manage?${queryParams.toString()}`, {
+      method: 'DELETE',
       headers: {
         'Content-Type': 'application/json',
       },
     });
 
     if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Failed to remove subscription: ${errorText}`);
+      const errorData = await response.json();
+      throw new Error(`Failed to remove subscription: ${errorData.error || 'Unknown error'}`);
     }
 
     const result = await response.json();

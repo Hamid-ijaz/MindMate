@@ -57,28 +57,29 @@ export async function POST(request: NextRequest) {
     // Process each overdue task
     for (const taskDoc of tasksSnapshot.docs) {
       const task = taskDoc.data();
-      const userId = task.userId;
+      const userEmail = task.userEmail; // Use userEmail for consistency
 
       // Only process each user once
-      if (processedUsers.has(userId)) {
+      if (processedUsers.has(userEmail)) {
         continue;
       }
-      processedUsers.add(userId);
+      processedUsers.add(userEmail);
 
       try {
-        // Get user's push subscriptions
+        // Get user's push subscriptions using userEmail
         const subscriptionsSnapshot = await db.collection('pushSubscriptions')
-          .where('userId', '==', userId)
+          .where('userEmail', '==', userEmail)
+          .where('isActive', '==', true)
           .get();
 
         if (subscriptionsSnapshot.empty) {
-          console.log(`No push subscriptions found for user ${userId}`);
+          console.log(`No push subscriptions found for user ${userEmail}`);
           continue;
         }
 
         // Count overdue tasks for this user
         const userOverdueTasksSnapshot = await db.collection('tasks')
-          .where('userId', '==', userId)
+          .where('userEmail', '==', userEmail)
           .where('completed', '==', false)
           .where('dueDate', '<=', now)
           .where('isMuted', '==', false)
@@ -105,14 +106,14 @@ export async function POST(request: NextRequest) {
 
           try {
             await webpush.sendNotification(subscription, JSON.stringify(payload));
-            console.log(`Push notification sent successfully to user ${userId}`);
-          } catch (error) {
-            console.error(`Failed to send push notification to user ${userId}:`, error);
+            console.log(`Push notification sent successfully to user ${userEmail}`);
+          } catch (error: any) {
+            console.error(`Failed to send push notification to user ${userEmail}:`, error);
             
             // If subscription is invalid, remove it
-            if (error.statusCode === 410 || error.statusCode === 404) {
+            if (error?.statusCode === 410 || error?.statusCode === 404) {
               await subDoc.ref.delete();
-              console.log(`Removed invalid subscription for user ${userId}`);
+              console.log(`Removed invalid subscription for user ${userEmail}`);
             }
           }
         });
@@ -126,7 +127,7 @@ export async function POST(request: NextRequest) {
         await Promise.all(updatePromises);
 
       } catch (error) {
-        console.error(`Error processing notifications for user ${userId}:`, error);
+        console.error(`Error processing notifications for user ${userEmail}:`, error);
       }
     }
 

@@ -3,6 +3,7 @@
 import { TaskSuggestion } from "@/components/task-suggestion";
 import { QuickActions } from "@/components/quick-actions";
 import { PullToRefresh } from "@/components/pull-to-refresh";
+import { NotificationPrompt } from "@/components/notification-prompt";
 import React, { useState, useMemo, useEffect } from "react";
 import { useTasks } from "@/contexts/task-context";
 import { useNotes } from "@/contexts/note-context";
@@ -10,6 +11,7 @@ import { useNotifications } from "@/contexts/notification-context";
 import { useAuth } from "@/contexts/auth-context";
 import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
 import { useToast } from "@/hooks/use-toast";
+import { useNotificationManager } from "@/hooks/use-notification-manager";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -165,6 +167,7 @@ export default function EnhancedDashboard() {
   const { user } = useAuth();
   const { getModifiers } = useKeyboardShortcuts();
   const { toast } = useToast();
+  const { shouldShowPrompt } = useNotificationManager();
 
   // Dashboard state
   const [currentView, setCurrentView] = useState<'minimal' | 'detailed' | 'analytics'>('detailed');
@@ -191,6 +194,7 @@ export default function EnhancedDashboard() {
   const [editingNote, setEditingNote] = useState<Note | null>(null);
   const [shareDialog, setShareDialog] = useState<{isOpen: boolean, itemType: 'task' | 'note', itemTitle: string, itemId: string} | null>(null);
   const [showTaskSuggestions, setShowTaskSuggestions] = useState(false);
+  const [showNotificationPrompt, setShowNotificationPrompt] = useState(shouldShowPrompt());
 
   // Get OS-appropriate modifier keys
   const modifiers = getModifiers();
@@ -829,6 +833,20 @@ export default function EnhancedDashboard() {
             </Card>
           )}
         </motion.div>
+
+        {/* Notification Prompt */}
+        {showNotificationPrompt && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-6"
+          >
+            <NotificationPrompt
+              onDismiss={() => setShowNotificationPrompt(false)}
+              onSubscribed={() => setShowNotificationPrompt(false)}
+            />
+          </motion.div>
+        )}
 
         
         {/* Analytics Cards - Always Visible */}

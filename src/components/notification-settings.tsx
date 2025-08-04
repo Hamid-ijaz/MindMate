@@ -1,131 +1,306 @@
-"use client";
+'use client';
 
-import { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useAuth } from '@/contexts/auth-context';
+import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
-import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Bell, BellOff, Smartphone, AlertCircle, CheckCircle2 } from 'lucide-react';
-import { usePushNotifications } from '@/hooks/use-push-notifications';
-import { useToast } from '@/hooks/use-toast';
+import { Separator } from '@/components/ui/separator';
+import { Bell, BellOff, Clock, Volume2, VolumeX, Smartphone, Monitor, Tablet } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+
+interface NotificationPreferences {
+  enabled: boolean;
+  taskReminders: boolean;
+  overdueAlerts: boolean;
+  dailyDigest: boolean;
+  weeklyReport: boolean;
+  quietHours: {
+    enabled: boolean;
+    start: string;
+    end: string;
+  };
+  devices: {
+    desktop: boolean;
+    mobile: boolean;
+    tablet: boolean;
+  };
+  sound: boolean;
+  vibration: boolean;
+}
 
 export function NotificationSettings() {
-  const {
-    isSupported,
-    permission,
-    subscription,
-    requestPermission,
-    subscribe,
-    unsubscribe,
-    sendNotification,
-  } = usePushNotifications();
-  
+  const { user } = useAuth();
   const { toast } = useToast();
-  const [testingNotification, setTestingNotification] = useState(false);
-  const [reminderSettings, setReminderSettings] = useState({
+  const [preferences, setPreferences] = useState<NotificationPreferences>({
+    enabled: false,
     taskReminders: true,
-    dailyDigest: false,
-    completionCelebrations: true,
-    reminderTime: '09:00', // Default reminder time
+    overdueAlerts: true,
+    dailyDigest: true,
+    weeklyReport: false,
+    quietHours: {
+      enabled: false,
+      start: '22:00',
+      end: '08:00',
+    },
+    devices: {
+      desktop: true,
+      mobile: true,
+      tablet: true,
+    },
+    sound: true,
+    vibration: true,
   });
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [subscriptionStatus, setSubscriptionStatus] = useState<'unknown' | 'subscribed' | 'unsubscribed'>('unknown');
+
+  useEffect(() => {
+    if (user?.email) {
+      loadPreferences();
+      checkSubscriptionStatus();
+    }
+  }, [user]);
+
+  const loadPreferences = async () => {
+    if (!user?.email) return;
+
+    try {
+      const response = await fetch('/api/notifications/preferences', {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${user.email}`,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        console.log("🚀 > loadPreferences > data:", data)
+        if (data.preferences) {
+          setPreferences(prev => ({ ...prev, ...data.preferences }));
+        }
+      }
+    } catch (error) {
+      console.error('Failed to load notification preferences:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const checkSubscriptionStatus = async () => {
+    try {
+      if ('serviceWorker' in navigator && 'PushManager' in window) {
+        const registration = await navigator.serviceWorker.ready;
+        const subscription = await registration.pushManager.getSubscription();
+        setSubscriptionStatus(subscription ? 'subscribed' : 'unsubscribed');
+      }
+    } catch (error) {
+      console.error('Failed to check subscription status:', error);
+    }
+  };
+
+  const savePreferences = async (newPreferences: NotificationPreferences) => {
+    if (!user?.email) return;
+
+    setSaving(true);
+    try {
+      const response = await fetch('/api/notifications/preferences', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${user.email}`,
+        },
+        body: JSON.stringify({ preferences: newPreferences }),
+      });
+
+      if (response.ok) {
+        setPreferences(newPreferences);
+        toast({
+          title: 'Settings saved',
+          description: 'Your notification preferences have been updated.',
+        });
+      } else {
+        throw new Error('Failed to save preferences');
+      }
+    } catch (error) {
+      console.error('Failed to save notification preferences:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to save notification preferences. Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const handleToggleNotifications = async () => {
-    if (subscription) {
-      await unsubscribe();
+    if (!preferences.enabled) {
+      // Enable notifications - request permission and subscribe
+      try {
+        if (!('Notification' in window)) {
+          toast({
+            title: 'Not supported',
+            description: 'Push notifications are not supported in this browser.',
+            variant: 'destructive',
+          });
+          return;
+        }
+
+        const permission = await Notification.requestPermission();
+        console.log("🚀 > handleToggleNotifications > permission:", permission)
+        if (permission === 'granted') {
+          // Subscribe to push notifications
+          const registration = await navigator.serviceWorker.ready;
+
+          // Helper to convert base64 VAPID key to Uint8Array
+          function urlBase64ToUint8Array(base64String: string) {
+            const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+            const base64 = (base64String + padding)
+              .replace(/-/g, '+')
+              .replace(/_/g, '/');
+            const rawData = window.atob(base64);
+            const outputArray = new Uint8Array(rawData.length);
+            for (let i = 0; i < rawData.length; ++i) {
+              outputArray[i] = rawData.charCodeAt(i);
+            }
+            return outputArray;
+          }
+
+          const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+          if (!vapidKey) throw new Error('VAPID public key is not set');
+          const convertedKey = urlBase64ToUint8Array(vapidKey);
+          const subscription = await registration.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: convertedKey,
+          });
+          const body = {
+            userEmail: user?.email,
+            subscription,
+            deviceInfo: {
+              userAgent: navigator.userAgent,
+              platform: navigator.platform,
+            },
+          };
+          console.log('Subscribe request body:', body);
+
+          const response = await fetch('/api/notifications/subscribe', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${user?.email}`,
+            },
+            body: JSON.stringify(body),
+          });
+
+          if (response.ok) {
+            const newPreferences = { ...preferences, enabled: true };
+            await savePreferences(newPreferences);
+            setSubscriptionStatus('subscribed');
+          } else {
+            // Show error details from backend
+            let errorMsg = 'Failed to enable notifications.';
+            try {
+              const errorData = await response.json();
+              errorMsg = errorData?.error || errorMsg;
+              console.error('Subscribe API error:', errorData);
+            } catch (e) {
+              // ignore
+            }
+            toast({
+              title: 'Error',
+              description: errorMsg,
+              variant: 'destructive',
+            });
+          }
+        } else {
+          toast({
+            title: 'Permission denied',
+            description: 'Please enable notifications in your browser settings.',
+            variant: 'destructive',
+          });
+        }
+      } catch (error) {
+        console.error('Failed to enable notifications:', error);
+        toast({
+          title: 'Error',
+          description: error instanceof Error ? error.message : String(error),
+          variant: 'destructive',
+        });
+      }
     } else {
-      const permissionGranted = await requestPermission();
-      if (permissionGranted) {
-        await subscribe();
+      // Disable notifications
+      try {
+        const registration = await navigator.serviceWorker.ready;
+        const subscription = await registration.pushManager.getSubscription();
+
+        if (subscription) {
+          await fetch('/api/notifications/unsubscribe', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${user?.email}`,
+            },
+            body: JSON.stringify({ endpoint: subscription.endpoint }),
+          });
+
+          await subscription.unsubscribe();
+        }
+
+        const newPreferences = { ...preferences, enabled: false };
+        await savePreferences(newPreferences);
+        setSubscriptionStatus('unsubscribed');
+      } catch (error) {
+        console.error('Failed to disable notifications:', error);
+        toast({
+          title: 'Error',
+          description: 'Failed to disable notifications. Please try again.',
+          variant: 'destructive',
+        });
       }
     }
   };
 
-  const handleTestNotification = async () => {
-    setTestingNotification(true);
-    
-    const success = await sendNotification({
-      title: 'MindMate Test Notification',
-      body: 'Great! Your notifications are working perfectly. 🎉',
-      data: { type: 'test' },
-      actions: [
-        { action: 'dismiss', title: 'Dismiss' },
-        { action: 'open', title: 'Open App' },
-      ],
-    });
-
-    if (success) {
-      toast({
-        title: "Test Sent!",
-        description: "Check your notification area to see the test notification.",
-      });
-    } else {
-      toast({
-        title: "Test Failed",
-        description: "Unable to send test notification. Please check your permissions.",
-        variant: "destructive",
-      });
-    }
-    
-    setTestingNotification(false);
+  const updatePreference = async (key: keyof NotificationPreferences, value: any) => {
+    const newPreferences = { ...preferences, [key]: value };
+    await savePreferences(newPreferences);
   };
 
-  const updateReminderSetting = (key: keyof typeof reminderSettings, value: boolean | string) => {
-    setReminderSettings(prev => ({
-      ...prev,
-      [key]: value,
-    }));
-    
-    // Here you would typically save to your backend/local storage
-    localStorage.setItem('mindmate-reminder-settings', JSON.stringify({
-      ...reminderSettings,
-      [key]: value,
-    }));
+  const updateNestedPreference = async (parentKey: keyof NotificationPreferences, childKey: string, value: any) => {
+    const newPreferences = {
+      ...preferences,
+      [parentKey]: {
+        ...(preferences[parentKey] as any),
+        [childKey]: value,
+      },
+    };
+    await savePreferences(newPreferences);
   };
 
-  const getPermissionBadge = () => {
-    switch (permission) {
-      case 'granted':
-        return <Badge className="bg-green-100 text-green-800">Enabled</Badge>;
-      case 'denied':
-        return <Badge variant="destructive">Denied</Badge>;
-      default:
-        return <Badge variant="outline">Not Set</Badge>;
-    }
-  };
-
-  const getPermissionIcon = () => {
-    switch (permission) {
-      case 'granted':
-        return <CheckCircle2 className="h-5 w-5 text-green-500" />;
-      case 'denied':
-        return <AlertCircle className="h-5 w-5 text-red-500" />;
-      default:
-        return <Bell className="h-5 w-5 text-muted-foreground" />;
-    }
-  };
-
-  if (!isSupported) {
+  if (loading) {
     return (
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <BellOff className="h-5 w-5" />
-            Push Notifications
-          </CardTitle>
-          <CardDescription>
-            Push notifications are not supported in this browser
-          </CardDescription>
+          <CardTitle>Push Notifications</CardTitle>
+          <CardDescription>Configure your notification preferences</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="flex items-center justify-center p-8 text-center">
-            <div className="space-y-2">
-              <AlertCircle className="h-12 w-12 text-muted-foreground mx-auto" />
-              <p className="text-sm text-muted-foreground">
-                Your browser doesn't support push notifications. 
-                Try using Chrome, Firefox, or Safari for the best experience.
-              </p>
+          <div className="space-y-4 animate-pulse">
+            <div className="flex items-center justify-between">
+              <div className="h-4 bg-muted rounded w-1/3"></div>
+              <div className="h-6 bg-muted rounded w-12"></div>
+            </div>
+            <div className="h-px bg-muted"></div>
+            <div className="space-y-3">
+              {[1, 2, 3, 4].map(i => (
+                <div key={i} className="flex items-center justify-between">
+                  <div className="h-4 bg-muted rounded w-2/3"></div>
+                  <div className="h-6 bg-muted rounded w-12"></div>
+                </div>
+              ))}
             </div>
           </div>
         </CardContent>
@@ -134,166 +309,270 @@ export function NotificationSettings() {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Main Notification Settings */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            {getPermissionIcon()}
-            Push Notifications
-          </CardTitle>
-          <CardDescription>
-            Get notified about task reminders, deadlines, and updates
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          {/* Permission Status */}
-          <div className="flex items-center justify-between p-4 border rounded-lg">
-            <div className="flex items-center gap-3">
-              <Smartphone className="h-5 w-5 text-muted-foreground" />
-              <div>
-                <p className="font-medium">Notification Permission</p>
-                <p className="text-sm text-muted-foreground">
-                  {permission === 'granted' && 'Notifications are enabled'}
-                  {permission === 'denied' && 'Notifications are blocked'}
-                  {permission === 'default' && 'Permission not requested'}
-                </p>
-              </div>
-            </div>
-            {getPermissionBadge()}
-          </div>
-
-          {/* Enable/Disable Toggle */}
-          <div className="flex items-center justify-between">
-            <div className="space-y-1">
-              <Label htmlFor="notifications-enabled" className="text-base font-medium">
-                Enable Push Notifications
-              </Label>
-              <p className="text-sm text-muted-foreground">
-                Receive notifications even when MindMate is closed
-              </p>
-            </div>
-            <Switch
-              id="notifications-enabled"
-              checked={!!subscription}
-              onCheckedChange={handleToggleNotifications}
-              disabled={permission === 'denied'}
-            />
-          </div>
-
-          {/* Test Notification Button */}
-          {subscription && (
-            <Button
-              onClick={handleTestNotification}
-              disabled={testingNotification}
-              variant="outline"
-              className="w-full"
-            >
-              {testingNotification ? (
-                <>
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current mr-2" />
-                  Sending Test...
-                </>
+    <Card>
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle className="flex items-center gap-2">
+              {preferences.enabled ? (
+                <Bell className="h-5 w-5 text-primary" />
               ) : (
-                <>
-                  <Bell className="mr-2 h-4 w-4" />
-                  Send Test Notification
-                </>
+                <BellOff className="h-5 w-5 text-muted-foreground" />
               )}
-            </Button>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Notification Preferences */}
-      {subscription && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Notification Preferences</CardTitle>
+              Push Notifications
+            </CardTitle>
             <CardDescription>
-              Customize what notifications you want to receive
+              Get notified about task reminders, overdue items, and daily progress
             </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            {/* Task Reminders */}
-            <div className="flex items-center justify-between">
-              <div className="space-y-1">
-                <Label htmlFor="task-reminders" className="text-base font-medium">
-                  Task Reminders
-                </Label>
-                <p className="text-sm text-muted-foreground">
-                  Get notified about upcoming task deadlines
-                </p>
+          </div>
+          <Badge variant={subscriptionStatus === 'subscribed' ? 'default' : 'secondary'}>
+            {subscriptionStatus === 'subscribed' ? 'Active' : 'Inactive'}
+          </Badge>
+        </div>
+      </CardHeader>
+
+      <CardContent className="space-y-6">
+        {/* Master Toggle */}
+        <div className="flex items-center justify-between">
+          <div className="space-y-1">
+            <Label className="text-base font-medium">Enable Push Notifications</Label>
+            <p className="text-sm text-muted-foreground">
+              Allow MindMate to send you push notifications
+            </p>
+          </div>
+          <Switch
+            checked={preferences.enabled}
+            onCheckedChange={handleToggleNotifications}
+            disabled={saving}
+          />
+        </div>
+
+        {preferences.enabled && (
+          <>
+            <Separator />
+
+            {/* Notification Types */}
+            <div className="space-y-4">
+              <h4 className="text-sm font-medium">Notification Types</h4>
+
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-1">
+                    <Label>Task Reminders</Label>
+                    <p className="text-xs text-muted-foreground">
+                      Get reminded about upcoming tasks
+                    </p>
+                  </div>
+                  <Switch
+                    checked={preferences.taskReminders}
+                    onCheckedChange={(checked) => updatePreference('taskReminders', checked)}
+                    disabled={saving}
+                  />
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <div className="space-y-1">
+                    <Label>Overdue Alerts</Label>
+                    <p className="text-xs text-muted-foreground">
+                      Get notified about overdue tasks
+                    </p>
+                  </div>
+                  <Switch
+                    checked={preferences.overdueAlerts}
+                    onCheckedChange={(checked) => updatePreference('overdueAlerts', checked)}
+                    disabled={saving}
+                  />
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <div className="space-y-1">
+                    <Label>Daily Digest</Label>
+                    <p className="text-xs text-muted-foreground">
+                      Daily summary of your progress
+                    </p>
+                  </div>
+                  <Switch
+                    checked={preferences.dailyDigest}
+                    onCheckedChange={(checked) => updatePreference('dailyDigest', checked)}
+                    disabled={saving}
+                  />
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <div className="space-y-1">
+                    <Label>Weekly Report</Label>
+                    <p className="text-xs text-muted-foreground">
+                      Weekly overview of your achievements
+                    </p>
+                  </div>
+                  <Switch
+                    checked={preferences.weeklyReport}
+                    onCheckedChange={(checked) => updatePreference('weeklyReport', checked)}
+                    disabled={saving}
+                  />
+                </div>
               </div>
-              <Switch
-                id="task-reminders"
-                checked={reminderSettings.taskReminders}
-                onCheckedChange={(checked) => updateReminderSetting('taskReminders', checked)}
-              />
             </div>
 
-            {/* Completion Celebrations */}
-            <div className="flex items-center justify-between">
-              <div className="space-y-1">
-                <Label htmlFor="completion-celebrations" className="text-base font-medium">
-                  Completion Celebrations
-                </Label>
-                <p className="text-sm text-muted-foreground">
-                  Get positive reinforcement when you complete tasks
-                </p>
+            <Separator />
+
+            {/* Quiet Hours */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="space-y-1">
+                  <Label className="flex items-center gap-2">
+                    <Clock className="h-4 w-4" />
+                    Quiet Hours
+                  </Label>
+                  <p className="text-xs text-muted-foreground">
+                    Don't send notifications during these hours
+                  </p>
+                </div>
+                <Switch
+                  checked={preferences.quietHours.enabled}
+                  onCheckedChange={(checked) => updateNestedPreference('quietHours', 'enabled', checked)}
+                  disabled={saving}
+                />
               </div>
-              <Switch
-                id="completion-celebrations"
-                checked={reminderSettings.completionCelebrations}
-                onCheckedChange={(checked) => updateReminderSetting('completionCelebrations', checked)}
-              />
+
+              {preferences.quietHours.enabled && (
+                <div className="grid grid-cols-2 gap-4 ml-6">
+                  <div className="space-y-2">
+                    <Label className="text-xs">Start Time</Label>
+                    <Select
+                      value={preferences.quietHours.start}
+                      onValueChange={(value) => updateNestedPreference('quietHours', 'start', value)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Array.from({ length: 24 }, (_, i) => {
+                          const hour = i.toString().padStart(2, '0');
+                          return (
+                            <SelectItem key={hour} value={`${hour}:00`}>
+                              {hour}:00
+                            </SelectItem>
+                          );
+                        })}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-xs">End Time</Label>
+                    <Select
+                      value={preferences.quietHours.end}
+                      onValueChange={(value) => updateNestedPreference('quietHours', 'end', value)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Array.from({ length: 24 }, (_, i) => {
+                          const hour = i.toString().padStart(2, '0');
+                          return (
+                            <SelectItem key={hour} value={`${hour}:00`}>
+                              {hour}:00
+                            </SelectItem>
+                          );
+                        })}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              )}
             </div>
 
-            {/* Daily Digest */}
-            <div className="flex items-center justify-between">
-              <div className="space-y-1">
-                <Label htmlFor="daily-digest" className="text-base font-medium">
-                  Daily Digest
-                </Label>
-                <p className="text-sm text-muted-foreground">
-                  Receive a summary of your tasks every morning
-                </p>
+            <Separator />
+
+            {/* Device Settings */}
+            <div className="space-y-4">
+              <h4 className="text-sm font-medium">Device Preferences</h4>
+
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Monitor className="h-4 w-4" />
+                    <Label className="text-sm">Desktop</Label>
+                  </div>
+                  <Switch
+                    checked={preferences.devices.desktop}
+                    onCheckedChange={(checked) => updateNestedPreference('devices', 'desktop', checked)}
+                    disabled={saving}
+                  />
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Smartphone className="h-4 w-4" />
+                    <Label className="text-sm">Mobile</Label>
+                  </div>
+                  <Switch
+                    checked={preferences.devices.mobile}
+                    onCheckedChange={(checked) => updateNestedPreference('devices', 'mobile', checked)}
+                    disabled={saving}
+                  />
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Tablet className="h-4 w-4" />
+                    <Label className="text-sm">Tablet</Label>
+                  </div>
+                  <Switch
+                    checked={preferences.devices.tablet}
+                    onCheckedChange={(checked) => updateNestedPreference('devices', 'tablet', checked)}
+                    disabled={saving}
+                  />
+                </div>
               </div>
-              <Switch
-                id="daily-digest"
-                checked={reminderSettings.dailyDigest}
-                onCheckedChange={(checked) => updateReminderSetting('dailyDigest', checked)}
-              />
             </div>
 
-            {/* Daily Digest Time */}
-            {reminderSettings.dailyDigest && (
-              <div className="ml-4 p-4 border-l-2 border-muted">
-                <Label htmlFor="reminder-time" className="text-sm font-medium">
-                  Daily Digest Time
-                </Label>
-                <Select
-                  value={reminderSettings.reminderTime}
-                  onValueChange={(value) => updateReminderSetting('reminderTime', value)}
-                >
-                  <SelectTrigger className="w-full mt-2">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="07:00">7:00 AM</SelectItem>
-                    <SelectItem value="08:00">8:00 AM</SelectItem>
-                    <SelectItem value="09:00">9:00 AM</SelectItem>
-                    <SelectItem value="10:00">10:00 AM</SelectItem>
-                    <SelectItem value="18:00">6:00 PM</SelectItem>
-                    <SelectItem value="19:00">7:00 PM</SelectItem>
-                    <SelectItem value="20:00">8:00 PM</SelectItem>
-                  </SelectContent>
-                </Select>
+            <Separator />
+
+            {/* Sound & Vibration */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  {preferences.sound ? (
+                    <Volume2 className="h-4 w-4" />
+                  ) : (
+                    <VolumeX className="h-4 w-4" />
+                  )}
+                  <Label className="text-sm">Sound</Label>
+                </div>
+                <Switch
+                  checked={preferences.sound}
+                  onCheckedChange={(checked) => updatePreference('sound', checked)}
+                  disabled={saving}
+                />
               </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
-    </div>
+
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Smartphone className="h-4 w-4" />
+                  <Label className="text-sm">Vibration</Label>
+                </div>
+                <Switch
+                  checked={preferences.vibration}
+                  onCheckedChange={(checked) => updatePreference('vibration', checked)}
+                  disabled={saving}
+                />
+              </div>
+            </div>
+          </>
+        )}
+
+        {saving && (
+          <div className="flex items-center justify-center py-4">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
+              Saving preferences...
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }

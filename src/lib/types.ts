@@ -271,6 +271,74 @@ export interface User {
   phone?: string;
   dob?: string;
   password?: string; // In a real app, this would be a hash
+  // Push Notification Settings
+  notificationPreferences?: NotificationPreferences;
+}
+
+// Push Notification Types
+export interface NotificationPreferences {
+  pushEnabled: boolean;
+  emailEnabled: boolean;
+  reminderEnabled: boolean;
+  overdueEnabled: boolean;
+  quietHoursEnabled: boolean;
+  quietHours: {
+    start: string; // "22:00"
+    end: string;   // "08:00"
+  };
+  reminderTiming: {
+    beforeMinutes: number; // 15, 30, 60, etc.
+    smartTiming: boolean; // Use AI to optimize timing
+  };
+  notificationTypes: {
+    taskReminders: boolean;
+    overdueTasks: boolean;
+    recurringTasks: boolean;
+    collaborationUpdates: boolean;
+    systemNotifications: boolean;
+  };
+  deliverySettings: {
+    sound: boolean;
+    vibration: boolean;
+    priority: 'low' | 'normal' | 'high';
+    groupSimilar: boolean; // Group similar notifications
+    maxDaily: number; // Maximum notifications per day
+  };
+}
+
+// Push Subscription Types for Firestore
+export interface PushSubscriptionDocument {
+  id?: string;
+  userId: string; // Use userEmail for consistency
+  userEmail: string; // Primary identifier for user
+  endpoint: string;
+  keys: {
+    p256dh: string;
+    auth: string;
+  };
+  isActive: boolean;
+  subscribedAt: number;
+  lastUsedAt?: number;
+  deviceInfo: {
+    userAgent: string;
+    platform: string;
+    vendor: string;
+    browserName?: string;
+    browserVersion?: string;
+    deviceType?: 'mobile' | 'tablet' | 'desktop';
+  };
+  notificationStats: {
+    totalSent: number;
+    totalDelivered: number;
+    lastNotificationAt?: number;
+    failureCount: number;
+    lastFailureAt?: number;
+    lastFailureReason?: string;
+  };
+  preferences: {
+    enabled: boolean;
+    allowedTypes: string[]; // ['reminders', 'overdue', 'recurring', etc.]
+  };
 }
 
 export interface Accomplishment {

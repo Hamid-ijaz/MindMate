@@ -24,7 +24,7 @@ import {
 } from 'lucide-react';
 import { ThemePicker } from './theme-picker';
 import { ThemePickerDialog } from './theme-picker-dialog';
-import { NotificationHistory } from './notification-history';
+import { NotificationDropdown } from './notification-dropdown';
 import { PWAInstallPrompt } from './pwa-install-prompt';
 import { KeyboardShortcutsHelp } from './keyboard-shortcuts-help';
 import { ClientOnly } from './ui/client-only';
@@ -520,7 +520,7 @@ export function Header() {
                 {/* Utility Buttons */}
                 <div className="hidden md:flex items-center gap-1">
                   <PWAInstallPrompt />
-                  <NotificationHistory />
+                  <NotificationDropdown />
                 </div>
 
                 {/* User Menu */}
@@ -564,7 +564,7 @@ export function Header() {
                               <Bell className="h-4 w-4 mr-2" />
                               Notifications
                             </span>
-                            <NotificationHistory />
+                            <NotificationDropdown />
                           </div>
                         </DropdownMenuItem>
                       </DropdownMenuGroup>

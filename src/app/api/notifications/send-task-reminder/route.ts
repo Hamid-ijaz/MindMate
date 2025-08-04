@@ -34,11 +34,11 @@ try {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { taskId, userId, title, message } = body;
+    const { taskId, userEmail, title, message } = body;
 
-    if (!taskId || !userId || !title || !message) {
+    if (!taskId || !userEmail || !title || !message) {
       return NextResponse.json(
-        { error: 'Missing required fields: taskId, userId, title, message' },
+        { error: 'Missing required fields: taskId, userEmail, title, message' },
         { status: 400 }
       );
     }
@@ -47,7 +47,8 @@ export async function POST(request: NextRequest) {
 
     // Get user's push subscriptions
     const subscriptionsSnapshot = await db.collection('pushSubscriptions')
-      .where('userId', '==', userId)
+      .where('userEmail', '==', userEmail)
+      .where('isActive', '==', true)
       .get();
 
     if (subscriptionsSnapshot.empty) {
@@ -77,7 +78,7 @@ export async function POST(request: NextRequest) {
       
       try {
         await webpush.sendNotification(subscription, JSON.stringify(payload));
-        console.log(`Task reminder sent successfully for task ${taskId} to user ${userId}`);
+        console.log(`Task reminder sent successfully for task ${taskId} to user ${userEmail}`);
         return { success: true, subscriptionId: subDoc.id };
       } catch (error) {
         console.error(`Failed to send task reminder for task ${taskId}:`, error);
@@ -85,7 +86,7 @@ export async function POST(request: NextRequest) {
         // If subscription is invalid, remove it
         if (error.statusCode === 410 || error.statusCode === 404) {
           await subDoc.ref.delete();
-          console.log(`Removed invalid subscription ${subDoc.id} for user ${userId}`);
+          console.log(`Removed invalid subscription ${subDoc.id} for user ${userEmail}`);
         }
         
         return { success: false, error: error.message, subscriptionId: subDoc.id };
@@ -109,7 +110,7 @@ export async function POST(request: NextRequest) {
       success: true,
       message: `Task reminder sent to ${successCount}/${totalCount} subscriptions`,
       taskId,
-      userId,
+      userEmail,
       notificationsSent: successCount,
       totalSubscriptions: totalCount,
       results

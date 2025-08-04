@@ -6,8 +6,12 @@
   },
   "crons": [
     {
+      "path": "/api/notifications/comprehensive-check",
+      "schedule": "0 18 * * *"
+    },
+    {
       "path": "/api/notifications/trigger-overdue-check",
-      "schedule": "0 0 * * *"
+      "schedule": "0 18 * * *"
     }
   ]
 }
