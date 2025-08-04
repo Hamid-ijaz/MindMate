@@ -181,7 +181,25 @@ export function NotificationDropdown() {
             </p>
           </div>
         ) : (
-          <div className="max-h-64 overflow-y-auto">
+          <div className="max-h-64 overflow-y-auto pr-1" style={{
+            scrollbarWidth: 'thin',
+            scrollbarColor: 'hsl(var(--muted-foreground)) transparent',
+          }}>
+            <style jsx>{`
+              div::-webkit-scrollbar {
+                width: 6px;
+              }
+              div::-webkit-scrollbar-track {
+                background: transparent;
+              }
+              div::-webkit-scrollbar-thumb {
+                background-color: hsl(var(--muted-foreground) / 0.3);
+                border-radius: 3px;
+              }
+              div::-webkit-scrollbar-thumb:hover {
+                background-color: hsl(var(--muted-foreground) / 0.5);
+              }
+            `}</style>
             {notifications.map((notification, index) => (
               <div key={notification.id}>
                 <DropdownMenuItem

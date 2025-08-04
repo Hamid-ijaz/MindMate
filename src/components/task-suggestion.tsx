@@ -417,12 +417,13 @@ export function TaskSuggestion() {
                   }}
                   className="h-full"
                 >
-                  <Card className={cn(
-                    "h-full flex flex-col shadow-lg border transition-all duration-300",
-                    "bg-gradient-to-br from-card via-card/98 to-muted/20",
-                    "hover:shadow-xl hover:shadow-primary/5 hover:scale-[1.02]",
-                    "border-border/50 hover:border-primary/30 group/card"
-                  )}>
+                  <motion.div className="p-3 transition-all duration-200 origin-center hover:scale-[1.02]">
+                    <Card className={cn(
+                      "h-full flex flex-col shadow-lg border transition-all duration-300 overflow-visible",
+                      "bg-gradient-to-br from-card via-card/98 to-muted/20",
+                      "hover:shadow-xl hover:shadow-primary/5",
+                      "border-border/50 hover:border-primary/30 group/card"
+                    )}>
                     {/* Compact Header */}
                     <CardHeader className="pb-3 space-y-2 flex-shrink-0">
                       <div className="flex justify-between items-start">
@@ -614,6 +615,7 @@ export function TaskSuggestion() {
                       </CardFooter>
                     </div>
                   </Card>
+                  </motion.div>
                 </motion.div>
               </CarouselItem>
             ))}

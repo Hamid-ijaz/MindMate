@@ -8,7 +8,7 @@ import { useTouchGestures } from '@/hooks/use-touch-gestures';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Check, Edit, Trash2, ChevronDown, ChevronUp, RotateCcw, CalendarIcon, Loader2, ExternalLink, Repeat } from 'lucide-react';
+import { Check, Edit, Trash2, ChevronDown, ChevronUp, RotateCcw, CalendarIcon, Loader2, ExternalLink, Repeat, Plus } from 'lucide-react';
 import { TaskForm } from './task-form';
 import { SubtaskList } from './subtask-list';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
@@ -35,6 +35,7 @@ export function TaskItem({ task, extraActions, isSubtask = false, isHistoryView 
   const { deleteNotification } = useNotifications();
   const { handleTaskCompletion } = useCompletionAudio();
   const [showSubtasks, setShowSubtasks] = useState(false);
+  const [showAddSubtask, setShowAddSubtask] = useState(false);
   const [isCompleting, setIsCompleting] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [shareDialog, setShareDialog] = useState<{ isOpen: boolean, itemType: 'task' | 'note', itemTitle: string, itemId: string } | null>(null);
@@ -135,6 +136,13 @@ export function TaskItem({ task, extraActions, isSubtask = false, isHistoryView 
             {showSubtasks ? <ChevronUp className="h-4 w-4 mr-2" /> : <ChevronDown className="h-4 w-4 mr-2" />}
             <span className="hidden md:inline">Subtasks</span>
             <span className="md:ml-1">({pendingSubtasks.length})</span>
+          </Button>
+        )}
+
+        {!isSubtask && subtasks.length === 0 && (
+          <Button variant="ghost" size="sm" onClick={() => setShowAddSubtask(!showAddSubtask)}>
+            <Plus className="h-4 w-4 mr-2" />
+            <span className="hidden md:inline">Add Subtask</span>
           </Button>
         )}
 
@@ -326,6 +334,19 @@ export function TaskItem({ task, extraActions, isSubtask = false, isHistoryView 
                 {pendingSubtasks.length} subtasks
               </Button>
             )}
+
+            {/* Add subtask button for tasks without subtasks */}
+            {!isSubtask && subtasks.length === 0 && (
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={() => setShowAddSubtask(!showAddSubtask)}
+                className="h-8 px-2 text-xs"
+              >
+                <Plus className="h-3 w-3 mr-1" />
+                Add Subtask
+              </Button>
+            )}
             
             {/* View detail button for mobile */}
             {!isSubtask && (
@@ -391,6 +412,18 @@ export function TaskItem({ task, extraActions, isSubtask = false, isHistoryView 
         <div className="border-t bg-muted/10">
           <div className="p-4">
             <SubtaskList parentTask={task} subtasks={subtasks} />
+          </div>
+        </div>
+      )}
+
+      {/* Add subtask form */}
+      {showAddSubtask && !isSubtask && !isHistoryView && (
+        <div className="border-t bg-muted/10">
+          <div className="p-4">
+            <TaskForm 
+              parentId={task.id}
+              onFinished={() => setShowAddSubtask(false)}
+            />
           </div>
         </div>
       )}

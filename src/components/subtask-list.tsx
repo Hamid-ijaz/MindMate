@@ -306,7 +306,7 @@ export function SubtaskList({
                     </Button>
                   </div>
                   <TaskForm
-                    parentTaskId={parentTask.id}
+                    parentId={parentTask.id}
                     onFinished={handleFormFinish}
                     defaultValues={{
                       category: parentTask.category,
