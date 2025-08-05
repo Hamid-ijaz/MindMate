@@ -9,7 +9,7 @@ import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
-import { Bell, BellOff, Clock, Volume2, VolumeX, Smartphone, Monitor, Tablet } from 'lucide-react';
+import { Bell, BellOff, Clock, Volume2, VolumeX, Smartphone, Monitor, Tablet, TestTube, X } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 
 interface NotificationPreferences {
@@ -56,12 +56,21 @@ export function NotificationSettings() {
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [testingSend, setTestingSend] = useState(false);
   const [subscriptionStatus, setSubscriptionStatus] = useState<'unknown' | 'subscribed' | 'unsubscribed'>('unknown');
+  const [subscribedDevices, setSubscribedDevices] = useState<Array<{
+    id: string;
+    userAgent: string;
+    platform: string;
+    createdAt: number;
+    isCurrentDevice: boolean;
+  }>>([]);
 
   useEffect(() => {
     if (user?.email) {
       loadPreferences();
       checkSubscriptionStatus();
+      loadSubscribedDevices();
     }
   }, [user]);
 
@@ -88,6 +97,84 @@ export function NotificationSettings() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const loadSubscribedDevices = async () => {
+    if (!user?.email) return;
+
+    try {
+      const response = await fetch('/api/notifications/devices', {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${user.email}`,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.devices) {
+          // Mark current device based on user agent
+          const currentUserAgent = navigator.userAgent;
+          const devicesWithCurrent = data.devices.map((device: any) => ({
+            ...device,
+            isCurrentDevice: device.userAgent === currentUserAgent
+          }));
+          setSubscribedDevices(devicesWithCurrent);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to load subscribed devices:', error);
+    }
+  };
+
+  const removeDeviceSubscription = async (deviceId: string) => {
+    try {
+      const response = await fetch('/api/notifications/devices', {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${user?.email}`,
+        },
+        body: JSON.stringify({ deviceId }),
+      });
+
+      if (response.ok) {
+        setSubscribedDevices(prev => prev.filter(device => device.id !== deviceId));
+        toast({
+          title: 'Device removed',
+          description: 'The device has been removed from notification subscriptions.',
+        });
+      } else {
+        throw new Error('Failed to remove device');
+      }
+    } catch (error) {
+      console.error('Failed to remove device:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to remove device subscription.',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const getDeviceIcon = (userAgent: string) => {
+    if (/Mobile|Android|iPhone|iPad/.test(userAgent)) {
+      return Smartphone;
+    } else if (/Tablet|iPad/.test(userAgent)) {
+      return Tablet;
+    } else {
+      return Monitor;
+    }
+  };
+
+  const getDeviceName = (userAgent: string) => {
+    if (/iPhone/.test(userAgent)) return 'iPhone';
+    if (/iPad/.test(userAgent)) return 'iPad';
+    if (/Android/.test(userAgent)) return 'Android Device';
+    if (/Windows/.test(userAgent)) return 'Windows PC';
+    if (/Mac/.test(userAgent)) return 'Mac';
+    if (/Linux/.test(userAgent)) return 'Linux PC';
+    return 'Unknown Device';
   };
 
   const checkSubscriptionStatus = async () => {
@@ -200,6 +287,8 @@ export function NotificationSettings() {
             const newPreferences = { ...preferences, enabled: true };
             await savePreferences(newPreferences);
             setSubscriptionStatus('subscribed');
+            // Reload devices to show the new subscription
+            await loadSubscribedDevices();
           } else {
             // Show error details from backend
             let errorMsg = 'Failed to enable notifications.';
@@ -280,6 +369,56 @@ export function NotificationSettings() {
     await savePreferences(newPreferences);
   };
 
+  const sendTestNotification = async () => {
+    if (!preferences.enabled || subscriptionStatus !== 'subscribed') {
+      toast({
+        title: 'Cannot send test notification',
+        description: 'Please enable notifications first.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setTestingSend(true);
+    try {
+      const response = await fetch('/api/notifications/test', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${user?.email}`,
+        },
+        body: JSON.stringify({
+          userEmail: user?.email,
+          message: {
+            title: 'Test Notification',
+            body: 'This is a test notification from MindMate. Your notifications are working correctly!',
+            icon: '/icon-192.png',
+            badge: '/icon-192.png',
+          }
+        }),
+      });
+
+      if (response.ok) {
+        toast({
+          title: 'Test notification sent!',
+          description: 'You should receive a test notification shortly.',
+        });
+      } else {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Failed to send test notification');
+      }
+    } catch (error) {
+      console.error('Failed to send test notification:', error);
+      toast({
+        title: 'Test failed',
+        description: error instanceof Error ? error.message : 'Failed to send test notification',
+        variant: 'destructive',
+      });
+    } finally {
+      setTestingSend(false);
+    }
+  };
+
   if (loading) {
     return (
       <Card>
@@ -349,6 +488,39 @@ export function NotificationSettings() {
 
         {preferences.enabled && (
           <>
+            <Separator />
+
+            {/* Test Notification Button */}
+            <div className="flex items-center justify-between p-4 bg-muted/30 rounded-lg border border-dashed">
+              <div className="space-y-1">
+                <Label className="text-sm font-medium flex items-center gap-2">
+                  <TestTube className="h-4 w-4" />
+                  Test Notifications
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  Send a test notification to verify everything is working correctly
+                </p>
+              </div>
+              <Button
+                onClick={sendTestNotification}
+                disabled={testingSend || subscriptionStatus !== 'subscribed'}
+                variant="outline"
+                size="sm"
+              >
+                {testingSend ? (
+                  <>
+                    <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-primary mr-2"></div>
+                    Sending...
+                  </>
+                ) : (
+                  <>
+                    <TestTube className="h-3 w-3 mr-2" />
+                    Test
+                  </>
+                )}
+              </Button>
+            </div>
+
             <Separator />
 
             {/* Notification Types */}
@@ -560,6 +732,70 @@ export function NotificationSettings() {
                   disabled={saving}
                 />
               </div>
+            </div>
+
+            <Separator />
+
+            {/* Connected Devices */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h4 className="text-sm font-medium">Connected Devices</h4>
+                <Badge variant="outline" className="text-xs">
+                  {subscribedDevices.length} device{subscribedDevices.length !== 1 ? 's' : ''}
+                </Badge>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Devices that have notifications enabled for your account
+              </p>
+
+              {subscribedDevices.length > 0 ? (
+                <div className="space-y-2">
+                  {subscribedDevices.map((device) => {
+                    const DeviceIcon = getDeviceIcon(device.userAgent);
+                    return (
+                      <div
+                        key={device.id}
+                        className="flex items-center justify-between p-3 rounded-lg border bg-muted/20"
+                      >
+                        <div className="flex items-center gap-3">
+                          <DeviceIcon className="h-4 w-4 text-muted-foreground" />
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-medium">
+                                {getDeviceName(device.userAgent)}
+                              </span>
+                              {device.isCurrentDevice && (
+                                <Badge variant="secondary" className="text-xs">
+                                  Current
+                                </Badge>
+                              )}
+                            </div>
+                            <p className="text-xs text-muted-foreground">
+                              Connected {new Date(device.createdAt).toLocaleDateString()}
+                            </p>
+                          </div>
+                        </div>
+                        {!device.isCurrentDevice && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => removeDeviceSubscription(device.id)}
+                            className="text-destructive hover:text-destructive h-8 px-2"
+                          >
+                            <X className="h-3 w-3" />
+                          </Button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="text-center py-4 text-muted-foreground">
+                  <Smartphone className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                  <p className="text-sm">No devices connected</p>
+                  <p className="text-xs">Enable notifications to see connected devices</p>
+                </div>
+              )}
             </div>
           </>
         )}

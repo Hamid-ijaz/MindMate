@@ -18,6 +18,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { NotificationSettings } from '@/components/notification-settings';
 import { CalendarConnections } from '@/components/calendar-connections';
 import { ThemePicker } from '@/components/theme-picker';
+import { PWASettings } from '@/components/pwa-settings';
 import { Trash2, Plus, Bell, BellOff, Palette } from 'lucide-react';
 import { Separator } from "@/components/ui/separator";
 import { Loader2 } from "lucide-react";
@@ -390,6 +391,10 @@ function SettingsPageInner() {
 
             <motion.div variants={cardVariants}>
               <NotificationSettings />
+            </motion.div>
+
+            <motion.div variants={cardVariants}>
+              <PWASettings />
             </motion.div>
 
             <motion.div variants={cardVariants}>

@@ -89,6 +89,49 @@ export function Header() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isThemePickerOpen, setIsThemePickerOpen] = useState(false);
 
+  // Lock body scroll when mobile menu is open
+  useEffect(() => {
+    if (isMobileMenuOpen) {
+      // Store current scroll position
+      const scrollY = window.scrollY;
+      
+      // Lock body scroll and prevent scrolling
+      document.body.style.overflow = 'hidden';
+      document.body.style.position = 'fixed';
+      document.body.style.top = `-${scrollY}px`;
+      document.body.style.width = '100%';
+      
+      // Store scroll position to restore later
+      document.body.dataset.scrollY = scrollY.toString();
+    } else {
+      // Restore scroll position
+      const scrollY = document.body.dataset.scrollY;
+      document.body.style.overflow = '';
+      document.body.style.position = '';
+      document.body.style.top = '';
+      document.body.style.width = '';
+      
+      // Restore scroll position
+      if (scrollY) {
+        window.scrollTo(0, parseInt(scrollY));
+        delete document.body.dataset.scrollY;
+      }
+    }
+
+    // Cleanup on unmount
+    return () => {
+      document.body.style.overflow = '';
+      document.body.style.position = '';
+      document.body.style.top = '';
+      document.body.style.width = '';
+      if (document.body.dataset.scrollY) {
+        const scrollY = document.body.dataset.scrollY;
+        window.scrollTo(0, parseInt(scrollY));
+        delete document.body.dataset.scrollY;
+      }
+    };
+  }, [isMobileMenuOpen]);
+
   // Get OS-appropriate modifier keys
   const modifiers = getModifiers();
 
@@ -518,8 +561,10 @@ export function Header() {
                 </div>
 
                 {/* Utility Buttons */}
-                <div className="hidden md:flex items-center gap-1">
-                  <PWAInstallPrompt />
+                <div className="flex items-center gap-1">
+                  <div className="hidden md:block">
+                    <PWAInstallPrompt />
+                  </div>
                   <NotificationDropdown />
                 </div>
 
@@ -554,21 +599,6 @@ export function Header() {
                         Keyboard Shortcuts
                       </DropdownMenuItem>
                     </DropdownMenuGroup>
-                    
-                    <div className="md:hidden">
-                      <DropdownMenuSeparator />
-                      <DropdownMenuGroup>
-                        <DropdownMenuItem>
-                          <div className="flex items-center justify-between w-full">
-                            <span className="flex items-center">
-                              <Bell className="h-4 w-4 mr-2" />
-                              Notifications
-                            </span>
-                            <NotificationDropdown />
-                          </div>
-                        </DropdownMenuItem>
-                      </DropdownMenuGroup>
-                    </div>
                     
                     <DropdownMenuSeparator />
                     <DropdownMenuItem onClick={handleLogout} className="text-destructive">

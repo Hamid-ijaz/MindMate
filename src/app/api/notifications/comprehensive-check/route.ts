@@ -1,3 +1,4 @@
+
 import { NextRequest, NextResponse } from 'next/server';
 import { initializeApp, getApps, cert } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
@@ -84,7 +85,12 @@ async function executeNotificationCheck(): Promise<any> {
   // Get all users who have push notification preferences
   const preferencesSnapshot = await db.collection('notificationPreferences').get();
   
+
   for (const prefDoc of preferencesSnapshot.docs) {
+    if (!isLoopRunning) {
+      console.log('Loop stop requested, breaking user loop.');
+      break;
+    }
     const userEmail = prefDoc.id;
     console.log("🚀 > executeNotificationCheck > userEmail:", userEmail)
     const preferences = prefDoc.data();
@@ -114,7 +120,6 @@ async function executeNotificationCheck(): Promise<any> {
 
       const subscriptions = subscriptionsSnapshot.docs;
 
-
       // Fetch all tasks for this user once
       const allTasksSnapshot = await db
         .collection('tasks')
@@ -141,9 +146,6 @@ async function executeNotificationCheck(): Promise<any> {
           _doc: doc
         };
       });
-      
-      // console.log("🚀 > executeNotificationCheck > allTasks:", allTasks)
-      // console.log("🚀 > executeNotificationCheck > allTasks:", allTasks.length)
 
       // Check for overdue tasks
       if (preferences.overdueAlerts) {
@@ -162,6 +164,10 @@ async function executeNotificationCheck(): Promise<any> {
         console.log("🚀 > executeNotificationCheck > overdueTasksToNotify.length:", overdueTasksToNotify.length)
         if (overdueTasksToNotify.length > 0) {
           for (const task of overdueTasksToNotify) {
+            if (!isLoopRunning) {
+              console.log('Loop stop requested, breaking overdue task loop.');
+              break;
+            }
             const taskTitle = (task._doc && typeof task._doc.data === 'function' && task._doc.data().title) ? task._doc.data().title : 'Untitled Task';
             const payload = {
               title: 'Task Overdue',
@@ -180,6 +186,10 @@ async function executeNotificationCheck(): Promise<any> {
 
             // Send to all user's devices
             for (const sub of subscriptions) {
+              if (!isLoopRunning) {
+                console.log('Loop stop requested, breaking subscription loop (overdue).');
+                break;
+              }
               const result = await sendPushNotification(sub.data().subscription, payload);
               if (result.success) {
                 results.totalNotificationsSent++;
@@ -212,6 +222,10 @@ async function executeNotificationCheck(): Promise<any> {
         });
 
         for (const task of tasksToRemind as any[]) {
+          if (!isLoopRunning) {
+            console.log('Loop stop requested, breaking reminder task loop.');
+            break;
+          }
           const timeUntilDue = Math.round((task.reminderAt - now.getTime()) / (60 * 1000));
           const taskTitle = (task._doc && typeof task._doc.data === 'function' && task._doc.data().title) ? task._doc.data().title : 'Untitled Task';
           const payload = {
@@ -231,6 +245,10 @@ async function executeNotificationCheck(): Promise<any> {
 
           // Send to all user's devices
           for (const sub of subscriptions) {
+            if (!isLoopRunning) {
+              console.log('Loop stop requested, breaking subscription loop (reminder).');
+              break;
+            }
             const result = await sendPushNotification(sub.data().subscription, payload);
             if (result.success) {
               results.totalNotificationsSent++;
@@ -281,7 +299,7 @@ async function startNotificationLoop() {
 
   try {
     // Run the loop for maximum Vercel timeout (58 minutes to be safe)
-    const maxRunTime = 999 * 60 * 1000; // 99 minutes
+    const maxRunTime = 24 * 60 * 60 * 1000; // 24 hours
     const startTime = Date.now();
     
     while (Date.now() - startTime < maxRunTime && isLoopRunning) {
@@ -301,16 +319,16 @@ async function startNotificationLoop() {
         console.log(`Cycle ${totalResults.cycles} completed in ${cycleDuration}ms:`, cycleResults);
         
         // Check if we have enough time for another full cycle (30 min + buffer)
-        // const timeRemaining = maxRunTime - (Date.now() - startTime);
-        // if (timeRemaining < 31 * 60 * 1000) { // Less than 31 minutes remaining
-        //   console.log('Not enough time for another cycle, ending loop');
-        //   break;
-        // }
+        const timeRemaining = maxRunTime - (Date.now() - startTime);
+        if (timeRemaining < 1 * 60 * 1000) { // Less than 1 minute remaining
+          console.log('Not enough time for another cycle, ending loop');
+          break;
+        }
         
-        // Wait for 30 minutes before next cycle
-        console.log('Waiting 30 minutes before next cycle...');
-        await new Promise(resolve => setTimeout(resolve, 0.5 * 60 * 1000)); // 30 seconds
-        
+        // Wait for 30 sec before next cycle
+        console.log('Waiting 30 seconds before next cycle...');
+        await new Promise(resolve => setTimeout(resolve, 30 * 1000)); // 30 seconds
+
       } catch (cycleError: any) {
         console.error('Error in notification cycle:', cycleError);
         totalResults.allErrors.push(`Cycle ${totalResults.cycles + 1} error: ${cycleError.message}`);
@@ -349,7 +367,7 @@ export async function POST(request: NextRequest) {
 
     // Check if we want to run a single check or start the loop
     const url = new URL(request.url);
-    const mode = url.searchParams.get('mode') || 'single'; // Default to loop mode
+    const mode = url.searchParams.get('mode') || 'loop'; // Default to loop mode
 
     if (mode === 'single') {
       // Single execution mode (for testing)
@@ -450,4 +468,16 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     );
   }
+}
+
+
+// Support DELETE to stop the notification loop
+export async function DELETE(request: NextRequest) {
+  isLoopRunning = false;
+  loopStartTime = null;
+  console.log('Notification loop stopped by DELETE request.');
+  return NextResponse.json({
+    success: true,
+    message: 'Notification loop stopped.'
+  });
 }
