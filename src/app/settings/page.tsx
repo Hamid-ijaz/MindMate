@@ -133,6 +133,8 @@ function SettingsPageInner() {
           lastName: user.lastName,
           email: user.email,
         });
+        setIsAdmin(user.email === "hamid.ijaz91@gmail.com");
+
     }
   }, [isLoading, user, profileForm]);
 
@@ -186,6 +188,42 @@ function SettingsPageInner() {
     setIsRequestingPermission(false);
   }
 
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    setIsAdmin(user?.email === "hamid.ijaz91@gmail.com");
+  }, [user]);
+  const [adminLoading, setAdminLoading] = useState(false);
+  const handleAdminPost = async () => {
+    // setAdminLoading(true);
+    try {
+      toast({ title: "POST Sending", description: "Comprehensive check POST request sent." });
+      const res = await fetch("/api/notifications/comprehensive-check", { method: "POST" });
+      // setAdminLoading(false);
+      if (res.ok) {
+        toast({ title: "POST Success", description: "Comprehensive check POST request sent." });
+      } else {
+        toast({ title: "POST Failed", description: "Request failed.", variant: "destructive" });
+      }
+    } catch (e) {
+      toast({ title: "POST Error", description: "An error occurred.", variant: "destructive" });
+    }
+  };
+  const handleAdminDelete = async () => {
+    setAdminLoading(true);
+    try {
+      const res = await fetch("/api/notifications/comprehensive-check", { method: "DELETE" });
+      if (res.ok) {
+        toast({ title: "DELETE Success", description: "Comprehensive check DELETE request sent." });
+      } else {
+        toast({ title: "DELETE Failed", description: "Request failed.", variant: "destructive" });
+      }
+    } catch (e) {
+      toast({ title: "DELETE Error", description: "An error occurred.", variant: "destructive" });
+    }
+    setAdminLoading(false);
+  };
+
   return (
     <motion.div 
       className="container mx-auto max-w-4xl py-8 md:py-12 px-4"
@@ -198,6 +236,25 @@ function SettingsPageInner() {
         <h1 className="text-3xl font-bold tracking-tighter sm:text-4xl">Settings</h1>
         <p className="mt-2 text-muted-foreground">Manage your account and application settings.</p>
       </motion.div>
+
+      {isAdmin && (
+        <motion.div variants={cardVariants}>
+          <Card className="mb-8 border-2 border-red-500">
+            <CardHeader>
+              <CardTitle>Admin Section</CardTitle>
+              <CardDescription>Developer tools for admin only</CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-4">
+              <Button variant="destructive" onClick={handleAdminPost} disabled={adminLoading}>
+                Send POST to /api/notifications/comprehensive-check
+              </Button>
+              <Button variant="outline" onClick={handleAdminDelete} disabled={adminLoading}>
+                Send DELETE to /api/notifications/comprehensive-check
+              </Button>
+            </CardContent>
+          </Card>
+        </motion.div>
+      )}
 
       {isLoading ? (
         <SettingsSkeleton />
