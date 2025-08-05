@@ -37,7 +37,7 @@ export function MobileNav() {
     { label: 'Notes', href: '/notes', icon: Notebook },
     { label: 'Chat', href: '/chat', icon: MessageSquare },
     { label: 'Pending', href: '/pending', icon: Clock, badge: 5 },
-    { label: 'Analytics', href: '/analytics', icon: TrendingUp, isNew: true },
+    { label: 'History', href: '/history', icon: TrendingUp },
   ];
 
   return (

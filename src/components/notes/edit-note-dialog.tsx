@@ -347,13 +347,13 @@ export function EditNoteDialog({ note, isOpen, onClose, shareToken, sharedBy }: 
                             
                             <TabsContent 
                                 value="content" 
-                                className="mt-0 flex-1 min-h-0 flex flex-col overflow-y-auto"
-                                style={{ maxHeight: 'calc(100vh - 320px)' }}
+                                className="mt-0 flex-1 min-h-0 flex flex-col"
+                                style={{ maxHeight: 'calc(100vh - 280px)' }}
                             >
                                 <div className="space-y-3 sm:space-y-4 flex-1 flex flex-col">
                                     {/* Rich Text Editor - Ultra Mobile Responsive */}
                                     <motion.div 
-                                        className="relative flex-1 min-h-[180px] sm:min-h-[200px] md:min-h-[250px] p-3 sm:p-4 rounded-xl border-2 border-dashed border-muted-foreground/20 focus-within:border-primary/30 transition-colors bg-background/50 backdrop-blur-sm"
+                                        className="relative flex-1 p-3 sm:p-4 rounded-xl border-2 border-dashed border-muted-foreground/20 focus-within:border-primary/30 transition-colors bg-background/50 backdrop-blur-sm"
                                         initial={{ scale: 0.98, opacity: 0 }}
                                         animate={{ scale: 1, opacity: 1 }}
                                         transition={{ duration: 0.3, delay: 0.3 }}
@@ -363,13 +363,15 @@ export function EditNoteDialog({ note, isOpen, onClose, shareToken, sharedBy }: 
                                             suppressContentEditableWarning={true}
                                             contentEditable
                                             dangerouslySetInnerHTML={{ __html: note?.content || '' }}
-                                            className="w-full h-full min-h-[180px] sm:min-h-[200px] md:min-h-[250px] border-none focus:outline-none resize-none bg-transparent leading-relaxed overflow-y-auto touch-manipulation"
+                                            className="w-full min-h-[180px] sm:min-h-[200px] md:min-h-[250px] border-none focus:outline-none resize-none bg-transparent leading-relaxed overflow-y-auto touch-manipulation"
                                             style={{ 
                                                 fontSize: `${fontSize}px`,
                                                 color: 'hsl(var(--foreground))',
                                                 WebkitTouchCallout: 'none',
                                                 WebkitUserSelect: 'text',
-                                                maxHeight: 'calc(100vh - 450px)'
+                                                height: 'auto',
+                                                maxHeight: 'calc(100vh - 420px)',
+                                                minHeight: '200px'
                                             }}
                                             onInput={handleInput}
                                         />

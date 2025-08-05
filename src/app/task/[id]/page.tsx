@@ -33,9 +33,11 @@ import {
   FileText,
   Target,
   Timer,
-  Zap
+  Zap,
+  Plus
 } from 'lucide-react';
 import { SubtaskList } from '@/components/subtask-list';
+import { TaskForm } from '@/components/task-form';
 import { ShareDialog } from '@/components/share-dialog';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { safeDate, safeDateFormat } from '@/lib/utils';
@@ -119,6 +121,7 @@ function TaskPageInner() {
     const [isCompleting, setIsCompleting] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
     const [showSubtasks, setShowSubtasks] = useState(true);
+    const [showAddSubtask, setShowAddSubtask] = useState(false);
     const [shareDialog, setShareDialog] = useState<{ isOpen: boolean, itemType: 'task' | 'note', itemTitle: string, itemId: string } | null>(null);
     const completeButtonRef = useRef<HTMLButtonElement>(null);
     
@@ -495,7 +498,7 @@ function TaskPageInner() {
                     </Card>
 
                     {/* Subtasks Section */}
-                    {subtasks.length > 0 && (
+                    {subtasks.length > 0 ? (
                         <Card className="border border-muted">
                             <CardHeader className="pb-3">
                                 <div className="flex items-center justify-between">
@@ -533,6 +536,55 @@ function TaskPageInner() {
                                                 isHistoryView={!!task.completedAt}
                                             />
                                         </CardContent>
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
+                        </Card>
+                    ) : !task.completedAt && (
+                        <Card className="border border-muted border-dashed">
+                            <CardContent className="p-6 text-center">
+                                <div className="flex flex-col items-center gap-4">
+                                    <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center">
+                                        <Plus className="h-8 w-8 text-muted-foreground" />
+                                    </div>
+                                    <div>
+                                        <h3 className="text-lg font-semibold mb-1">No Subtasks Yet</h3>
+                                        <p className="text-muted-foreground text-sm">
+                                            Break this task down into smaller, manageable steps
+                                        </p>
+                                    </div>
+                                    <Button 
+                                        onClick={() => setShowAddSubtask(!showAddSubtask)}
+                                        className="mt-2"
+                                    >
+                                        <Plus className="mr-2 h-4 w-4" />
+                                        Add First Subtask
+                                    </Button>
+                                </div>
+                            </CardContent>
+                            
+                            {/* Add subtask form */}
+                            <AnimatePresence>
+                                {showAddSubtask && (
+                                    <motion.div
+                                        initial={{ opacity: 0, height: 0 }}
+                                        animate={{ opacity: 1, height: "auto" }}
+                                        exit={{ opacity: 0, height: 0 }}
+                                        transition={{ duration: 0.2 }}
+                                    >
+                                        <div className="border-t bg-muted/10">
+                                            <div className="p-4">
+                                                <TaskForm 
+                                                    parentId={task.id}
+                                                    onFinished={() => setShowAddSubtask(false)}
+                                                    defaultValues={{
+                                                        category: task.category,
+                                                        priority: task.priority,
+                                                        timeOfDay: task.timeOfDay,
+                                                    }}
+                                                />
+                                            </div>
+                                        </div>
                                     </motion.div>
                                 )}
                             </AnimatePresence>

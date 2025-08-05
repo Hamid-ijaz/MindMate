@@ -27,10 +27,10 @@ import { TaskItem } from "@/components/task-item";
 import { NoteCard } from "@/components/notes/note-card";
 import { EditNoteDialog } from "@/components/notes/edit-note-dialog";
 import { ShareDialog } from "@/components/share-dialog";
-import { 
-  Clock, Target, Zap, TrendingUp, Calendar, Plus, Settings, 
-  Sun, CloudRain, Thermometer, Brain, Timer, Trophy, 
-  BarChart3, Activity, CheckCircle2, AlertCircle, 
+import {
+  Clock, Target, Zap, TrendingUp, Calendar, Plus, Settings,
+  Sun, CloudRain, Thermometer, Brain, Timer, Trophy,
+  BarChart3, Activity, CheckCircle2, AlertCircle,
   Lightbulb, Mic, Play, Pause, SkipForward, Volume2,
   Grip, Eye, EyeOff, Maximize2, Minimize2, RotateCcw,
   Sparkles, MapPin, Users, Share2, Award, Star,
@@ -39,7 +39,7 @@ import {
   Calendar as CalendarIcon, Cloud, MapPinIcon, Search,
   Filter, X, Wand2, Bot, ArrowRight, Command, BookOpen,
   Rocket, Workflow, ChevronUp, Globe, Compass, Wand,
-  Bell, AlarmClock, Repeat, Grid, LayoutGrid, StickyNote, 
+  Bell, AlarmClock, Repeat, Grid, LayoutGrid, StickyNote,
   Edit3, MoreHorizontal, SortAsc, CheckSquare
 } from "lucide-react";
 import { format, isToday, startOfDay, endOfDay, addDays, subDays, differenceInDays } from "date-fns";
@@ -56,84 +56,78 @@ const useWeatherData = () => {
     suggestion: "Loading weather data..."
   });
   const [isLoading, setIsLoading] = useState(true);
+  // Fetch weather data using OpenWeatherMap API
+  const fetchWeatherData = async () => {
+    try {
+      if ('geolocation' in navigator) {
+        navigator.geolocation.getCurrentPosition(
+          async (position) => {
+            const { latitude, longitude } = position.coords;
 
-  useEffect(() => {
-    const fetchWeatherData = async () => {
-      try {
-        // Get user's location
-        if ('geolocation' in navigator) {
-          navigator.geolocation.getCurrentPosition(
-            async (position) => {
-              const { latitude, longitude } = position.coords;
-              
-              try {
-                // Use OpenWeatherMap API (you'll need to add your API key)
-                const API_KEY = process.env.NEXT_PUBLIC_OPENWEATHER_API_KEY;
-                if (API_KEY) {
-                  const response = await fetch(
-                    `https://api.openweathermap.org/data/2.5/weather?lat=${latitude}&lon=${longitude}&appid=${API_KEY}&units=metric`
-                  );
-                  
-                  if (response.ok) {
-                    const data = await response.json();
-                    setWeather({
-                      temperature: Math.round(data.main.temp),
-                      condition: data.weather[0].main.toLowerCase(),
-                      humidity: data.main.humidity,
-                      location: `${data.name}, ${data.sys.country}`,
-                      suggestion: data.main.temp > 20 && data.weather[0].main === 'Clear' 
-                        ? "Perfect weather for outdoor tasks!"
-                        : data.main.temp < 10 
-                          ? "Cozy weather for indoor focus!"
-                          : "Great day for productive work!"
-                    });
-                  } else {
-                    throw new Error('Weather API failed');
-                  }
+            try {
+              const API_KEY = process.env.NEXT_PUBLIC_OPENWEATHER_API_KEY;
+              if (API_KEY) {
+                const response = await fetch(
+                  `https://api.openweathermap.org/data/2.5/weather?lat=${latitude}&lon=${longitude}&appid=${API_KEY}&units=metric`
+                );
+
+                if (response.ok) {
+                  const data = await response.json();
+                  setWeather({
+                    temperature: Math.round(data.main.temp),
+                    condition: data.weather[0].main.toLowerCase(),
+                    humidity: data.main.humidity,
+                    location: `${data.name}, ${data.sys.country}`,
+                    suggestion: data.main.temp > 20 && data.weather[0].main === 'Clear'
+                      ? "Perfect weather for outdoor tasks!"
+                      : data.main.temp < 10
+                        ? "Cozy weather for indoor focus!"
+                        : "Great day for productive work!"
+                  });
                 } else {
-                  throw new Error('No API key');
+                  throw new Error('Weather API failed');
                 }
-              } catch (error) {
-                console.log('Weather API error, using fallback:', error);
-                // Fallback to simulated data
-                setWeather({
-                  temperature: 22 + Math.floor(Math.random() * 10),
-                  condition: ["sunny", "cloudy", "partly-cloudy"][Math.floor(Math.random() * 3)],
-                  humidity: 40 + Math.floor(Math.random() * 30),
-                  location: "Your Location",
-                  suggestion: "Great day for productive work!"
-                });
+              } else {
+                throw new Error('No API key');
               }
-              setIsLoading(false);
-            },
-            () => {
-              // Location denied, use fallback
+            } catch (error) {
               setWeather({
-                temperature: 22,
-                condition: "sunny",
-                humidity: 45,
-                location: "Location unavailable",
-                suggestion: "Perfect weather for productive tasks!"
+                temperature: 22 + Math.floor(Math.random() * 10),
+                condition: ["sunny", "cloudy", "partly-cloudy"][Math.floor(Math.random() * 3)],
+                humidity: 40 + Math.floor(Math.random() * 30),
+                location: "Your Location",
+                suggestion: "Great day for productive work!"
               });
-              setIsLoading(false);
             }
-          );
-        } else {
-          // Geolocation not supported
-          setWeather({
-            temperature: 22,
-            condition: "sunny", 
-            humidity: 45,
-            location: "Location unavailable",
-            suggestion: "Perfect weather for productive tasks!"
-          });
-          setIsLoading(false);
-        }
-      } catch (error) {
-        console.error('Weather data fetch error:', error);
+            setIsLoading(false);
+          },
+          (error) => {
+            setWeather({
+              temperature: 22,
+              condition: "sunny",
+              humidity: 45,
+              location: "Location unavailable",
+              suggestion: "Perfect weather for productive tasks!"
+            });
+            setIsLoading(false);
+          }
+        );
+      } else {
+        setWeather({
+          temperature: 22,
+          condition: "sunny",
+          humidity: 45,
+          location: "Location unavailable",
+          suggestion: "Perfect weather for productive tasks!"
+        });
         setIsLoading(false);
       }
-    };
+    } catch (error) {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
 
     fetchWeatherData();
   }, []);
@@ -265,7 +259,7 @@ export default function EnhancedDashboard() {
   const [energyLevel, setEnergyLevel] = useState(80);
   const [voiceRecording, setVoiceRecording] = useState(false);
   const [newTaskText, setNewTaskText] = useState("");
-  
+
   // Enhanced search and filter state
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("");
@@ -278,7 +272,7 @@ export default function EnhancedDashboard() {
   const [showSearchBar, setShowSearchBar] = useState(false);
   const [searchView, setSearchView] = useState<'unified' | 'separated'>('unified');
   const [editingNote, setEditingNote] = useState<Note | null>(null);
-  const [shareDialog, setShareDialog] = useState<{isOpen: boolean, itemType: 'task' | 'note', itemTitle: string, itemId: string} | null>(null);
+  const [shareDialog, setShareDialog] = useState<{ isOpen: boolean, itemType: 'task' | 'note', itemTitle: string, itemId: string } | null>(null);
   const [showTaskSuggestions, setShowTaskSuggestions] = useState(false);
   const [showNotificationPrompt, setShowNotificationPrompt] = useState(shouldShowPrompt());
 
@@ -289,7 +283,7 @@ export default function EnhancedDashboard() {
   const handleRefresh = async () => {
     // Simulate a refresh delay
     await new Promise(resolve => setTimeout(resolve, 1000));
-    
+
     // Clear filters and search to show fresh content
     setSearch("");
     setCategory("");
@@ -298,7 +292,7 @@ export default function EnhancedDashboard() {
     setContentType('all');
     setSortBy('date');
     setShowFilters(false);
-    
+
     // Force re-render by clearing and restoring state if needed
     console.log('Refreshed home page content');
   };
@@ -306,7 +300,7 @@ export default function EnhancedDashboard() {
   // Set cards per row based on screen size after component mounts
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    
+
     const updateCardsPerRow = () => {
       const width = window.innerWidth;
       if (width < 640) setCardsPerRow(1); // sm
@@ -336,7 +330,7 @@ export default function EnhancedDashboard() {
         rejectionCount: 0,
         isMuted: false,
       };
-      
+
       await addTask(newTask);
       // You could show a toast notification here
       console.log("Note converted to task successfully");
@@ -366,30 +360,30 @@ export default function EnhancedDashboard() {
     const today = new Date();
     const activeTasks = tasks.filter(t => !t.completedAt);
     const completedTasks = tasks.filter(t => t.completedAt);
-    
+
     // Today's tasks
-    const todayTasks = activeTasks.filter(t => 
+    const todayTasks = activeTasks.filter(t =>
       t.scheduledAt && isToday(new Date(t.scheduledAt))
     );
-    const todayCompleted = completedTasks.filter(t => 
+    const todayCompleted = completedTasks.filter(t =>
       t.completedAt && isToday(new Date(t.completedAt))
     ).length;
-    
+
     // Overdue tasks
-    const overdueTasks = activeTasks.filter(t => 
+    const overdueTasks = activeTasks.filter(t =>
       t.scheduledAt && new Date(t.scheduledAt) < startOfDay(today)
     );
-    
+
     // Time spent today
     const timeSpentToday = completedTasks
       .filter(t => t.completedAt && isToday(new Date(t.completedAt)))
       .reduce((sum, task) => sum + (task.duration || 0), 0);
-    
+
     // Streak calculation
     let streak = 0;
     let checkDate = new Date();
     while (true) {
-      const dayCompleted = completedTasks.some(t => 
+      const dayCompleted = completedTasks.some(t =>
         t.completedAt && startOfDay(new Date(t.completedAt)).getTime() === startOfDay(checkDate).getTime()
       );
       if (dayCompleted) {
@@ -399,16 +393,16 @@ export default function EnhancedDashboard() {
         break;
       }
     }
-    
+
     // Completion rate (last 7 days)
     const weekAgo = subDays(today, 7);
     const weekTasks = tasks.filter(t => new Date(t.createdAt) >= weekAgo);
     const weekCompleted = weekTasks.filter(t => t.completedAt).length;
     const completionRate = weekTasks.length > 0 ? (weekCompleted / weekTasks.length) * 100 : 0;
-    
+
     // Priority breakdown
     const highPriorityTasks = activeTasks.filter(t => t.priority === 'High' || t.priority === 'Critical').length;
-    
+
     return {
       totalActive: activeTasks.length,
       todayTasks: todayTasks.length,
@@ -426,17 +420,17 @@ export default function EnhancedDashboard() {
   // Smart task prioritization
   const smartTasks = useMemo(() => {
     const activeTasks = tasks.filter(t => !t.completedAt);
-    
+
     return activeTasks
       .map(task => {
         let score = 0;
-        
+
         // Priority scoring
         if (task.priority === 'Critical') score += 100;
         else if (task.priority === 'High') score += 75;
         else if (task.priority === 'Medium') score += 50;
         else score += 25;
-        
+
         // Due date scoring
         if (task.scheduledAt) {
           const daysUntilDue = differenceInDays(new Date(task.scheduledAt), new Date());
@@ -445,17 +439,17 @@ export default function EnhancedDashboard() {
           else if (daysUntilDue === 1) score += 100; // Due tomorrow
           else score += Math.max(0, 50 - daysUntilDue * 5);
         }
-        
+
         // Time of day matching
         const currentHour = new Date().getHours();
         if (task.timeOfDay === 'Morning' && currentHour < 12) score += 25;
         else if (task.timeOfDay === 'Afternoon' && currentHour >= 12 && currentHour < 17) score += 25;
         else if (task.timeOfDay === 'Evening' && currentHour >= 17) score += 25;
-        
+
         // Energy level matching
         if (task.priority === 'Critical' && energyLevel > 70) score += 30;
         else if (task.priority === 'Low' && energyLevel < 40) score += 20;
-        
+
         return { ...task, score };
       })
       .sort((a, b) => b.score - a.score)
@@ -481,7 +475,7 @@ export default function EnhancedDashboard() {
     return tasks.filter(t => {
       const matchesSearch = search === "" || t.title.toLowerCase().includes(search.toLowerCase()) || (t.description || "").toLowerCase().includes(search.toLowerCase());
       const matchesCategory = category === "" || category === "all-categories" || t.category === category;
-      
+
       // Improved date filtering - show tasks that are due on or before the selected date
       const matchesDate = date === "" || (() => {
         // For tasks with reminderAt, use that date, otherwise use createdAt
@@ -490,10 +484,10 @@ export default function EnhancedDashboard() {
         selectedDate.setHours(23, 59, 59, 999); // Include the entire selected day
         return taskDate <= selectedDate;
       })();
-      
+
       const matchesPriority = priority === "" || priority === "all-priorities" || t.priority === priority;
       const matchesContentType = contentType === 'all' || contentType === 'tasks';
-      
+
       return matchesSearch && matchesCategory && matchesDate && matchesPriority && matchesContentType;
     });
   }, [tasks, search, category, date, priority, contentType]);
@@ -524,7 +518,7 @@ export default function EnhancedDashboard() {
       ...filteredTasks.map(task => ({ ...task, type: 'task' as const })),
       ...filteredNotes.map(note => ({ ...note, type: 'note' as const }))
     ];
-    
+
     // Sort based on selected option
     return items.sort((a, b) => {
       switch (sortBy) {
@@ -553,7 +547,7 @@ export default function EnhancedDashboard() {
       console.log("Snooze not implemented");
     }
   };
-  
+
   const handleRecurring = (id: string) => {
     if (typeof setRecurringNotification === "function") {
       setRecurringNotification(id, "daily");
@@ -561,8 +555,8 @@ export default function EnhancedDashboard() {
       console.log("Recurring not implemented");
     }
   };
-  
-  
+
+
   const handleDelete = (id: string) => deleteNotification(id);
 
   // Pomodoro timer effect
@@ -603,7 +597,7 @@ export default function EnhancedDashboard() {
 
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     const recognition = new SpeechRecognition();
-    
+
     recognition.continuous = false;
     recognition.interimResults = false;
     recognition.lang = 'en-US';
@@ -656,7 +650,7 @@ export default function EnhancedDashboard() {
     <PullToRefresh onRefresh={handleRefresh}>
       <div className="w-full max-w-6xl mx-auto py-4 md:py-8 px-2 md:px-0">
         {/* Ultra-Modern Compact Search Interface */}
-        <motion.div 
+        <motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
           className="mb-6"
@@ -674,7 +668,7 @@ export default function EnhancedDashboard() {
                   <span>{filteredTasks.filter(t => !t.completedAt && !t.isMuted).length} pending</span>
                 </div>
               </div>
-              
+
               <Button
                 variant="outline"
                 onClick={() => setShowSearchBar(true)}
@@ -705,7 +699,7 @@ export default function EnhancedDashboard() {
                         </p>
                       </div>
                     </div>
-                    
+
                     <Button
                       variant="ghost"
                       size="sm"
@@ -719,7 +713,7 @@ export default function EnhancedDashboard() {
                       <X className="w-4 h-4" />
                     </Button>
                   </div>
-                  
+
                   {/* Enhanced Search Input */}
                   <div className="relative mt-3">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -759,7 +753,7 @@ export default function EnhancedDashboard() {
                       </Button>
                       <Button
                         variant={searchView === 'separated' ? 'default' : 'ghost'}
-                        size="sm" 
+                        size="sm"
                         onClick={() => setSearchView('separated')}
                         className="h-7 px-3 text-xs"
                       >
@@ -767,7 +761,7 @@ export default function EnhancedDashboard() {
                         Grouped
                       </Button>
                     </div>
-                    
+
                     {/* Layout Control */}
                     <Select value={cardsPerRow.toString()} onValueChange={(value) => setCardsPerRow(parseInt(value) as 1 | 2 | 3 | 4 | 5)}>
                       <SelectTrigger className="h-7 w-20 text-xs border-border/50 bg-background/50">
@@ -781,10 +775,10 @@ export default function EnhancedDashboard() {
                         <SelectItem value="5">5 Cols</SelectItem>
                       </SelectContent>
                     </Select>
-                    
+
                     {/* Filters Toggle */}
-                    <Button 
-                      variant="outline" 
+                    <Button
+                      variant="outline"
                       size="sm"
                       onClick={() => setShowFilters(f => !f)}
                       className={cn(
@@ -796,13 +790,13 @@ export default function EnhancedDashboard() {
                       Filters
                       {showFilters && <div className="w-1 h-1 bg-primary rounded-full ml-1" />}
                     </Button>
-                    
+
                     {/* Clear All */}
-                    <Button 
-                      variant="ghost" 
+                    <Button
+                      variant="ghost"
                       size="sm"
-                      onClick={() => { 
-                        setSearch(""); 
+                      onClick={() => {
+                        setSearch("");
                         setShowFilters(false);
                         setCategory("");
                         setPriority("");
@@ -815,10 +809,10 @@ export default function EnhancedDashboard() {
                       Clear All
                     </Button>
                   </div>
-                  
+
                   {/* Results Summary */}
                   <div className="text-xs text-muted-foreground">
-                    {searchView === 'unified' 
+                    {searchView === 'unified'
                       ? `${unifiedItems.length} results found`
                       : `${filteredTasks.length} tasks • ${filteredNotes.length} notes`
                     }
@@ -851,7 +845,7 @@ export default function EnhancedDashboard() {
                               </SelectContent>
                             </Select>
                           </div>
-                          
+
                           {/* Category Filter - Dynamic */}
                           <div>
                             <label className="text-xs font-medium text-muted-foreground mb-1 block">Category</label>
@@ -867,7 +861,7 @@ export default function EnhancedDashboard() {
                               </SelectContent>
                             </Select>
                           </div>
-                          
+
                           {/* Priority Filter */}
                           <div>
                             <label className="text-xs font-medium text-muted-foreground mb-1 block">Priority</label>
@@ -884,7 +878,7 @@ export default function EnhancedDashboard() {
                               </SelectContent>
                             </Select>
                           </div>
-                          
+
                           {/* Sort By */}
                           <div>
                             <label className="text-xs font-medium text-muted-foreground mb-1 block">Sort By</label>
@@ -900,7 +894,7 @@ export default function EnhancedDashboard() {
                             </Select>
                           </div>
                         </div>
-                        
+
                         {/* Date Filter */}
                         <div>
                           <label className="text-xs font-medium text-muted-foreground mb-1 block">Created Before</label>
@@ -934,7 +928,7 @@ export default function EnhancedDashboard() {
           </motion.div>
         )}
 
-        
+
         {/* Analytics Cards - Always Visible */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-6">
           {/* Content will be added here */}
@@ -944,7 +938,7 @@ export default function EnhancedDashboard() {
         {!showSearchBar && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
             {/* Task Suggestion - Takes 2 columns */}
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.1 }}
@@ -954,7 +948,7 @@ export default function EnhancedDashboard() {
             </motion.div>
 
             {/* Productivity Stats - Compact Version - Takes 1 column */}
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.2 }}
@@ -1017,7 +1011,7 @@ export default function EnhancedDashboard() {
               <div className={getGridClass()}>
                 <AnimatePresence mode="popLayout">
                   {unifiedItems.length === 0 ? (
-                    <motion.div 
+                    <motion.div
                       initial={{ opacity: 0, scale: 0.9 }}
                       animate={{ opacity: 1, scale: 1 }}
                       exit={{ opacity: 0, scale: 0.9 }}
@@ -1041,18 +1035,18 @@ export default function EnhancedDashboard() {
                         className="break-inside-avoid"
                       >
                         {item.type === 'task' ? (
-                          <motion.div 
+                          <motion.div
                             className="relative transform transition-all duration-200 hover:scale-[1.02] hover:shadow-md group"
                             whileHover={{ y: -2 }}
                           >
                             {/* Task content wrapper */}
                             <div className="relative ">
-                              <TaskItem task={item} className="pt-4"  />
+                              <TaskItem task={item} className="pt-4" />
 
                               {/* Tags overlay - positioned inside the card */}
                               <div className="absolute top-3 left-3 z-20 flex gap-1">
-                                <Badge 
-                                  variant="secondary" 
+                                <Badge
+                                  variant="secondary"
                                   className="text-xs bg-blue-500/20 text-blue-700 border-blue-200 backdrop-blur-sm shadow-sm px-2 py-1 rounded-full"
                                 >
                                   <CheckSquare className="w-3 h-3 mr-1" />
@@ -1062,7 +1056,7 @@ export default function EnhancedDashboard() {
                             </div>
                           </motion.div>
                         ) : (
-                          <motion.div 
+                          <motion.div
                             className="relative transform transition-all duration-200 hover:scale-[1.02] hover:shadow-md group"
                             whileHover={{ y: -2 }}
                           >
@@ -1070,9 +1064,9 @@ export default function EnhancedDashboard() {
                             <div className="">
                               <NoteCard note={item} onClick={() => setEditingNote(item)} className="pt-5" />
 
-                                <div className="absolute top-3 left-3 z-20 flex gap-1">
-                                <Badge 
-                                  variant="secondary" 
+                              <div className="absolute top-3 left-3 z-20 flex gap-1">
+                                <Badge
+                                  variant="secondary"
                                   className="text-xs bg-green-500/20 text-green-700 border-green-200 backdrop-blur-sm shadow-sm px-2 py-1 rounded-full"
                                 >
                                   <StickyNote className="w-3 h-3 mr-1" />
@@ -1091,8 +1085,8 @@ export default function EnhancedDashboard() {
               /* Enhanced Separated View with Modern Layout */
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                 {/* Tasks Section */}
-                <motion.div 
-                  layout 
+                <motion.div
+                  layout
                   className="space-y-4"
                   initial={{ opacity: 0, x: -20 }}
                   animate={{ opacity: 1, x: 0 }}
@@ -1107,10 +1101,10 @@ export default function EnhancedDashboard() {
                   </div>
                   <AnimatePresence mode="popLayout">
                     {filteredTasks.length === 0 ? (
-                      <motion.div 
-                        initial={{ opacity: 0 }} 
-                        animate={{ opacity: 1 }} 
-                        exit={{ opacity: 0 }} 
+                      <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
                         className="text-muted-foreground py-8 text-center space-y-2"
                       >
                         <CheckSquare className="w-8 h-8 mx-auto mb-2 opacity-50" />
@@ -1118,17 +1112,17 @@ export default function EnhancedDashboard() {
                       </motion.div>
                     ) : (
                       filteredTasks.map((task, index) => (
-                        <motion.div 
-                          key={task.id} 
-                          layout 
-                          initial={{ opacity: 0, x: -20 }} 
-                          animate={{ opacity: 1, x: 0 }} 
+                        <motion.div
+                          key={task.id}
+                          layout
+                          initial={{ opacity: 0, x: -20 }}
+                          animate={{ opacity: 1, x: 0 }}
                           exit={{ opacity: 0, x: -20 }}
-                          transition={{ 
-                            type: "spring", 
-                            stiffness: 500, 
-                            damping: 30, 
-                            delay: index * 0.05 
+                          transition={{
+                            type: "spring",
+                            stiffness: 500,
+                            damping: 30,
+                            delay: index * 0.05
                           }}
                           whileHover={{ scale: 1.02, y: -2 }}
                           className="relative group"
@@ -1141,8 +1135,8 @@ export default function EnhancedDashboard() {
                 </motion.div>
 
                 {/* Notes Section */}
-                <motion.div 
-                  layout 
+                <motion.div
+                  layout
                   className="space-y-4"
                   initial={{ opacity: 0, x: 20 }}
                   animate={{ opacity: 1, x: 0 }}
@@ -1157,10 +1151,10 @@ export default function EnhancedDashboard() {
                   </div>
                   <AnimatePresence mode="popLayout">
                     {filteredNotes.length === 0 ? (
-                      <motion.div 
-                        initial={{ opacity: 0 }} 
-                        animate={{ opacity: 1 }} 
-                        exit={{ opacity: 0 }} 
+                      <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
                         className="text-muted-foreground py-8 text-center space-y-2"
                       >
                         <StickyNote className="w-8 h-8 mx-auto mb-2 opacity-50" />
@@ -1169,17 +1163,17 @@ export default function EnhancedDashboard() {
                     ) : (
                       <div className="grid grid-cols-1 gap-4">
                         {filteredNotes.map((note, index) => (
-                          <motion.div 
-                            key={note.id} 
-                            layout 
-                            initial={{ opacity: 0, x: 20 }} 
-                            animate={{ opacity: 1, x: 0 }} 
+                          <motion.div
+                            key={note.id}
+                            layout
+                            initial={{ opacity: 0, x: 20 }}
+                            animate={{ opacity: 1, x: 0 }}
                             exit={{ opacity: 0, x: 20 }}
-                            transition={{ 
-                              type: "spring", 
-                              stiffness: 500, 
-                              damping: 30, 
-                              delay: index * 0.05 
+                            transition={{
+                              type: "spring",
+                              stiffness: 500,
+                              damping: 30,
+                              delay: index * 0.05
                             }}
                             whileHover={{ scale: 1.02, y: -2 }}
                             className="break-inside-avoid relative group"
@@ -1197,7 +1191,7 @@ export default function EnhancedDashboard() {
         )}
 
         {/* Quick Stats Overview */}
-        <motion.div 
+        <motion.div
           className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 mb-6"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -1352,8 +1346,8 @@ export default function EnhancedDashboard() {
                           <div className={cn(
                             "w-2 h-2 rounded-full",
                             task.priority === 'Critical' ? 'bg-red-500' :
-                            task.priority === 'High' ? 'bg-orange-500' :
-                            task.priority === 'Medium' ? 'bg-yellow-500' : 'bg-green-500'
+                              task.priority === 'High' ? 'bg-orange-500' :
+                                task.priority === 'Medium' ? 'bg-yellow-500' : 'bg-green-500'
                           )} />
                           <div className="flex-1">
                             <p className="font-medium">{task.title}</p>
@@ -1375,305 +1369,305 @@ export default function EnhancedDashboard() {
                 </Card>
               </motion.div>
 
-            {/* Progress Visualization */}
-            <motion.div
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.4 }}
-            >
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <TrendingUp className="w-5 h-5" />
-                    Weekly Insights
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm">Daily Average</span>
-                      <span className="text-sm font-medium">
-                        {Math.round(analytics.todayCompleted / Math.max(1, 1))} tasks/day
-                      </span>
-                    </div>
-                    
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="text-center p-3 bg-purple-50 dark:bg-purple-950/20 rounded-lg">
-                        <p className="text-xl font-bold text-purple-600 dark:text-purple-400">
-                          {Math.round(analytics.completionRate)}%
-                        </p>
-                        <p className="text-xs text-purple-600/80 dark:text-purple-400/80">Success Rate</p>
-                      </div>
-                      <div className="text-center p-3 bg-indigo-50 dark:bg-indigo-950/20 rounded-lg">
-                        <p className="text-xl font-bold text-indigo-600 dark:text-indigo-400">
-                          {analytics.streak}
-                        </p>
-                        <p className="text-xs text-indigo-600/80 dark:text-indigo-400/80">Day Streak</p>
-                      </div>
-                    </div>
-                    
-                    <div className="space-y-2">
-                      <div className="flex justify-between text-xs">
-                        <span className="text-muted-foreground">Most Productive Day</span>
-                        <span className="font-medium">Today</span>
-                      </div>
-                      <div className="flex justify-between text-xs">
-                        <span className="text-muted-foreground">High Priority Tasks</span>
-                        <span className="font-medium text-orange-600">
-                          {analytics.highPriorityTasks} remaining
+              {/* Progress Visualization */}
+              <motion.div
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.4 }}
+              >
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <TrendingUp className="w-5 h-5" />
+                      Weekly Insights
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm">Daily Average</span>
+                        <span className="text-sm font-medium">
+                          {Math.round(analytics.todayCompleted / Math.max(1, 1))} tasks/day
                         </span>
                       </div>
-                      <div className="flex justify-between text-xs">
-                        <span className="text-muted-foreground">Active Notes</span>
-                        <span className="font-medium text-blue-600">
-                          {analytics.totalNotes}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </motion.div>
 
-            {/* Quick Action Cards */}
-            <motion.div
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.5 }}
-            >
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Zap className="w-5 h-5" />
-                    Quick Actions
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-2 gap-3">
-                    <Button 
-                      variant="outline" 
-                      className="h-16 flex flex-col items-center justify-center gap-1 hover:bg-primary/5"
-                      onClick={() => {
-                        const event = new KeyboardEvent('keydown', { key: 'n', ctrlKey: true });
-                        document.dispatchEvent(event);
-                      }}
-                    >
-                      <Plus className="w-4 h-4" />
-                      <span className="text-xs">New Task</span>
-                    </Button>
-                    <Button 
-                      variant="outline" 
-                      className="h-16 flex flex-col items-center justify-center gap-1 hover:bg-secondary/50"
-                      onClick={() => {
-                        const event = new KeyboardEvent('keydown', { key: 'm', ctrlKey: true });
-                        document.dispatchEvent(event);
-                      }}
-                    >
-                      <StickyNote className="w-4 h-4" />
-                      <span className="text-xs">New Note</span>
-                    </Button>
-                    <Button 
-                      variant="outline" 
-                      className="h-16 flex flex-col items-center justify-center gap-1 hover:bg-green-50 dark:hover:bg-green-950/20"
-                      onClick={() => window.location.href = '/pending'}
-                    >
-                      <Target className="w-4 h-4" />
-                      <span className="text-xs">View Tasks</span>
-                    </Button>
-                    <Button 
-                      variant="outline" 
-                      className="h-16 flex flex-col items-center justify-center gap-1 hover:bg-blue-50 dark:hover:bg-blue-950/20"
-                      onClick={() => window.location.href = '/notes'}
-                    >
-                      <BookOpen className="w-4 h-4" />
-                      <span className="text-xs">All Notes</span>
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            </motion.div>
-          </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="text-center p-3 bg-purple-50 dark:bg-purple-950/20 rounded-lg">
+                          <p className="text-xl font-bold text-purple-600 dark:text-purple-400">
+                            {Math.round(analytics.completionRate)}%
+                          </p>
+                          <p className="text-xs text-purple-600/80 dark:text-purple-400/80">Success Rate</p>
+                        </div>
+                        <div className="text-center p-3 bg-indigo-50 dark:bg-indigo-950/20 rounded-lg">
+                          <p className="text-xl font-bold text-indigo-600 dark:text-indigo-400">
+                            {analytics.streak}
+                          </p>
+                          <p className="text-xs text-indigo-600/80 dark:text-indigo-400/80">Day Streak</p>
+                        </div>
+                      </div>
 
-          {/* Right Column - Context & Tools */}
-          <div className="space-y-6">
-            {/* Focus Timer */}
-            <motion.div
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.2 }}
-            >
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Timer className="w-5 h-5" />
-                    Focus Timer
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-center space-y-4">
-                    <div className="relative w-32 h-32 mx-auto">
-                      <svg className="w-32 h-32 transform -rotate-90">
-                        <circle
-                          cx="64"
-                          cy="64"
-                          r="56"
-                          stroke="currentColor"
-                          strokeWidth="8"
-                          fill="transparent"
-                          className="text-muted"
-                        />
-                        <circle
-                          cx="64"
-                          cy="64"
-                          r="56"
-                          stroke="currentColor"
-                          strokeWidth="8"
-                          fill="transparent"
-                          strokeDasharray={`${2 * Math.PI * 56}`}
-                          strokeDashoffset={`${2 * Math.PI * 56 * (1 - (pomodoroTime / (25 * 60)))}`}
-                          className="text-primary transition-all duration-1000 ease-in-out"
-                        />
-                      </svg>
-                      <div className="absolute inset-0 flex items-center justify-center">
-                        <span className="text-2xl font-mono font-bold">
-                          {formatTime(pomodoroTime)}
-                        </span>
+                      <div className="space-y-2">
+                        <div className="flex justify-between text-xs">
+                          <span className="text-muted-foreground">Most Productive Day</span>
+                          <span className="font-medium">Today</span>
+                        </div>
+                        <div className="flex justify-between text-xs">
+                          <span className="text-muted-foreground">High Priority Tasks</span>
+                          <span className="font-medium text-orange-600">
+                            {analytics.highPriorityTasks} remaining
+                          </span>
+                        </div>
+                        <div className="flex justify-between text-xs">
+                          <span className="text-muted-foreground">Active Notes</span>
+                          <span className="font-medium text-blue-600">
+                            {analytics.totalNotes}
+                          </span>
+                        </div>
                       </div>
                     </div>
-                    
-                    <div className="flex justify-center gap-2">
+                  </CardContent>
+                </Card>
+              </motion.div>
+
+              {/* Quick Action Cards */}
+              <motion.div
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.5 }}
+              >
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Zap className="w-5 h-5" />
+                      Quick Actions
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-2 gap-3">
                       <Button
-                        onClick={() => setIsTimerRunning(!isTimerRunning)}
-                        variant={isTimerRunning ? 'destructive' : 'default'}
-                      >
-                        {isTimerRunning ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
-                      </Button>
-                      <Button
-                        onClick={() => {
-                          setPomodoroTime(25 * 60);
-                          setIsTimerRunning(false);
-                        }}
                         variant="outline"
+                        className="h-16 flex flex-col items-center justify-center gap-1 hover:bg-primary/5"
+                        onClick={() => {
+                          const event = new KeyboardEvent('keydown', { key: 'n', ctrlKey: true });
+                          document.dispatchEvent(event);
+                        }}
                       >
-                        <RotateCcw className="w-4 h-4" />
+                        <Plus className="w-4 h-4" />
+                        <span className="text-xs">New Task</span>
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="h-16 flex flex-col items-center justify-center gap-1 hover:bg-secondary/50"
+                        onClick={() => {
+                          const event = new KeyboardEvent('keydown', { key: 'm', ctrlKey: true });
+                          document.dispatchEvent(event);
+                        }}
+                      >
+                        <StickyNote className="w-4 h-4" />
+                        <span className="text-xs">New Note</span>
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="h-16 flex flex-col items-center justify-center gap-1 hover:bg-green-50 dark:hover:bg-green-950/20"
+                        onClick={() => window.location.href = '/pending'}
+                      >
+                        <Target className="w-4 h-4" />
+                        <span className="text-xs">View Tasks</span>
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="h-16 flex flex-col items-center justify-center gap-1 hover:bg-blue-50 dark:hover:bg-blue-950/20"
+                        onClick={() => window.location.href = '/notes'}
+                      >
+                        <BookOpen className="w-4 h-4" />
+                        <span className="text-xs">All Notes</span>
                       </Button>
                     </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </motion.div>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            </div>
 
-            {/* Weather & Context */}
-            <motion.div
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.3 }}
-            >
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Cloud className="w-5 h-5" />
-                    Context
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Thermometer className="w-4 h-4" />
-                      <span className="text-sm">Weather</span>
+            {/* Right Column - Context & Tools */}
+            <div className="space-y-6">
+              {/* Focus Timer */}
+              <motion.div
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.2 }}
+              >
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Timer className="w-5 h-5" />
+                      Focus Timer
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-center space-y-4">
+                      <div className="relative w-32 h-32 mx-auto">
+                        <svg className="w-32 h-32 transform -rotate-90">
+                          <circle
+                            cx="64"
+                            cy="64"
+                            r="56"
+                            stroke="currentColor"
+                            strokeWidth="8"
+                            fill="transparent"
+                            className="text-muted"
+                          />
+                          <circle
+                            cx="64"
+                            cy="64"
+                            r="56"
+                            stroke="currentColor"
+                            strokeWidth="8"
+                            fill="transparent"
+                            strokeDasharray={`${2 * Math.PI * 56}`}
+                            strokeDashoffset={`${2 * Math.PI * 56 * (1 - (pomodoroTime / (25 * 60)))}`}
+                            className="text-primary transition-all duration-1000 ease-in-out"
+                          />
+                        </svg>
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <span className="text-2xl font-mono font-bold">
+                            {formatTime(pomodoroTime)}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="flex justify-center gap-2">
+                        <Button
+                          onClick={() => setIsTimerRunning(!isTimerRunning)}
+                          variant={isTimerRunning ? 'destructive' : 'default'}
+                        >
+                          {isTimerRunning ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+                        </Button>
+                        <Button
+                          onClick={() => {
+                            setPomodoroTime(25 * 60);
+                            setIsTimerRunning(false);
+                          }}
+                          variant="outline"
+                        >
+                          <RotateCcw className="w-4 h-4" />
+                        </Button>
+                      </div>
                     </div>
-                    <div className="text-right">
-                      <p className="font-medium">{weather.temperature}°C</p>
-                      <p className="text-xs text-muted-foreground capitalize">{weather.condition}</p>
-                    </div>
-                  </div>
-                  
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <MapPinIcon className="w-3 h-3" />
-                    <span>{weather.location}</span>
-                  </div>
-                  
-                  <div className="p-3 bg-muted/50 rounded-lg">
-                    <p className="text-sm">{weather.suggestion}</p>
-                  </div>
-                  
-                  <div className="space-y-2">
+                  </CardContent>
+                </Card>
+              </motion.div>
+
+              {/* Weather & Context */}
+              <motion.div
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.3 }}
+              >
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Cloud className="w-5 h-5" />
+                      Context
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
                     <div className="flex items-center justify-between">
-                      <span className="text-sm">Energy Level</span>
-                      <span className="text-sm font-medium">{energyLevel}%</span>
+                      <div className="flex items-center gap-2">
+                        <Thermometer className="w-4 h-4" />
+                        <span className="text-sm">Weather</span>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-medium">{weather.temperature}°C</p>
+                        <p className="text-xs text-muted-foreground capitalize">{weather.condition}</p>
+                      </div>
                     </div>
-                    <Slider
-                      value={[energyLevel]}
-                      onValueChange={(value) => setEnergyLevel(value[0])}
-                      max={100}
-                      step={10}
-                      className="mt-2"
-                    />
-                  </div>
-                </CardContent>
-              </Card>
-            </motion.div>
 
-            {/* Motivational Quote */}
-            <motion.div
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.4 }}
-            >
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Sparkles className="w-5 h-5" />
-                    Daily Inspiration
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <blockquote className="text-center space-y-2">
-                    <p className="italic text-sm">"{currentQuote.text}"</p>
-                    <footer className="text-xs text-muted-foreground">
-                      — {currentQuote.author}
-                    </footer>
-                  </blockquote>
-                </CardContent>
-              </Card>
-            </motion.div>
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <MapPinIcon className="w-3 h-3" />
+                      <span>{weather.location}</span>
+                    </div>
 
-            {/* Achievement Badges */}
-            <motion.div
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.5 }}
-            >
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Trophy className="w-5 h-5" />
-                    Achievements
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-3 gap-2">
-                    <div className="text-center p-2 bg-yellow-50 dark:bg-yellow-950/20 rounded-lg">
-                      <Award className="w-6 h-6 text-yellow-600 mx-auto mb-1" />
-                      <p className="text-xs font-medium">Streak</p>
-                      <p className="text-xs text-muted-foreground">{analytics.streak} days</p>
+                    <div className="p-3 bg-muted/50 rounded-lg">
+                      <p className="text-sm">{weather.suggestion}</p>
                     </div>
-                    <div className="text-center p-2 bg-blue-50 dark:bg-blue-950/20 rounded-lg">
-                      <Target className="w-6 h-6 text-blue-600 mx-auto mb-1" />
-                      <p className="text-xs font-medium">Focus</p>
-                      <p className="text-xs text-muted-foreground">{Math.floor(analytics.timeSpentToday / 60)}h</p>
+
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm">Energy Level</span>
+                        <span className="text-sm font-medium">{energyLevel}%</span>
+                      </div>
+                      <Slider
+                        value={[energyLevel]}
+                        onValueChange={(value) => setEnergyLevel(value[0])}
+                        max={100}
+                        step={10}
+                        className="mt-2"
+                      />
                     </div>
-                    <div className="text-center p-2 bg-green-50 dark:bg-green-950/20 rounded-lg">
-                      <CheckCircle2 className="w-6 h-6 text-green-600 mx-auto mb-1" />
-                      <p className="text-xs font-medium">Tasks</p>
-                      <p className="text-xs text-muted-foreground">{analytics.todayCompleted}</p>
+                  </CardContent>
+                </Card>
+              </motion.div>
+
+              {/* Motivational Quote */}
+              <motion.div
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.4 }}
+              >
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Sparkles className="w-5 h-5" />
+                      Daily Inspiration
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <blockquote className="text-center space-y-2">
+                      <p className="italic text-sm">"{currentQuote.text}"</p>
+                      <footer className="text-xs text-muted-foreground">
+                        — {currentQuote.author}
+                      </footer>
+                    </blockquote>
+                  </CardContent>
+                </Card>
+              </motion.div>
+
+              {/* Achievement Badges */}
+              <motion.div
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.5 }}
+              >
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Trophy className="w-5 h-5" />
+                      Achievements
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-3 gap-2">
+                      <div className="text-center p-2 bg-yellow-50 dark:bg-yellow-950/20 rounded-lg">
+                        <Award className="w-6 h-6 text-yellow-600 mx-auto mb-1" />
+                        <p className="text-xs font-medium">Streak</p>
+                        <p className="text-xs text-muted-foreground">{analytics.streak} days</p>
+                      </div>
+                      <div className="text-center p-2 bg-blue-50 dark:bg-blue-950/20 rounded-lg">
+                        <Target className="w-6 h-6 text-blue-600 mx-auto mb-1" />
+                        <p className="text-xs font-medium">Focus</p>
+                        <p className="text-xs text-muted-foreground">{Math.floor(analytics.timeSpentToday / 60)}h</p>
+                      </div>
+                      <div className="text-center p-2 bg-green-50 dark:bg-green-950/20 rounded-lg">
+                        <CheckCircle2 className="w-6 h-6 text-green-600 mx-auto mb-1" />
+                        <p className="text-xs font-medium">Tasks</p>
+                        <p className="text-xs text-muted-foreground">{analytics.todayCompleted}</p>
+                      </div>
                     </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </motion.div>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            </div>
           </div>
-        </div>
         )}
 
         {/* Additional Analytics Cards - Always Visible */}
@@ -1699,7 +1693,7 @@ export default function EnhancedDashboard() {
                     const completedCategoryTasks = filteredTasks.filter(t => t.category === category && t.completedAt);
                     const total = categoryTasks.length + completedCategoryTasks.length;
                     const progress = total > 0 ? (completedCategoryTasks.length / total) * 100 : 0;
-                    
+
                     return (
                       <div key={category} className="space-y-1">
                         <div className="flex justify-between text-xs">
@@ -1739,10 +1733,10 @@ export default function EnhancedDashboard() {
                 <div className="space-y-2">
                   {['Work', 'Personal', 'Health', 'Other'].map(category => (
                     <div key={category} className="flex items-center justify-between">
-                      <span className="text-xs">{category}</span>
+                      <span className="text-sm">{category}</span>
                       <div className="flex items-center gap-2">
-                        <Progress value={Math.random() * 100} className="w-16 h-1.5" />
-                        <span className="text-xs w-4">{Math.floor(Math.random() * 20)}</span>
+                        <Progress value={Math.random() * 100} className="w-20" />
+                        <span className="text-sm w-8">{Math.floor(Math.random() * 20)}</span>
                       </div>
                     </div>
                   ))}
@@ -1755,7 +1749,7 @@ export default function EnhancedDashboard() {
                 <CardTitle className="text-base">Productivity Insights</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="space-y-3">
+                <div className="space-y-4">
                   <div className="flex items-center justify-between">
                     <span className="text-xs">Most Productive Hour</span>
                     <span className="font-medium text-xs">10:00 AM</span>
@@ -1849,14 +1843,14 @@ export default function EnhancedDashboard() {
             </Card>
           </motion.div>
         )}
-        
+
         {/* Edit Note Dialog */}
         <EditNoteDialog
           note={editingNote}
           isOpen={!!editingNote}
           onClose={() => setEditingNote(null)}
         />
-        
+
         {/* Share Dialog */}
         {shareDialog && (
           <ShareDialog

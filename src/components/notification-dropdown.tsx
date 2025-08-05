@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { Bell, BellRing, X, AlertTriangle, Calendar, CheckCircle, Trash2 } from 'lucide-react';
 import { useAuth } from '@/contexts/auth-context';
+import { useNotifications } from '@/contexts/notification-context';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { 
@@ -32,70 +33,40 @@ interface NotificationEvent {
 
 export function NotificationDropdown() {
   const { user } = useAuth();
-  const [notifications, setNotifications] = useState<NotificationEvent[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { notifications, deleteNotification } = useNotifications();
+  const [loading, setLoading] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
 
-  useEffect(() => {
-    if (user?.email) {
-      loadNotificationHistory();
-    }
-  }, [user]);
-
-  const loadNotificationHistory = async () => {
-    if (!user?.email) return;
-    
-    try {
-      // Since we don't have a history API yet, we'll simulate with recent activity
-      const mockNotifications: NotificationEvent[] = [
-        {
-          id: '1',
-          type: 'overdue',
-          title: 'Overdue Tasks Alert',
-          message: 'You have 3 overdue tasks that need attention',
-          timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000), // 2 hours ago
-          isRead: false,
-          metadata: { taskCount: 3 }
-        },
-        {
-          id: '2',
-          type: 'reminder',
-          title: 'Task Reminder',
-          message: 'Complete project presentation is due in 15 minutes',
-          timestamp: new Date(Date.now() - 4 * 60 * 60 * 1000), // 4 hours ago
-          taskId: 'task-123',
-          isRead: true
-        },
-        {
-          id: '3',
-          type: 'daily-digest',
-          title: 'Daily Progress Summary',
-          message: 'You completed 5 out of 8 tasks today. Great progress!',
-          timestamp: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000), // 1 day ago
-          isRead: true,
-          metadata: { taskCount: 8, completionRate: 62.5 }
-        }
-      ];
-      
-      setNotifications(mockNotifications);
-    } catch (error) {
-      console.error('Failed to load notification history:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  // Convert notifications from context to dropdown format
+  const dropdownNotifications: NotificationEvent[] = notifications.map(notif => ({
+    id: notif.id,
+    type: notif.data?.type === 'task-overdue' ? 'overdue' : 
+          notif.data?.type === 'task-reminder' ? 'reminder' : 
+          notif.title.toLowerCase().includes('overdue') ? 'overdue' :
+          notif.title.toLowerCase().includes('digest') ? 'daily-digest' :
+          'reminder',
+    title: notif.title,
+    message: notif.body || '',
+    timestamp: new Date(notif.createdAt),
+    taskId: notif.data?.taskId,
+    isRead: notif.isRead,
+    metadata: notif.data ? {
+      taskCount: notif.data.taskCount,
+      completionRate: notif.data.completionRate
+    } : undefined
+  }));
 
   const markAsRead = async (notificationId: string, event: React.MouseEvent) => {
     event.stopPropagation();
-    setNotifications(prev => 
-      prev.map(n => 
-        n.id === notificationId ? { ...n, isRead: true } : n
-      )
-    );
+    // Update the notification as read in the context
+    await deleteNotification(notificationId);
   };
 
   const clearHistory = async () => {
-    setNotifications([]);
+    // Clear all notifications
+    for (const notification of dropdownNotifications) {
+      await deleteNotification(notification.id);
+    }
     setIsOpen(false);
   };
 
@@ -116,7 +87,7 @@ export function NotificationDropdown() {
     }
   };
 
-  const unreadCount = notifications.filter(n => !n.isRead).length;
+  const unreadCount = dropdownNotifications.filter(n => !n.isRead).length;
 
   return (
     <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
@@ -145,7 +116,7 @@ export function NotificationDropdown() {
       >
         <DropdownMenuLabel className="flex items-center justify-between py-2">
           <span className="font-semibold">Notifications</span>
-          {notifications.length > 0 && (
+          {dropdownNotifications.length > 0 && (
             <Button
               variant="ghost"
               size="sm"
@@ -172,7 +143,7 @@ export function NotificationDropdown() {
               </div>
             ))}
           </div>
-        ) : notifications.length === 0 ? (
+        ) : dropdownNotifications.length === 0 ? (
           <div className="text-center py-8 px-4">
             <Bell className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
             <p className="text-sm text-muted-foreground">No notifications yet</p>
@@ -200,7 +171,7 @@ export function NotificationDropdown() {
                 background-color: hsl(var(--muted-foreground) / 0.5);
               }
             `}</style>
-            {notifications.map((notification, index) => (
+            {dropdownNotifications.map((notification, index) => (
               <div key={notification.id}>
                 <DropdownMenuItem
                   className={`flex items-start p-3 cursor-pointer ${
@@ -265,13 +236,13 @@ export function NotificationDropdown() {
                   </div>
                 </DropdownMenuItem>
                 
-                {index < notifications.length - 1 && <DropdownMenuSeparator />}
+                {index < dropdownNotifications.length - 1 && <DropdownMenuSeparator />}
               </div>
             ))}
           </div>
         )}
         
-        {notifications.length > 0 && (
+        {dropdownNotifications.length > 0 && (
           <>
             <DropdownMenuSeparator />
             <div className="p-2">

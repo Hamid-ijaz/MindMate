@@ -86,7 +86,9 @@ async function executeNotificationCheck(): Promise<any> {
   
   for (const prefDoc of preferencesSnapshot.docs) {
     const userEmail = prefDoc.id;
+    console.log("🚀 > executeNotificationCheck > userEmail:", userEmail)
     const preferences = prefDoc.data();
+    console.log("🚀 > executeNotificationCheck > preferences:", preferences)
 
     try {
       // Skip if notifications are disabled for this user
@@ -112,81 +114,117 @@ async function executeNotificationCheck(): Promise<any> {
 
       const subscriptions = subscriptionsSnapshot.docs;
 
+
+      // Fetch all tasks for this user once
+      const allTasksSnapshot = await db
+        .collection('tasks')
+        .where('userEmail', '==', userEmail)
+        .get();
+      function toMillis(val: any): number | undefined {
+        if (!val) return undefined;
+        if (typeof val === 'number') return val;
+        if (typeof val === 'object' && typeof val._seconds === 'number') {
+          return val._seconds * 1000 + Math.floor((val._nanoseconds || 0) / 1e6);
+        }
+        return undefined;
+      }
+      const allTasks = allTasksSnapshot.docs.map(doc => {
+        const data = doc.data();
+        console.log("🚀 > executeNotificationCheck > data:", data.reminderAt)
+        // Normalize all relevant fields to millis if present
+        return {
+          ...data,
+          reminderAt: toMillis(data.reminderAt),
+          completedAt: toMillis(data.completedAt),
+          notifiedAt: toMillis(data.notifiedAt),
+          lastRemindedAt: toMillis(data.lastRemindedAt),
+          _doc: doc
+        };
+      });
+      
+      // console.log("🚀 > executeNotificationCheck > allTasks:", allTasks)
+      // console.log("🚀 > executeNotificationCheck > allTasks:", allTasks.length)
+
       // Check for overdue tasks
       if (preferences.overdueAlerts) {
-        const overdueTasksSnapshot = await db
-          .collection('tasks')
-          .where('userEmail', '==', userEmail)
-          .where('isCompleted', '==', false)
-          .where('dueDate', '<', now)
-          .where('overdueNotificationSent', '==', false)
-          .get();
+        const overdueTasks = allTasks.filter(task => {
+          return task.reminderAt !=  undefined;
+        });
+        console.log("🚀 > executeNotificationCheck > overdueTasks:", overdueTasks.length)
+        // Only process tasks that have reminderAt and completedAt fields
+        const twentyFourHoursAgo = now.getTime() - (24 * 60 * 60 * 1000);
+        const overdueTasksToNotify = overdueTasks.filter((task: any) => {
+          if (typeof task.completedAt !== 'undefined' && task.completedAt) return false;
+          if (typeof task.notifiedAt !== 'undefined' && task.notifiedAt >= twentyFourHoursAgo) return false;
+          return task.reminderAt < now.getTime();
+        });
 
-        if (!overdueTasksSnapshot.empty) {
-          const overdueCount = overdueTasksSnapshot.size;
-          const payload = {
-            title: 'Overdue Tasks Alert',
-            body: `You have ${overdueCount} overdue task${overdueCount > 1 ? 's' : ''} that need attention`,
-            icon: '/icon-192.png',
-            badge: '/icon-192.png',
-            tag: 'overdue-tasks',
-            data: {
-              type: 'overdue-alert',
-              taskCount: overdueCount,
-              url: '/task?filter=overdue',
-              timestamp: now.toISOString()
-            }
-          };
+        console.log("🚀 > executeNotificationCheck > overdueTasksToNotify.length:", overdueTasksToNotify.length)
+        if (overdueTasksToNotify.length > 0) {
+          for (const task of overdueTasksToNotify) {
+            const taskTitle = (task._doc && typeof task._doc.data === 'function' && task._doc.data().title) ? task._doc.data().title : 'Untitled Task';
+            const payload = {
+              title: 'Task Overdue',
+              body: `"${taskTitle}" is overdue!`,
+              icon: '/icon-192.png',
+              badge: '/icon-192.png',
+              tag: `overdue-task-${task._doc.id}`,
+              data: {
+                type: 'overdue-task',
+                taskId: task._doc.id,
+                title: taskTitle,
+                url: `/task/${task._doc.id}`,
+                timestamp: now.toISOString()
+              }
+            };
 
-          // Send to all user's devices
-          for (const sub of subscriptions) {
-            const result = await sendPushNotification(sub.data().subscription, payload);
-            if (result.success) {
-              results.totalNotificationsSent++;
-            } else if (result.error?.includes('410') || result.error?.includes('404')) {
-              // Remove invalid subscription
-              await db.collection('pushSubscriptions').doc(sub.id).delete();
+            // Send to all user's devices
+            for (const sub of subscriptions) {
+              const result = await sendPushNotification(sub.data().subscription, payload);
+              if (result.success) {
+                results.totalNotificationsSent++;
+              } else if (result.error?.includes('410') || result.error?.includes('404')) {
+                // Remove invalid subscription
+                await db.collection('pushSubscriptions').doc(sub.id).delete();
+              }
             }
+
+            // Mark this task as having been notified
+            await task._doc.ref.update({ notifiedAt: now.getTime() });
+            results.overdueNotifications++;
           }
-
-          // Mark tasks as having overdue notification sent
-          const batch = db.batch();
-          overdueTasksSnapshot.docs.forEach(taskDoc => {
-            batch.update(taskDoc.ref, { overdueNotificationSent: true });
-          });
-          await batch.commit();
-
-          results.overdueNotifications++;
         }
       }
 
       // Check for upcoming task reminders
       if (preferences.taskReminders) {
-        const reminderTime = new Date(now.getTime() + 15 * 60 * 1000); // 15 minutes from now
-        
-        const upcomingTasksSnapshot = await db
-          .collection('tasks')
-          .where('userEmail', '==', userEmail)
-          .where('isCompleted', '==', false)
-          .where('dueDate', '>', now)
-          .where('dueDate', '<=', reminderTime)
-          .where('reminderAt', '<', new Date(now.getTime() - 30 * 60 * 1000)) // Not reminded in last 30 minutes
-          .get();
+        const reminderTime = now.getTime() + (2 * 60 * 60 * 1000); // 2 hours from now
+        const thirtyMinutesAgo = now.getTime() - (30 * 60 * 1000); // 30 minutes ago
+        const RemindTasks = allTasks.filter(task => {
+                  return task.reminderAt !=  undefined;
+                });
+        // Only process tasks that have reminderAt field
+        const tasksToRemind = RemindTasks.filter((task: any) => {
+          if (typeof task.reminderAt !== 'number') return false;
+          if (typeof task.completedAt !== 'undefined' && task.completedAt) return false;
+          if (typeof task.lastRemindedAt !== 'undefined' && task.lastRemindedAt >= thirtyMinutesAgo) return false;
+          return task.reminderAt > now.getTime() && task.reminderAt <= reminderTime;
+        });
 
-        for (const taskDoc of upcomingTasksSnapshot.docs) {
-          const task = taskDoc.data();
-          const timeUntilDue = Math.round((task.dueDate.toDate().getTime() - now.getTime()) / (60 * 1000));
-          
+        for (const task of tasksToRemind as any[]) {
+          const timeUntilDue = Math.round((task.reminderAt - now.getTime()) / (60 * 1000));
+          const taskTitle = (task._doc && typeof task._doc.data === 'function' && task._doc.data().title) ? task._doc.data().title : 'Untitled Task';
           const payload = {
             title: 'Task Reminder',
-            body: `"${task.title}" is due in ${timeUntilDue} minutes`,
+            body: `"${taskTitle}" is due in ${timeUntilDue} minutes`,
             icon: '/icon-192.png',
             badge: '/icon-192.png',
-            tag: `task-reminder-${taskDoc.id}`,
+            tag: `task-reminder-${task._doc.id}`,
             data: {
               type: 'task-reminder',
-              taskId: taskDoc.id,
-              url: `/task/${taskDoc.id}`,
+              taskId: task._doc.id,
+              title: taskTitle,
+              url: `/task/${task._doc.id}`,
               timestamp: now.toISOString()
             }
           };
@@ -203,7 +241,7 @@ async function executeNotificationCheck(): Promise<any> {
           }
 
           // Update reminder timestamp
-          await taskDoc.ref.update({ reminderAt: now });
+          await task._doc.ref.update({ lastRemindedAt: now.getTime() });
           results.reminderNotifications++;
         }
       }
@@ -243,7 +281,7 @@ async function startNotificationLoop() {
 
   try {
     // Run the loop for maximum Vercel timeout (58 minutes to be safe)
-    const maxRunTime = 58 * 60 * 1000; // 58 minutes
+    const maxRunTime = 999 * 60 * 1000; // 99 minutes
     const startTime = Date.now();
     
     while (Date.now() - startTime < maxRunTime && isLoopRunning) {
@@ -263,21 +301,21 @@ async function startNotificationLoop() {
         console.log(`Cycle ${totalResults.cycles} completed in ${cycleDuration}ms:`, cycleResults);
         
         // Check if we have enough time for another full cycle (30 min + buffer)
-        const timeRemaining = maxRunTime - (Date.now() - startTime);
-        if (timeRemaining < 31 * 60 * 1000) { // Less than 31 minutes remaining
-          console.log('Not enough time for another cycle, ending loop');
-          break;
-        }
+        // const timeRemaining = maxRunTime - (Date.now() - startTime);
+        // if (timeRemaining < 31 * 60 * 1000) { // Less than 31 minutes remaining
+        //   console.log('Not enough time for another cycle, ending loop');
+        //   break;
+        // }
         
         // Wait for 30 minutes before next cycle
         console.log('Waiting 30 minutes before next cycle...');
-        await new Promise(resolve => setTimeout(resolve, 30 * 60 * 1000));
+        await new Promise(resolve => setTimeout(resolve, 0.5 * 60 * 1000)); // 30 seconds
         
       } catch (cycleError: any) {
         console.error('Error in notification cycle:', cycleError);
         totalResults.allErrors.push(`Cycle ${totalResults.cycles + 1} error: ${cycleError.message}`);
         // Continue with the loop even if one cycle fails
-        await new Promise(resolve => setTimeout(resolve, 30 * 60 * 1000)); // Still wait 30 minutes
+        await new Promise(resolve => setTimeout(resolve, 0.5 * 60 * 1000)); // Still wait 30 minutes
       }
     }
     
@@ -311,7 +349,7 @@ export async function POST(request: NextRequest) {
 
     // Check if we want to run a single check or start the loop
     const url = new URL(request.url);
-    const mode = url.searchParams.get('mode') || 'single'; // Default to single mode
+    const mode = url.searchParams.get('mode') || 'single'; // Default to loop mode
 
     if (mode === 'single') {
       // Single execution mode (for testing)
@@ -345,13 +383,71 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-
 // Also support GET for testing
 export async function GET(request: NextRequest) {
-  // Return loop status for monitoring
-  return NextResponse.json({
-    isLoopRunning,
-    loopStartTime: loopStartTime?.toISOString() || null,
-    message: isLoopRunning ? 'Notification loop is currently running' : 'No notification loop running'
-  });
+  // Generate a test notification to all users
+  try {
+    const db = getFirestore();
+    const preferencesSnapshot = await db.collection('notificationPreferences').get();
+    let totalSent = 0;
+    let errors: string[] = [];
+
+    for (const prefDoc of preferencesSnapshot.docs) {
+      const userEmail = prefDoc.id;
+      const preferences = prefDoc.data();
+
+      if (!preferences.enabled) continue;
+
+      const subscriptionsSnapshot = await db
+        .collection('pushSubscriptions')
+        .where('userEmail', '==', userEmail)
+        .get();
+
+      if (subscriptionsSnapshot.empty) continue;
+
+      const payload = {
+        title: 'Test Notification',
+        body: 'This is a test notification from MindMate.',
+        icon: '/icon-192.png',
+        badge: '/icon-192.png',
+        tag: 'test-notification',
+        data: {
+          type: 'test',
+          timestamp: new Date().toISOString()
+        }
+      };
+
+      for (const sub of subscriptionsSnapshot.docs) {
+        const result = await sendPushNotification(sub.data().subscription, payload);
+        if (result.success) {
+          totalSent++;
+        } else {
+          errors.push(`User ${userEmail} sub ${sub.id}: ${result.error}`);
+          if (result.error?.includes('410') || result.error?.includes('404')) {
+            await db.collection('pushSubscriptions').doc(sub.id).delete();
+          }
+        }
+      }
+    }
+
+    return NextResponse.json({
+      isLoopRunning,
+      loopStartTime: loopStartTime?.toISOString() || null,
+      testNotification: {
+        totalSent,
+        errors
+      },
+      message: `Test notification sent to all users. Total sent: ${totalSent}`
+    });
+  } catch (error: any) {
+    return NextResponse.json(
+      {
+        isLoopRunning,
+        loopStartTime: loopStartTime?.toISOString() || null,
+        error: error.message,
+        message: 'Failed to send test notification'
+      },
+      { status: 500 }
+    );
+  }
 }

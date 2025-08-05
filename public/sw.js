@@ -1,6 +1,7 @@
-const CACHE_NAME = 'mindmate-v1';
-const STATIC_CACHE = 'mindmate-static-v1';
-const DYNAMIC_CACHE = 'mindmate-dynamic-v1';
+const CACHE_NAME = 'mindmate-v3';
+const STATIC_CACHE = 'mindmate-static-v3';
+const DYNAMIC_CACHE = 'mindmate-dynamic-v3';
+const API_CACHE = 'mindmate-api-v3';
 
 // Files to cache for offline functionality
 const STATIC_FILES = [
@@ -9,7 +10,11 @@ const STATIC_FILES = [
   '/manifest.json',
   '/icon-192.png',
   '/icon-512.png',
-  '/favicon.ico'
+  '/favicon.ico',
+  '/favicon.svg',
+  '/logo.png',
+  '/audio/complete-tone.wav',
+  '/audio/mixkit-bell-notification-933.wav'
 ];
 
 // Install event - cache static files
@@ -20,7 +25,13 @@ self.addEventListener('install', (event) => {
     caches.open(STATIC_CACHE)
       .then((cache) => {
         console.log('Service Worker: Caching static files');
-        return cache.addAll(STATIC_FILES);
+        return cache.addAll(STATIC_FILES).catch((error) => {
+          console.error('Service Worker: Failed to cache some files', error);
+          // Cache files individually to avoid failure of entire batch
+          return Promise.allSettled(
+            STATIC_FILES.map(file => cache.add(file))
+          );
+        });
       })
       .then(() => {
         console.log('Service Worker: Static files cached');
@@ -41,7 +52,7 @@ self.addEventListener('activate', (event) => {
       .then((cacheNames) => {
         return Promise.all(
           cacheNames.map((cacheName) => {
-            if (cacheName !== STATIC_CACHE && cacheName !== DYNAMIC_CACHE) {
+            if (cacheName !== STATIC_CACHE && cacheName !== DYNAMIC_CACHE && cacheName !== API_CACHE) {
               console.log('Service Worker: Deleting old cache', cacheName);
               return caches.delete(cacheName);
             }
@@ -51,6 +62,9 @@ self.addEventListener('activate', (event) => {
       .then(() => {
         console.log('Service Worker: Activated');
         return self.clients.claim();
+      })
+      .catch((error) => {
+        console.error('Service Worker: Activation failed', error);
       })
   );
 });
@@ -64,23 +78,39 @@ self.addEventListener('push', (event) => {
     body: 'You have a task reminder!',
     icon: '/icon-192.png',
     badge: '/icon-192.png',
-    data: {}
+    data: {},
+    actions: [
+      {
+        action: 'view',
+        title: '👀 View Task',
+        icon: '/icon-192.png'
+      },
+      {
+        action: 'dismiss',
+        title: '❌ Dismiss',
+        icon: '/icon-192.png'
+      }
+    ],
+    requireInteraction: true,
+    silent: false,
+    timestamp: Date.now(),
+    tag: 'mindmate-reminder'
   };
 
   if (event.data) {
     try {
       const data = event.data.json();
       notificationData = {
+        ...notificationData,
         title: data.title || notificationData.title,
         body: data.body || notificationData.body,
         icon: data.icon || notificationData.icon,
         badge: data.badge || notificationData.badge,
         data: data.data || {},
-        actions: data.actions || [],
-        requireInteraction: true,
-        silent: false,
-        timestamp: Date.now(),
-        tag: data.tag || 'mindmate-reminder'
+        actions: data.actions || notificationData.actions,
+        tag: data.tag || notificationData.tag,
+        requireInteraction: data.requireInteraction !== false,
+        silent: data.silent || false
       };
     } catch (error) {
       console.error('Service Worker: Error parsing push data', error);
@@ -99,6 +129,14 @@ self.addEventListener('notificationclick', (event) => {
   event.notification.close();
   
   const taskId = event.notification.data?.taskId;
+  const action = event.action;
+  
+  if (action === 'dismiss') {
+    // Just close the notification
+    return;
+  }
+  
+  // Default action or 'view' action
   const url = taskId ? `/task/${taskId}` : '/';
   
   event.waitUntil(
@@ -120,6 +158,9 @@ self.addEventListener('notificationclick', (event) => {
         
         // Open new window if app is not open
         return clients.openWindow(url);
+      })
+      .catch((error) => {
+        console.error('Service Worker: Error handling notification click', error);
       })
   );
 });
@@ -155,147 +196,57 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Handle API requests
+  // Skip chrome extension requests
+  if (url.protocol === 'chrome-extension:') {
+    return;
+  }
+
+  // Handle API requests with better caching strategy
   if (url.pathname.startsWith('/api/')) {
     event.respondWith(
       fetch(request)
         .then((response) => {
-          // Clone the response before caching
-          const responseClone = response.clone();
-          
-          // Cache successful API responses
-          if (response.status === 200) {
-            caches.open(DYNAMIC_CACHE)
+          // Only cache successful GET responses for read-only APIs
+          if (response.status === 200 && request.method === 'GET') {
+            const responseClone = response.clone();
+            caches.open(API_CACHE)
               .then((cache) => {
-                cache.put(request, responseClone);
-              });
+                // Set a TTL for API cache
+                const ttl = Date.now() + (5 * 60 * 1000); // 5 minutes
+                const responseWithTTL = new Response(responseClone.body, {
+                  status: responseClone.status,
+                  statusText: responseClone.statusText,
+                  headers: {
+                    ...Object.fromEntries(responseClone.headers.entries()),
+                    'sw-cache-ttl': ttl.toString()
+                  }
+                });
+                cache.put(request, responseWithTTL);
+              })
+              .catch(err => console.log('API Cache error:', err));
           }
           
           return response;
         })
         .catch(() => {
-          // Return cached response if available
-          return caches.match(request);
-        })
-    );
-    return;
-  }
-
-  // Handle static assets and pages
-  event.respondWith(
-    caches.match(request)
-      .then((response) => {
-        if (response) {
-          return response;
-        }
-
-        return fetch(request)
-          .then((response) => {
-            // Don't cache non-successful responses
-            if (!response || response.status !== 200) {
-              return response;
-            }
-
-            const responseToCache = response.clone();
-            
-            caches.open(DYNAMIC_CACHE)
-              .then((cache) => {
-                cache.put(request, responseToCache);
-              });
-
-            return response;
-          });
-      })
-      .catch(() => {
-        // Return offline page for navigation requests
-        if (request.destination === 'document') {
-          return caches.match('/offline');
-        }
-      })
-  );
-});
-
-// Background sync for offline notifications
-self.addEventListener('sync', (event) => {
-  console.log('Service Worker: Background sync', event);
-  
-  if (event.tag === 'background-sync-notifications') {
-    event.waitUntil(
-      // Handle any queued notifications when back online
-      fetch('/api/notifications/sync', {
-        method: 'POST'
-      }).catch(err => console.error('Background sync failed:', err))
-    );
-  }
-});
-
-// Periodic background sync for checking overdue tasks
-self.addEventListener('periodicsync', (event) => {
-  if (event.tag === 'check-overdue-tasks') {
-    event.waitUntil(
-      fetch('/api/notifications/check-overdue', {
-        method: 'POST'
-      }).catch(err => console.error('Periodic sync failed:', err))
-    );
-  }
-});
-    caches.keys()
-      .then((cacheNames) => {
-        return Promise.all(
-          cacheNames.map((cacheName) => {
-            if (cacheName !== STATIC_CACHE && cacheName !== DYNAMIC_CACHE) {
-              console.log('Service Worker: Deleting old cache', cacheName);
-              return caches.delete(cacheName);
-            }
-          })
-        );
-      })
-      .then(() => {
-        console.log('Service Worker: Activated');
-        return self.clients.claim();
-      })
-  );
-});
-
-// Fetch event - serve cached content when offline
-self.addEventListener('fetch', (event) => {
-  const { request } = event;
-  const url = new URL(request.url);
-
-  // Skip non-GET requests
-  if (request.method !== 'GET') {
-    return;
-  }
-
-  // Handle API requests
-  if (url.pathname.startsWith('/api/')) {
-    event.respondWith(
-      fetch(request)
-        .then((response) => {
-          // Clone the response before caching
-          const responseClone = response.clone();
-          
-          // Cache successful API responses
-          if (response.status === 200) {
-            caches.open(DYNAMIC_CACHE)
-              .then((cache) => {
-                cache.put(request, responseClone);
-              });
-          }
-          
-          return response;
-        })
-        .catch(() => {
-          // Return cached API response if available
-          return caches.match(request)
-            .then((cachedResponse) => {
-              if (cachedResponse) {
+          // Return cached API response if available and not expired
+          return caches.match(request).then((cachedResponse) => {
+            if (cachedResponse) {
+              const ttl = cachedResponse.headers.get('sw-cache-ttl');
+              if (ttl && Date.now() < parseInt(ttl)) {
                 return cachedResponse;
               }
-              
-              // Return offline page for API failures
-              return caches.match('/offline');
+            }
+            // Return a basic offline response for API requests
+            return new Response(JSON.stringify({ 
+              error: 'Offline', 
+              message: 'You are currently offline. Please check your internet connection.',
+              timestamp: Date.now()
+            }), {
+              status: 503,
+              headers: { 'Content-Type': 'application/json' }
             });
+          });
         })
     );
     return;
@@ -306,12 +257,15 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(
       fetch(request)
         .then((response) => {
-          // Cache the page
-          const responseClone = response.clone();
-          caches.open(DYNAMIC_CACHE)
-            .then((cache) => {
-              cache.put(request, responseClone);
-            });
+          // Cache successful page responses
+          if (response.status === 200) {
+            const responseClone = response.clone();
+            caches.open(DYNAMIC_CACHE)
+              .then((cache) => {
+                cache.put(request, responseClone);
+              })
+              .catch(err => console.log('Cache error:', err));
+          }
           
           return response;
         })
@@ -348,9 +302,17 @@ self.addEventListener('fetch', (event) => {
             caches.open(DYNAMIC_CACHE)
               .then((cache) => {
                 cache.put(request, responseClone);
-              });
+              })
+              .catch(err => console.log('Cache error:', err));
 
             return response;
+          })
+          .catch(() => {
+            // Return a placeholder for failed resources
+            if (request.destination === 'image') {
+              return new Response('', { status: 404 });
+            }
+            return null;
           });
       })
   );
@@ -362,61 +324,22 @@ self.addEventListener('sync', (event) => {
   
   if (event.tag === 'sync-tasks') {
     event.waitUntil(syncTasks());
+  } else if (event.tag === 'background-sync-notifications') {
+    event.waitUntil(
+      fetch('/api/notifications/sync', {
+        method: 'POST'
+      }).catch(err => console.error('Background sync failed:', err))
+    );
   }
 });
 
-// Push notification handling
-self.addEventListener('push', (event) => {
-  console.log('Service Worker: Push received', event);
-  
-  const options = {
-    body: event.data ? event.data.text() : 'You have a new task reminder!',
-    icon: '/icon-192.png',
-    badge: '/icon-192.png',
-    vibrate: [200, 100, 200],
-    data: {
-      dateOfArrival: Date.now(),
-      primaryKey: 1
-    },
-    actions: [
-      {
-        action: 'complete',
-        title: 'Mark Complete',
-        icon: '/icon-192.png'
-      },
-      {
-        action: 'view',
-        title: 'View Task',
-        icon: '/icon-192.png'
-      }
-    ]
-  };
-
-  event.waitUntil(
-    self.registration.showNotification('MindMate Reminder', options)
-  );
-});
-
-// Notification click handling
-self.addEventListener('notificationclick', (event) => {
-  console.log('Service Worker: Notification clicked', event);
-  
-  event.notification.close();
-
-  if (event.action === 'complete') {
-    // Handle task completion
+// Periodic background sync for checking overdue tasks
+self.addEventListener('periodicsync', (event) => {
+  if (event.tag === 'check-overdue-tasks') {
     event.waitUntil(
-      clients.openWindow('/pending')
-    );
-  } else if (event.action === 'view') {
-    // Open the app
-    event.waitUntil(
-      clients.openWindow('/')
-    );
-  } else {
-    // Default action - open the app
-    event.waitUntil(
-      clients.openWindow('/')
+      fetch('/api/notifications/check-overdue', {
+        method: 'POST'
+      }).catch(err => console.error('Periodic sync failed:', err))
     );
   }
 });
@@ -424,8 +347,14 @@ self.addEventListener('notificationclick', (event) => {
 // Helper function to sync tasks when back online
 async function syncTasks() {
   try {
+    console.log('Service Worker: Syncing offline tasks');
     // Get offline tasks from IndexedDB
     const offlineTasks = await getOfflineTasks();
+    
+    if (offlineTasks.length === 0) {
+      console.log('Service Worker: No offline tasks to sync');
+      return;
+    }
     
     for (const task of offlineTasks) {
       try {
@@ -440,6 +369,7 @@ async function syncTasks() {
         if (response.ok) {
           // Remove from offline storage
           await removeOfflineTask(task.id);
+          console.log('Service Worker: Synced task', task.id);
         }
       } catch (error) {
         console.error('Failed to sync task:', task.id, error);
@@ -452,11 +382,26 @@ async function syncTasks() {
 
 // Helper functions for offline storage
 async function getOfflineTasks() {
-  // This would integrate with your IndexedDB implementation
-  return [];
+  try {
+    // Check if IndexedDB is available
+    if (!('indexedDB' in self)) {
+      return [];
+    }
+
+    // This would integrate with your IndexedDB implementation
+    // For now, return empty array
+    return [];
+  } catch (error) {
+    console.error('Error getting offline tasks:', error);
+    return [];
+  }
 }
 
 async function removeOfflineTask(taskId) {
-  // This would integrate with your IndexedDB implementation
-  console.log('Removing offline task:', taskId);
+  try {
+    // This would integrate with your IndexedDB implementation
+    console.log('Removing offline task:', taskId);
+  } catch (error) {
+    console.error('Error removing offline task:', error);
+  }
 }

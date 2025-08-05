@@ -1,27 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { collection, query, where, getDocs, orderBy, limit } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import { Task } from '@/lib/types';
 import webpush from 'web-push';
-
-// Types
-interface Task {
-  id: string;
-  title: string;
-  description?: string;
-  dueDate?: Date;
-  reminderAt?: Date;
-  notifiedAt?: Date;
-  isCompleted: boolean;
-  userId: string;
-  priority?: 'low' | 'medium' | 'high';
-  category?: string;
-  recurrence?: {
-    type: 'daily' | 'weekly' | 'monthly';
-    interval: number;
-    daysOfWeek?: number[];
-    endDate?: Date;
-  };
-}
 
 interface PushSubscription {
   id: string;
@@ -30,7 +11,7 @@ interface PushSubscription {
     p256dh: string;
     auth: string;
   };
-  userId: string;
+  userEmail: string;
   isActive: boolean;
 }
 
@@ -51,24 +32,24 @@ export async function POST(request: NextRequest) {
     const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
     const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
     
-    // Get all overdue tasks
+    // Get all overdue tasks (using correct field names from Task interface)
     const tasksRef = collection(db, 'tasks');
     const overdueTasksQuery = query(
       tasksRef,
-      where('isCompleted', '==', false),
-      where('dueDate', '<=', now),
-      orderBy('dueDate', 'asc'),
+      where('completedAt', '==', null), // Task is not completed
+      where('scheduledAt', '<=', now.getTime()), // Task is overdue (using timestamp)
+      orderBy('scheduledAt', 'asc'),
       limit(100) // Limit to prevent overwhelming
     );
     
     const overdueTasksSnapshot = await getDocs(overdueTasksQuery);
-    const overdueTasks = overdueTasksSnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data(),
-      dueDate: doc.data().dueDate?.toDate(),
-      reminderAt: doc.data().reminderAt?.toDate(),
-      notifiedAt: doc.data().notifiedAt?.toDate(),
-    })) as Task[];
+    const overdueTasks = overdueTasksSnapshot.docs.map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        ...data,
+      } as Task;
+    });
     
     console.log(`📋 Found ${overdueTasks.length} overdue tasks`);
     
@@ -80,23 +61,23 @@ export async function POST(request: NextRequest) {
       });
     }
     
-    // Group tasks by user
+    // Group tasks by user (using userEmail instead of userId)
     const tasksByUser = overdueTasks.reduce((acc, task) => {
-      if (!acc[task.userId]) {
-        acc[task.userId] = [];
+      if (!acc[task.userEmail]) {
+        acc[task.userEmail] = [];
       }
-      acc[task.userId].push(task);
+      acc[task.userEmail].push(task);
       return acc;
     }, {} as Record<string, Task[]>);
     
-    const userIds = Object.keys(tasksByUser);
-    console.log(`👥 Processing ${userIds.length} users with overdue tasks`);
+    const userEmails = Object.keys(tasksByUser);
+    console.log(`👥 Processing ${userEmails.length} users with overdue tasks`);
     
     // Get push subscriptions for all users with overdue tasks
     const subscriptionsRef = collection(db, 'pushSubscriptions');
     const subscriptionsQuery = query(
       subscriptionsRef,
-      where('userId', 'in', userIds),
+      where('userEmail', 'in', userEmails),
       where('isActive', '==', true)
     );
     
@@ -110,10 +91,10 @@ export async function POST(request: NextRequest) {
     
     // Group subscriptions by user
     const subscriptionsByUser = subscriptions.reduce((acc, sub) => {
-      if (!acc[sub.userId]) {
-        acc[sub.userId] = [];
+      if (!acc[sub.userEmail]) {
+        acc[sub.userEmail] = [];
       }
-      acc[sub.userId].push(sub);
+      acc[sub.userEmail].push(sub);
       return acc;
     }, {} as Record<string, PushSubscription[]>);
     
@@ -121,24 +102,24 @@ export async function POST(request: NextRequest) {
     const errors: string[] = [];
     
     // Process each user's overdue tasks
-    for (const userId of userIds) {
-      const userTasks = tasksByUser[userId];
-      const userSubscriptions = subscriptionsByUser[userId] || [];
+    for (const userEmail of userEmails) {
+      const userTasks = tasksByUser[userEmail];
+      const userSubscriptions = subscriptionsByUser[userEmail] || [];
       
       if (userSubscriptions.length === 0) {
-        console.log(`⚠️ No active subscriptions for user ${userId}`);
+        console.log(`⚠️ No active subscriptions for user ${userEmail}`);
         continue;
       }
       
       // Filter tasks that need notifications
       const tasksNeedingNotification = userTasks.filter(task => {
-        const taskDueDate = task.dueDate;
+        const taskScheduledAt = task.scheduledAt; // Use scheduledAt instead of dueDate
         const lastNotified = task.notifiedAt;
         
-        if (!taskDueDate) return false;
+        if (!taskScheduledAt) return false;
         
         // Task is overdue
-        const isOverdue = taskDueDate <= now;
+        const isOverdue = taskScheduledAt <= now.getTime();
         
         if (!isOverdue) return false;
         
@@ -147,18 +128,18 @@ export async function POST(request: NextRequest) {
         
         // If last notified more than 24 hours ago, send another notification
         // But only for the first 7 days after due date
-        const daysSinceDue = Math.floor((now.getTime() - taskDueDate.getTime()) / (24 * 60 * 60 * 1000));
-        const hoursSinceLastNotified = Math.floor((now.getTime() - lastNotified.getTime()) / (60 * 60 * 1000));
+        const daysSinceDue = Math.floor((now.getTime() - taskScheduledAt) / (24 * 60 * 60 * 1000));
+        const hoursSinceLastNotified = Math.floor((now.getTime() - lastNotified) / (60 * 60 * 1000));
         
         return daysSinceDue <= 7 && hoursSinceLastNotified >= 24;
       });
       
       if (tasksNeedingNotification.length === 0) {
-        console.log(`✅ No notifications needed for user ${userId}`);
+        console.log(`✅ No notifications needed for user ${userEmail}`);
         continue;
       }
       
-      console.log(`📤 Sending notifications for ${tasksNeedingNotification.length} tasks to user ${userId}`);
+      console.log(`📤 Sending notifications for ${tasksNeedingNotification.length} tasks to user ${userEmail}`);
       
       // Create notification content
       const notificationPayload = createNotificationPayload(tasksNeedingNotification);
