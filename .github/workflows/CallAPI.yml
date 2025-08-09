@@ -1,0 +1,13 @@
+name: Send DELETE to /api/notifications/comprehensive-check
+
+on:
+  schedule:
+    - cron: '*/30 * * * *' # Every 30 minutes
+
+jobs:
+  call-api:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send POST request
+        run: |
+          curl -X POST "https://mindmate.hamidijaz.dev/api/notifications/comprehensive-check"
