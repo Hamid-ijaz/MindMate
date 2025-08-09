@@ -214,3 +214,71 @@ export const toastVariants = {
   animate: { opacity: 1, x: 0 },
   exit: { opacity: 0, x: 100 }
 };
+
+// Chat-specific animations
+export const chatMessageVariants = {
+  initial: { opacity: 0, y: 20, scale: 0.95 },
+  animate: { 
+    opacity: 1, 
+    y: 0, 
+    scale: 1
+  },
+  exit: { opacity: 0, y: -10, scale: 0.95 }
+};
+
+export const chatInputVariants = {
+  initial: { opacity: 0, y: 20 },
+  animate: { 
+    opacity: 1, 
+    y: 0
+  },
+  exit: { opacity: 0, y: 20 }
+};
+
+export const quickActionVariants = {
+  initial: { opacity: 0, x: -20, scale: 0.9 },
+  animate: { 
+    opacity: 1, 
+    x: 0, 
+    scale: 1
+  },
+  hover: {
+    scale: 1.05
+  },
+  tap: {
+    scale: 0.95
+  }
+};
+
+export const typingIndicatorVariants = {
+  initial: { opacity: 0 },
+  animate: { 
+    opacity: 1
+  },
+  exit: { 
+    opacity: 0
+  }
+};
+
+export const chatContainerVariants = {
+  initial: { opacity: 0 },
+  animate: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.1,
+      delayChildren: 0.1
+    }
+  }
+};
+
+export const suggestedTaskVariants = {
+  initial: { opacity: 0, y: 15, scale: 0.9 },
+  animate: { 
+    opacity: 1, 
+    y: 0, 
+    scale: 1
+  },
+  hover: {
+    y: -2
+  }
+};

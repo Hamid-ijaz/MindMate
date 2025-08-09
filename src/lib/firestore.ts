@@ -13,10 +13,14 @@ import {
   onSnapshot,
   Timestamp,
   WriteBatch,
-  writeBatch
+  writeBatch,
+  limit,
+  startAfter,
+  DocumentSnapshot,
+  increment
 } from 'firebase/firestore';
 import { db } from './firebase';
-import type { Task, User, Accomplishment, Note, SharedItem, ShareHistoryEntry, SharePermission, ShareCollaborator, ShareAnalytics, GoogleCalendarSettings } from './types';
+import type { Task, User, Accomplishment, Note, SharedItem, ShareHistoryEntry, SharePermission, ShareCollaborator, ShareAnalytics, GoogleCalendarSettings, ChatMessage, ChatSession, ChatContext } from './types';
 
 // Collection names
 export const COLLECTIONS = {
@@ -26,6 +30,8 @@ export const COLLECTIONS = {
   USER_SETTINGS: 'userSettings',
   NOTES: 'notes',
   SHARED_ITEMS: 'sharedItems',
+  CHAT_SESSIONS: 'chatSessions',
+  CHAT_MESSAGES: 'chatMessages',
 } as const;
 
 // User operations
@@ -998,6 +1004,158 @@ export const sharingService = {
       ...settings,
       history: updatedHistory,
       updatedAt: Timestamp.now(),
+    });
+  }
+};
+
+// Chat Service for AI Conversation Hub
+export const chatService = {
+  // Create a new chat session
+  async createChatSession(userEmail: string, title?: string): Promise<string> {
+    const sessionId = `${userEmail}_${Date.now()}`;
+    const sessionRef = doc(db, COLLECTIONS.CHAT_SESSIONS, sessionId);
+    
+    const sessionData: Omit<ChatSession, 'id'> = {
+      userEmail,
+      title: title || 'New Chat',
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      messageCount: 0,
+      isActive: true,
+    };
+    
+    await setDoc(sessionRef, sessionData);
+    return sessionId;
+  },
+
+  // Get user's chat sessions
+  async getChatSessions(userEmail: string): Promise<ChatSession[]> {
+    const sessionsRef = collection(db, COLLECTIONS.CHAT_SESSIONS);
+    const q = query(
+      sessionsRef,
+      where('userEmail', '==', userEmail),
+      orderBy('updatedAt', 'desc'),
+      limit(50)
+    );
+    
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    })) as ChatSession[];
+  },
+
+  // Add message to session
+  async addMessage(sessionId: string, message: Omit<ChatMessage, 'id'>): Promise<string> {
+    const messageId = `${sessionId}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const messageRef = doc(db, COLLECTIONS.CHAT_MESSAGES, messageId);
+    
+    const messageData = {
+      ...message,
+      sessionId,
+    };
+    
+    await setDoc(messageRef, messageData);
+    
+    // Update session with latest info
+    const sessionRef = doc(db, COLLECTIONS.CHAT_SESSIONS, sessionId);
+    await updateDoc(sessionRef, {
+      updatedAt: Date.now(),
+      messageCount: increment(1),
+      lastMessage: message.content.substring(0, 100),
+    });
+    
+    return messageId;
+  },
+
+  // Get messages for a session
+  async getSessionMessages(sessionId: string, lastMessageDoc?: DocumentSnapshot): Promise<{ messages: ChatMessage[], hasMore: boolean }> {
+    const messagesRef = collection(db, COLLECTIONS.CHAT_MESSAGES);
+    let q = query(
+      messagesRef,
+      where('sessionId', '==', sessionId),
+      orderBy('timestamp', 'desc'),
+      limit(50)
+    );
+    
+    if (lastMessageDoc) {
+      q = query(
+        messagesRef,
+        where('sessionId', '==', sessionId),
+        orderBy('timestamp', 'desc'),
+        startAfter(lastMessageDoc),
+        limit(50)
+      );
+    }
+    
+    const querySnapshot = await getDocs(q);
+    const messages = querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    })) as ChatMessage[];
+    
+    return {
+      messages: messages.reverse(), // Reverse to get chronological order
+      hasMore: querySnapshot.docs.length === 50
+    };
+  },
+
+  // Update session title
+  async updateSessionTitle(sessionId: string, title: string): Promise<void> {
+    const sessionRef = doc(db, COLLECTIONS.CHAT_SESSIONS, sessionId);
+    await updateDoc(sessionRef, {
+      title,
+      updatedAt: Date.now(),
+    });
+  },
+
+  // Delete chat session and all its messages
+  async deleteSession(sessionId: string): Promise<void> {
+    const batch = writeBatch(db);
+    
+    // Delete session
+    const sessionRef = doc(db, COLLECTIONS.CHAT_SESSIONS, sessionId);
+    batch.delete(sessionRef);
+    
+    // Delete all messages in the session
+    const messagesRef = collection(db, COLLECTIONS.CHAT_MESSAGES);
+    const q = query(messagesRef, where('sessionId', '==', sessionId));
+    const querySnapshot = await getDocs(q);
+    
+    querySnapshot.docs.forEach(doc => {
+      batch.delete(doc.ref);
+    });
+    
+    await batch.commit();
+  },
+
+  // Get current active session for user
+  async getActiveSession(userEmail: string): Promise<ChatSession | null> {
+    const sessionsRef = collection(db, COLLECTIONS.CHAT_SESSIONS);
+    const q = query(
+      sessionsRef,
+      where('userEmail', '==', userEmail),
+      where('isActive', '==', true),
+      orderBy('updatedAt', 'desc'),
+      limit(1)
+    );
+    
+    const querySnapshot = await getDocs(q);
+    if (querySnapshot.empty) return null;
+    
+    const doc = querySnapshot.docs[0];
+    return {
+      id: doc.id,
+      ...doc.data()
+    } as ChatSession;
+  },
+
+  // Set session as active/inactive
+  async setSessionActive(sessionId: string, isActive: boolean): Promise<void> {
+    const sessionRef = doc(db, COLLECTIONS.CHAT_SESSIONS, sessionId);
+    await updateDoc(sessionRef, {
+      isActive,
+      updatedAt: Date.now(),
     });
   }
 };
