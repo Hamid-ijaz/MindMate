@@ -3,7 +3,8 @@ name: Send POST to /api/notifications/comprehensive-check
 on:
   schedule:
     - cron: '*/1 * * * *' # Every 1 minutes
-
+  workflow_dispatch:
+  
 jobs:
   call-api:
     runs-on: ubuntu-latest
