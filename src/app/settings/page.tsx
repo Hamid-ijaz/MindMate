@@ -2,6 +2,7 @@
 "use client";
 
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -98,11 +99,13 @@ function SettingsSkeleton() {
 import { NotificationProvider } from '@/contexts/notification-context';
 
 function SettingsPageInner() {
+  const searchParams = useSearchParams();
   const { user, updateUser, loading: authLoading } = useAuth();
   const { toast } = useToast();
   const { taskCategories, setTaskCategories, taskDurations, setTaskDurations, isLoading: tasksLoading } = useTasks();
   const { permission, requestPermission } = useNotifications();
   const [isRequestingPermission, setIsRequestingPermission] = useState(false);
+  const [calendarRefreshTrigger, setCalendarRefreshTrigger] = useState(0);
 
   const isLoading = authLoading || tasksLoading;
 
@@ -146,6 +149,53 @@ function SettingsPageInner() {
         });
      }
   }, [isLoading, taskCategories, taskDurations, taskSettingsForm]);
+
+  // Handle OAuth callback parameters
+  useEffect(() => {
+    const success = searchParams.get('success');
+    const error = searchParams.get('error');
+    const googleConnected = searchParams.get('google_connected');
+    const googleEmail = searchParams.get('google_email');
+    
+    if (success === 'google_calendar_connected' || googleConnected === 'true') {
+      toast({
+        title: "Connected Successfully",
+        description: `Google Calendar has been connected to your account${googleEmail ? ` (${decodeURIComponent(googleEmail)})` : ''}.`,
+      });
+      setCalendarRefreshTrigger(prev => prev + 1);
+      
+      // If we get the google_connected=true format, trigger a manual refresh
+      if (googleConnected === 'true') {
+        // Force refresh the calendar settings after a short delay
+        setTimeout(() => {
+          setCalendarRefreshTrigger(prev => prev + 1);
+        }, 1000);
+      }
+      
+      // Clean up URL parameters
+      window.history.replaceState({}, '', '/settings');
+    } else if (error) {
+      let errorMessage = "An error occurred.";
+      switch (error) {
+        case 'google_calendar_denied':
+          errorMessage = "Google Calendar access was denied.";
+          break;
+        case 'google_calendar_no_code':
+          errorMessage = "Authorization code was not received.";
+          break;
+        case 'google_calendar_connection_failed':
+          errorMessage = "Failed to connect to Google Calendar.";
+          break;
+      }
+      toast({
+        title: "Connection Failed",
+        description: errorMessage,
+        variant: "destructive",
+      });
+      // Clean up URL parameters
+      window.history.replaceState({}, '', '/settings');
+    }
+  }, [searchParams, toast]);
 
 
   const { fields: categoryFields, append: appendCategory, remove: removeCategory } = useFieldArray({
@@ -461,7 +511,7 @@ function SettingsPageInner() {
                   <CardDescription>Connect external calendars to sync your tasks and events.</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <CalendarConnections />
+                  <CalendarConnections key={calendarRefreshTrigger} />
                 </CardContent>
               </Card>
             </motion.div>

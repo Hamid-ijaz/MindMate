@@ -241,7 +241,7 @@ interface WidgetConfig {
 }
 
 export default function EnhancedDashboard() {
-  const { tasks, addTask, acceptTask, updateTask, taskCategories } = useTasks();
+  const { tasks, addTask, acceptTask, updateTask, taskCategories, startEditingTask } = useTasks();
   const { notes } = useNotes();
   const { notifications, snoozeNotification, setRecurringNotification, deleteNotification } = useNotifications();
   const { user } = useAuth();
@@ -262,9 +262,9 @@ export default function EnhancedDashboard() {
 
   // Enhanced search and filter state
   const [search, setSearch] = useState("");
-  const [category, setCategory] = useState("");
+  const [category, setCategory] = useState("all");
   const [date, setDate] = useState("");
-  const [priority, setPriority] = useState("");
+  const [priority, setPriority] = useState("all");
   const [contentType, setContentType] = useState<'all' | 'tasks' | 'notes'>('all');
   const [sortBy, setSortBy] = useState<'date' | 'priority' | 'alphabetical'>('date');
   const [cardsPerRow, setCardsPerRow] = useState<1 | 2 | 3 | 4 | 5>(2);
@@ -369,10 +369,22 @@ export default function EnhancedDashboard() {
       t.completedAt && isToday(new Date(t.completedAt))
     ).length;
 
-    // Overdue tasks
-    const overdueTasks = activeTasks.filter(t =>
-      t.scheduledAt && new Date(t.scheduledAt) < startOfDay(today)
-    );
+    // Overdue tasks (unified logic)
+    const overdueTasks = tasks.filter(task => {
+      // Skip completed or muted tasks
+      if (task.completedAt || task.isMuted) return false;
+
+      // Check if task has a reminder date set
+      if (task.reminderAt) {
+        const reminderDate = new Date(task.reminderAt);
+        return reminderDate < startOfDay(today);
+      }
+
+      // For tasks without reminders, consider them overdue if created more than 3 days ago
+      const createdDate = new Date(task.createdAt);
+      const threeDaysAgo = subDays(startOfDay(today), 3);
+      return createdDate < threeDaysAgo;
+    });
 
     // Time spent today
     const timeSpentToday = completedTasks
@@ -474,7 +486,7 @@ export default function EnhancedDashboard() {
   const filteredTasks = useMemo(() => {
     return tasks.filter(t => {
       const matchesSearch = search === "" || t.title.toLowerCase().includes(search.toLowerCase()) || (t.description || "").toLowerCase().includes(search.toLowerCase());
-      const matchesCategory = category === "" || category === "all-categories" || t.category === category;
+      const matchesCategory = category === "all" || category === "" || category === "all-categories" || t.category === category;
 
       // Improved date filtering - show tasks that are due on or before the selected date
       const matchesDate = date === "" || (() => {
@@ -485,7 +497,7 @@ export default function EnhancedDashboard() {
         return taskDate <= selectedDate;
       })();
 
-      const matchesPriority = priority === "" || priority === "all-priorities" || t.priority === priority;
+      const matchesPriority = priority === "all" || priority === "" || priority === "all-priorities" || t.priority === priority;
       const matchesContentType = contentType === 'all' || contentType === 'tasks';
 
       return matchesSearch && matchesCategory && matchesDate && matchesPriority && matchesContentType;
@@ -511,6 +523,33 @@ export default function EnhancedDashboard() {
     const completedTasks = filteredTasks.filter(t => t.completedAt).length;
     return totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 0;
   }, [filteredTasks]);
+
+  // Calculate overdue tasks
+  const overdueTasks = useMemo(() => {
+    const now = new Date();
+    const todayStart = startOfDay(now);
+    
+    return tasks.filter(task => {
+      // Skip completed or muted tasks
+      if (task.completedAt || task.isMuted) return false;
+      
+      // Check if task has a reminder date set
+      if (task.reminderAt) {
+        const reminderDate = new Date(task.reminderAt);
+        return reminderDate < todayStart;
+      }
+      
+      // For tasks without reminders, consider them overdue if created more than 3 days ago
+      const createdDate = new Date(task.createdAt);
+      const threeDaysAgo = subDays(todayStart, 3);
+      return createdDate < threeDaysAgo;
+    }).sort((a, b) => {
+      // Sort by reminder date first (if available), then by creation date
+      const aDate = a.reminderAt || a.createdAt;
+      const bDate = b.reminderAt || b.createdAt;
+      return aDate - bDate;
+    });
+  }, [tasks]);
 
   // Combined and sorted items for unified view with enhanced sorting
   const unifiedItems = useMemo(() => {
@@ -854,7 +893,7 @@ export default function EnhancedDashboard() {
                                 <SelectValue placeholder="All Categories" />
                               </SelectTrigger>
                               <SelectContent>
-                                <SelectItem value="">All Categories</SelectItem>
+                                <SelectItem value="all">All Categories</SelectItem>
                                 {taskCategories.map((cat) => (
                                   <SelectItem key={cat} value={cat}>{cat}</SelectItem>
                                 ))}
@@ -870,7 +909,7 @@ export default function EnhancedDashboard() {
                                 <SelectValue placeholder="All Priorities" />
                               </SelectTrigger>
                               <SelectContent>
-                                <SelectItem value="">All Priorities</SelectItem>
+                                <SelectItem value="all">All Priorities</SelectItem>
                                 <SelectItem value="Critical">Critical</SelectItem>
                                 <SelectItem value="High">High</SelectItem>
                                 <SelectItem value="Medium">Medium</SelectItem>
@@ -1041,7 +1080,7 @@ export default function EnhancedDashboard() {
                           >
                             {/* Task content wrapper */}
                             <div className="relative ">
-                              <TaskItem task={item} className="pt-4" />
+                              <TaskItem task={item} className="pt-4" hideSubtaskButton={true} />
 
                               {/* Tags overlay - positioned inside the card */}
                               <div className="absolute top-3 left-3 z-20 flex gap-1">
@@ -1127,7 +1166,7 @@ export default function EnhancedDashboard() {
                           whileHover={{ scale: 1.02, y: -2 }}
                           className="relative group"
                         >
-                          <TaskItem task={task} />
+                          <TaskItem task={task} hideSubtaskButton={true} />
                         </motion.div>
                       ))
                     )}
@@ -1317,6 +1356,95 @@ export default function EnhancedDashboard() {
                   </CardContent>
                 </Card>
               </motion.div>
+
+              {/* Overdue Tasks Card */}
+              {overdueTasks.length > 0 && (
+                <motion.div
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.25 }}
+                >
+                  <Card className="border-orange-200 dark:border-orange-800 bg-orange-50/50 dark:bg-orange-950/20">
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2 text-orange-800 dark:text-orange-200">
+                        <AlertCircle className="w-5 h-5" />
+                        Overdue Tasks
+                        <Badge variant="secondary" className="ml-auto bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200">
+                          {overdueTasks.length}
+                        </Badge>
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-3">
+                        {overdueTasks.slice(0, 5).map((task, index) => (
+                          <motion.div
+                            key={task.id}
+                            className="flex items-center gap-3 p-3 bg-white/80 dark:bg-gray-800/50 rounded-lg hover:bg-white dark:hover:bg-gray-800 transition-colors cursor-pointer border border-orange-200/50 dark:border-orange-800/50"
+                            whileHover={{ scale: 1.02 }}
+                            onClick={() => startEditingTask(task.id)}
+                          >
+                            <div className={cn(
+                              "w-3 h-3 rounded-full",
+                              task.priority === 'Critical' ? 'bg-red-500' :
+                                task.priority === 'High' ? 'bg-orange-500' :
+                                  task.priority === 'Medium' ? 'bg-yellow-500' : 'bg-green-500'
+                            )} />
+                            <div className="flex-1 min-w-0">
+                              <p className="font-medium truncate">{task.title}</p>
+                              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                <Clock className="w-3 h-3" />
+                                {task.reminderAt ? (
+                                  <span>Due {format(new Date(task.reminderAt), 'MMM d')}</span>
+                                ) : (
+                                  <span>Created {format(new Date(task.createdAt), 'MMM d')}</span>
+                                )}
+                                <Badge variant="outline" className="text-xs">
+                                  {task.priority}
+                                </Badge>
+                                <span className="text-orange-600 dark:text-orange-400 font-medium">
+                                  {task.reminderAt 
+                                    ? differenceInDays(new Date(), new Date(task.reminderAt)) + ' days overdue'
+                                    : differenceInDays(new Date(), new Date(task.createdAt)) + ' days old'
+                                  }
+                                </span>
+                              </div>
+                            </div>
+                            <Button 
+                              size="sm" 
+                              variant="ghost"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                acceptTask(task.id);
+                              }}
+                              className="shrink-0"
+                            >
+                              <CheckCircle2 className="w-4 h-4" />
+                            </Button>
+                          </motion.div>
+                        ))}
+                        
+                        {overdueTasks.length > 5 && (
+                          <div className="text-center pt-2">
+                            <Button 
+                              variant="ghost" 
+                              size="sm"
+                              className="text-orange-600 dark:text-orange-400 hover:text-orange-800 dark:hover:text-orange-200"
+                              onClick={() => {
+                                // Open search with filter for overdue tasks
+                                setShowSearchBar(true);
+                                setSearch(''); // Clear search but could add overdue filter logic
+                              }}
+                            >
+                              View all {overdueTasks.length} overdue tasks
+                              <ChevronRight className="w-4 h-4 ml-1" />
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                </motion.div>
+              )}
 
               {/* Smart Task Prioritization */}
               <motion.div

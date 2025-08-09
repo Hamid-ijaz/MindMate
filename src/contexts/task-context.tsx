@@ -1,7 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode, useRef } from 'react';
-import type { Task, Accomplishment, TaskCategory, TaskDuration, TimeOfDay } from '@/lib/types';
+import type { Task, Accomplishment, TaskCategory, TaskDuration, TimeOfDay, Note } from '@/lib/types';
 import { taskService, accomplishmentService, userSettingsService } from '@/lib/firestore';
 import { useAuth } from './auth-context';
 import { useToast } from '@/hooks/use-toast';
@@ -35,6 +35,8 @@ interface TaskContextType {
   editingTask: Task | null;
   startEditingTask: (taskId: string) => void;
   stopEditingTask: () => void;
+  preFilledData: Partial<Task> | null;
+  setPreFilledData: (data: Partial<Task> | null) => void;
 }
 
 const TaskContext = createContext<TaskContextType | undefined>(undefined);
@@ -56,6 +58,7 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
 
   const [isSheetOpen, setIsSheetOpen] = useState(false);
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
+  const [preFilledData, setPreFilledData] = useState<Partial<Task> | null>(null);
   
   const editingTask = tasks.find(t => t.id === editingTaskId) || null;
 
@@ -420,7 +423,8 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
         setTaskDurations: handleSetTaskDurations,
         addAccomplishment, addTask, updateTask, deleteTask, acceptTask, rejectTask, muteTask, uncompleteTask, 
         isLoading: isLoading || authLoading,
-        isSheetOpen, setIsSheetOpen, editingTask, startEditingTask, stopEditingTask
+        isSheetOpen, setIsSheetOpen, editingTask, startEditingTask, stopEditingTask,
+        preFilledData, setPreFilledData
     }}>
       {children}
     </TaskContext.Provider>

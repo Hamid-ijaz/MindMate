@@ -12,6 +12,8 @@ import { TaskForm } from "./task-form";
 import { useTasks } from "@/contexts/task-context";
 import { Button } from "./ui/button";
 import { cn } from "@/lib/utils";
+import { VoiceTaskDialog } from "./voice-task-dialog";
+import { useState, useRef } from "react";
 
 
 export function ManageTasksSheet() {
@@ -51,26 +53,102 @@ interface AddTaskButtonProps extends React.ComponentProps<typeof Button> {
     isMobile?: boolean;
 }
 
-export function AddTaskButton({ isMobile, className, ...props }: AddTaskButtonProps) {
+export function AddTaskButton({ isMobile, className, onClick, ...props }: AddTaskButtonProps) {
     const { setIsSheetOpen } = useTasks();
+    const [isVoiceDialogOpen, setIsVoiceDialogOpen] = useState(false);
+    const pressTimerRef = useRef<NodeJS.Timeout | null>(null);
+    const isPressedRef = useRef(false);
+
+    const handleClick = (e: React.MouseEvent<HTMLButtonElement>) => {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        // Only open sheet if it wasn't a long press
+        if (!isPressedRef.current) {
+            setIsSheetOpen(true);
+            onClick?.(e);
+        }
+    };
+
+    const handleMouseDown = (e: React.MouseEvent<HTMLButtonElement>) => {
+        if (isMobile) {
+            isPressedRef.current = false;
+            pressTimerRef.current = setTimeout(() => {
+                isPressedRef.current = true;
+                setIsVoiceDialogOpen(true);
+                // Add haptic feedback if available
+                if (navigator.vibrate) {
+                    navigator.vibrate(50);
+                }
+            }, 500); // 500ms long press
+        }
+    };
+
+    const handleMouseUp = () => {
+        if (pressTimerRef.current) {
+            clearTimeout(pressTimerRef.current);
+            pressTimerRef.current = null;
+        }
+        // Reset after a short delay to allow click to process
+        setTimeout(() => {
+            isPressedRef.current = false;
+        }, 100);
+    };
+
+    const handleTouchStart = (e: React.TouchEvent<HTMLButtonElement>) => {
+        if (isMobile) {
+            isPressedRef.current = false;
+            pressTimerRef.current = setTimeout(() => {
+                isPressedRef.current = true;
+                setIsVoiceDialogOpen(true);
+                // Add haptic feedback if available
+                if (navigator.vibrate) {
+                    navigator.vibrate(50);
+                }
+            }, 500); // 500ms long press
+        }
+    };
+
+    const handleTouchEnd = () => {
+        if (pressTimerRef.current) {
+            clearTimeout(pressTimerRef.current);
+            pressTimerRef.current = null;
+        }
+        // Reset after a short delay to allow click to process
+        setTimeout(() => {
+            isPressedRef.current = false;
+        }, 100);
+    };
 
     if (isMobile) {
         return (
-            <Button 
-                onClick={() => setIsSheetOpen(true)}
-                className={cn("rounded-full h-14 w-14 shadow-lg", className)}
-                data-add-task-trigger
-                {...props}
-            >
-              <PlusCircle className="h-6 w-6" />
-              <span className="sr-only">Add Task</span>
-            </Button>
+            <>
+                <Button 
+                    onClick={handleClick}
+                    onMouseDown={handleMouseDown}
+                    onMouseUp={handleMouseUp}
+                    onMouseLeave={handleMouseUp}
+                    onTouchStart={handleTouchStart}
+                    onTouchEnd={handleTouchEnd}
+                    className={cn("rounded-full h-14 w-14 shadow-lg", className)}
+                    data-add-task-trigger
+                    {...props}
+                >
+                  <PlusCircle className="h-6 w-6" />
+                  <span className="sr-only">Add Task (Hold for voice)</span>
+                </Button>
+                
+                <VoiceTaskDialog 
+                    isOpen={isVoiceDialogOpen}
+                    onClose={() => setIsVoiceDialogOpen(false)}
+                />
+            </>
         )
     }
 
     return (
         <Button 
-            onClick={() => setIsSheetOpen(true)} 
+            onClick={handleClick} 
             className={className} 
             data-add-task-trigger
             {...props}

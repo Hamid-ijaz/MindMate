@@ -33,6 +33,7 @@ export async function GET(request: NextRequest) {
     // Get user info
     googleService.setTokens(tokens.accessToken, tokens.refreshToken);
     const userInfo = await googleService.getUserInfo();
+    console.log("🚀 > GET > userInfo:", userInfo)
 
     // Store the tokens securely (you'll need to implement this based on your auth system)
     // For now, we'll pass them as query parameters (not secure for production)

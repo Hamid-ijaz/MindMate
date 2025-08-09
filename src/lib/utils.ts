@@ -108,3 +108,16 @@ export function safeDateFormat(value?: number | string | Date, formatStr: string
     return fallback;
   }
 }
+
+/**
+ * Check if a task is overdue based on reminderAt date
+ */
+export function isTaskOverdue(reminderAt?: number | string | Date): boolean {
+  if (!reminderAt) return false;
+  
+  const reminderDate = safeDate(reminderAt);
+  if (!reminderDate) return false;
+  
+  const now = new Date();
+  return reminderDate < now;
+}

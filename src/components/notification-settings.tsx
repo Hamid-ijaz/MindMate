@@ -3,13 +3,14 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/auth-context';
 import { useToast } from '@/hooks/use-toast';
+import { usePushNotifications } from '@/hooks/use-push-notifications';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
-import { Bell, BellOff, Clock, Volume2, VolumeX, Smartphone, Monitor, Tablet, TestTube, X } from 'lucide-react';
+import { Bell, BellOff, Clock, Volume2, VolumeX, Smartphone, Monitor, Tablet, TestTube, X, Plus } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 
 interface NotificationPreferences {
@@ -35,6 +36,14 @@ interface NotificationPreferences {
 export function NotificationSettings() {
   const { user } = useAuth();
   const { toast } = useToast();
+  const { 
+    isSupported, 
+    permission, 
+    subscription, 
+    isLoading: pushLoading, 
+    requestPermission, 
+    subscribe: subscribeToPush 
+  } = usePushNotifications();
   const [preferences, setPreferences] = useState<NotificationPreferences>({
     enabled: false,
     taskReminders: true,
@@ -175,6 +184,66 @@ export function NotificationSettings() {
     if (/Mac/.test(userAgent)) return 'Mac';
     if (/Linux/.test(userAgent)) return 'Linux PC';
     return 'Unknown Device';
+  };
+
+  const handleAddDevice = async () => {
+    if (!isSupported) {
+      toast({
+        title: 'Not Supported',
+        description: 'Push notifications are not supported on this device.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    // Check if current device is already subscribed
+    const currentUserAgent = navigator.userAgent;
+    const deviceAlreadyExists = subscribedDevices.some(device => 
+      device.userAgent === currentUserAgent && device.isCurrentDevice
+    );
+
+    if (deviceAlreadyExists) {
+      toast({
+        title: 'Device Already Added',
+        description: 'This device is already subscribed to notifications.',
+        variant: 'default',
+      });
+      return;
+    }
+
+    // Check if already subscribed (by checking existing subscription)
+    if (subscription) {
+      toast({
+        title: 'Already Subscribed',
+        description: 'This device is already subscribed to push notifications.',
+        variant: 'default',
+      });
+      return;
+    }
+
+    // Request permission if not granted
+    if (permission !== 'granted') {
+      const granted = await requestPermission();
+      if (!granted) {
+        toast({
+          title: 'Permission Denied',
+          description: 'Please enable notifications to add this device.',
+          variant: 'destructive',
+        });
+        return;
+      }
+    }
+
+    // Subscribe to push notifications
+    const success = await subscribeToPush();
+    if (success) {
+      // Reload the device list to show the new device
+      await loadSubscribedDevices();
+      toast({
+        title: 'Device Added',
+        description: 'This device has been added to your notification list.',
+      });
+    }
   };
 
   const checkSubscriptionStatus = async () => {
@@ -740,9 +809,21 @@ export function NotificationSettings() {
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <h4 className="text-sm font-medium">Connected Devices</h4>
-                <Badge variant="outline" className="text-xs">
-                  {subscribedDevices.length} device{subscribedDevices.length !== 1 ? 's' : ''}
-                </Badge>
+                <div className="flex items-center gap-2">
+                  <Badge variant="outline" className="text-xs">
+                    {subscribedDevices.length} device{subscribedDevices.length !== 1 ? 's' : ''}
+                  </Badge>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={handleAddDevice}
+                    disabled={subscriptionStatus === 'subscribed'}
+                    className="text-xs h-7 px-2"
+                  >
+                    <Plus className="h-3 w-3 mr-1" />
+                    Add Device
+                  </Button>
+                </div>
               </div>
               <p className="text-xs text-muted-foreground">
                 Devices that have notifications enabled for your account

@@ -87,8 +87,17 @@ export class CalendarUtils {
 
   static filterTasksForDate(tasks: Task[], date: Date): Task[] {
     return tasks.filter(task => {
+      // Show tasks with scheduledAt dates
       if (task.scheduledAt) {
         return isSameDay(new Date(task.scheduledAt), date);
+      }
+      // Show tasks with reminderAt dates (scheduled/reminder tasks)
+      if (task.reminderAt) {
+        return isSameDay(new Date(task.reminderAt), date);
+      }
+      // Show Google Calendar synced tasks that have their toggle on
+      if (task.syncToGoogleCalendar && task.googleCalendarSyncStatus === 'synced' && task.reminderAt) {
+        return isSameDay(new Date(task.reminderAt), date);
       }
       return false;
     });
@@ -96,8 +105,19 @@ export class CalendarUtils {
 
   static filterTasksForPeriod(tasks: Task[], startDate: Date, endDate: Date): Task[] {
     return tasks.filter(task => {
+      // Show tasks with scheduledAt dates
       if (task.scheduledAt) {
         const taskDate = new Date(task.scheduledAt);
+        return taskDate >= startDate && taskDate <= endDate;
+      }
+      // Show tasks with reminderAt dates (scheduled/reminder tasks)
+      if (task.reminderAt) {
+        const taskDate = new Date(task.reminderAt);
+        return taskDate >= startDate && taskDate <= endDate;
+      }
+      // Show Google Calendar synced tasks that have their toggle on
+      if (task.syncToGoogleCalendar && task.googleCalendarSyncStatus === 'synced' && task.reminderAt) {
+        const taskDate = new Date(task.reminderAt);
         return taskDate >= startDate && taskDate <= endDate;
       }
       return false;

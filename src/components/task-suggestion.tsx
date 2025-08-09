@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { Priority, Task, TimeOfDay } from "@/lib/types";
-import { AlertCircle, Check, Sparkles, X, Loader2, Wand2, Edit, CalendarIcon, Repeat, ExternalLink, ChevronLeft, ChevronRight, Target, List, Clock } from "lucide-react";
+import { AlertCircle, Check, Sparkles, X, Loader2, Wand2, Edit, CalendarIcon, Repeat, ExternalLink, ChevronLeft, ChevronRight, Target, List, Clock, Keyboard } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { getRandomQuote } from "@/lib/motivational-quotes";
 import { MAX_REJECTIONS_BEFORE_PROMPT, REJECTION_HOURS } from "@/lib/constants";
@@ -16,7 +16,7 @@ import { AlertDialog, AlertDialogContent, AlertDialogDescription, AlertDialogFoo
 import { AddTaskButton } from "./manage-tasks-sheet";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "./ui/accordion";
 import { rewordTask } from '@/ai/flows/reword-task-flow';
-import { getCurrentTimeOfDay, getDefaultPriority, cn, safeDateFormat } from "@/lib/utils";
+import { getCurrentTimeOfDay, getDefaultPriority, cn, safeDateFormat, isTaskOverdue } from "@/lib/utils";
 import { TaskItem } from "@/components/task-item";
 import { Checkbox } from "./ui/checkbox";
 import { Label } from "./ui/label";
@@ -48,13 +48,25 @@ export function TaskSuggestion() {
   const { user } = useAuth();
   const [currentPriority, setCurrentPriority] = useState<Priority>('Medium');
 
-  // Set default priority to highest available when tasks change
+  // Set default priority to highest available when tasks change - considering recently rejected tasks
   useEffect(() => {
     const uncompletedTasks = tasks.filter(t => !t.completedAt && !t.isMuted && !t.parentId);
+    const now = Date.now();
+    const rejectionTimeout = REJECTION_HOURS * 60 * 60 * 1000;
+    
     const priorityOrderArr: Priority[] = ['Critical', 'High', 'Medium', 'Low'];
+    
     for (let i = 0; i < priorityOrderArr.length; i++) {
-      if (uncompletedTasks.some(task => task.priority === priorityOrderArr[i])) {
-        setCurrentPriority(priorityOrderArr[i]);
+      const priority = priorityOrderArr[i];
+      // Check if there are any non-recently-rejected tasks for this priority
+      const availableTasks = uncompletedTasks.filter(task => {
+        const isPriorityMatch = task.priority === priority;
+        const recentlyRejected = task.lastRejectedAt && (now - task.lastRejectedAt < rejectionTimeout);
+        return isPriorityMatch && !recentlyRejected;
+      });
+      
+      if (availableTasks.length > 0) {
+        setCurrentPriority(priority);
         break;
       }
     }
@@ -73,11 +85,76 @@ export function TaskSuggestion() {
     isOpen: false, 
     task: null
   });
+  const [showKeyboardHelp, setShowKeyboardHelp] = useState(false);
 
   const [api, setApi] = useState<CarouselApi>();
   const [currentSlide, setCurrentSlide] = useState(0);
 
   const [isPending, startTransition] = useTransition();
+
+  // Keyboard navigation support - moved before early returns to comply with Rules of Hooks
+  useEffect(() => {
+    const handleKeyPress = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+        return; // Don't trigger shortcuts when typing
+      }
+      
+      // Calculate current values inline to avoid dependency issues
+      const uncompletedTasks = tasks.filter(t => !t.completedAt && !t.isMuted && !t.parentId);
+      const now = Date.now();
+      const rejectionTimeout = REJECTION_HOURS * 60 * 60 * 1000;
+      const filtered = uncompletedTasks.filter(task => {
+        const isPriorityMatch = task.priority === currentPriority;
+        const recentlyRejected = task.lastRejectedAt && (now - task.lastRejectedAt < rejectionTimeout);
+        return isPriorityMatch && !recentlyRejected;
+      });
+      
+      const currentTask = filtered[currentSlide];
+      const hasPendingSubtasks = currentTask ? tasks.filter(t => t.parentId === currentTask.id && !t.completedAt).length > 0 : false;
+      
+      switch (e.key.toLowerCase()) {
+        case 'enter':
+        case ' ':
+          e.preventDefault();
+          if (currentTask && !hasPendingSubtasks) {
+            handleAccept();
+          }
+          break;
+        case 'x':
+        case 'escape':
+          e.preventDefault();
+          if (currentTask) {
+            handleReject();
+          }
+          break;
+        case 'arrowleft':
+        case 'a':
+          e.preventDefault();
+          api?.scrollPrev();
+          break;
+        case 'arrowright':
+        case 'd':
+          e.preventDefault();
+          api?.scrollNext();
+          break;
+        case 'e':
+          e.preventDefault();
+          if (currentTask) {
+            startEditingTask(currentTask.id);
+          }
+          break;
+        case 'b':
+          e.preventDefault();
+          if (currentTask) {
+            handleRewordClick();
+          }
+          break;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyPress);
+    return () => window.removeEventListener('keydown', handleKeyPress);
+  }, [tasks, currentPriority, currentSlide, api]); // Safe dependencies
 
   // Always default to 'Medium' on mount
   
@@ -127,10 +204,20 @@ export function TaskSuggestion() {
     return filtered;
   }, [tasks, currentPriority]);
 
-  // Reset carousel slide when possibleTasks change
-  useEffect(() => {
-    setCurrentSlide(0);
-  }, [possibleTasks.length]);
+  // Helper function to get available task count for each priority (consistent with possibleTasks filtering)
+  const getAvailableTaskCount = useMemo(() => {
+    const uncompletedTasks = tasks.filter(t => !t.completedAt && !t.isMuted && !t.parentId);
+    const now = Date.now();
+    const rejectionTimeout = REJECTION_HOURS * 60 * 60 * 1000;
+    
+    return (priority: Priority) => {
+      return uncompletedTasks.filter(task => {
+        const isPriorityMatch = task.priority === priority;
+        const recentlyRejected = task.lastRejectedAt && (now - task.lastRejectedAt < rejectionTimeout);
+        return isPriorityMatch && !recentlyRejected;
+      }).length;
+    };
+  }, [tasks]);
 
   // Reset carousel slide when possibleTasks change
   useEffect(() => {
@@ -300,33 +387,85 @@ export function TaskSuggestion() {
 
   if (possibleTasks.length === 0) {
     return (
-      <div className="w-full max-w-lg mx-auto">
-        <Card>
-          <CardContent className="p-6 flex flex-col items-center justify-center h-80">
-            <div className="flex justify-between items-center w-full mb-4">
-              <span className="flex items-center gap-2">
-                <AlertCircle className="w-6 h-6 text-primary" />
-                <span className="text-xl font-semibold">No matching tasks</span>
-              </span>
-              <Select
-                onValueChange={(value: string) => setCurrentPriority(value as Priority)}
-                value={currentPriority}
-              >
-                <SelectTrigger className="w-auto">
-                  <SelectValue placeholder="Priority..." />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Critical">Critical Priority</SelectItem>
-                  <SelectItem value="High">High Priority</SelectItem>
-                  <SelectItem value="Medium">Medium Priority</SelectItem>
-                  <SelectItem value="Low">Low Priority</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <p className="text-muted-foreground mt-2 text-center">No tasks match your current priority. Try a different priority or see other available tasks below.</p>
-          </CardContent>
-        </Card>
-        {/* {otherVisibleTasks && otherVisibleTasks.length > 0 && <OtherTasksList tasks={otherVisibleTasks} />} */}
+      <div className="w-full space-y-4">
+        {/* Consistent Priority Selector - Same design as when tasks are present */}
+        <motion.div 
+          variants={slideInFromTopVariant}
+          initial="initial"
+          animate="animate"
+          className="flex justify-between items-center px-2 mb-4"
+        >
+          <div className="flex gap-1 bg-muted/30 rounded-lg p-1 shadow-sm border min-w-fit overflow-x-auto scrollbar-thin">
+            {(['Critical', 'High', 'Medium', 'Low'] as Priority[]).map((priority) => {
+              const count = getAvailableTaskCount(priority);
+              const isActive = currentPriority === priority;
+              return (
+                <Button
+                  key={priority}
+                  variant={isActive ? "default" : "ghost"}
+                  size="sm"
+                  onClick={() => setCurrentPriority(priority)}
+                  className={cn(
+                    "h-7 px-1.5 md:px-2 text-xs font-medium transition-all duration-200 min-w-0 flex-shrink-0",
+                    isActive && "bg-primary text-primary-foreground shadow-sm",
+                    !isActive && "hover:bg-background/50",
+                    count === 0 && "opacity-50"
+                  )}
+                >
+                  <div className={cn(
+                    "w-2 h-2 rounded-full mr-1 flex-shrink-0",
+                    priority === 'Critical' && "bg-red-500",
+                    priority === 'High' && "bg-orange-500", 
+                    priority === 'Medium' && "bg-yellow-500",
+                    priority === 'Low' && "bg-green-500"
+                  )} />
+                  <span className="truncate hidden sm:inline">{priority}</span>
+                  <span className="truncate sm:hidden">{priority.charAt(0)}</span>
+                  {count > 0 && (
+                    <Badge 
+                      variant="secondary" 
+                      className="ml-1 h-3 min-w-3 text-xs px-1 bg-background/20"
+                    >
+                      {count}
+                    </Badge>
+                  )}
+                </Button>
+              );
+            })}
+          </div>
+          
+          {/* Keyboard shortcuts help button */}
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowKeyboardHelp(true)}
+                  className="h-7 w-7 p-0 opacity-60 hover:opacity-100"
+                >
+                  <Keyboard className="h-3 w-3" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Keyboard shortcuts</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        </motion.div>
+        
+        {/* No tasks message card */}
+        <div className="w-full max-w-lg mx-auto">
+          <Card>
+            <CardContent className="p-6 flex flex-col items-center justify-center h-80">
+              <div className="flex flex-col items-center w-full">
+                <AlertCircle className="w-12 h-12 text-muted-foreground mb-4" />
+                <h3 className="text-xl font-semibold mb-2">No {currentPriority.toLowerCase()} priority tasks</h3>
+                <p className="text-muted-foreground text-center">You're all caught up with {currentPriority.toLowerCase()} priority tasks! Try selecting a different priority level above.</p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       </div>
     );
   }
@@ -347,11 +486,11 @@ export function TaskSuggestion() {
         variants={slideInFromTopVariant}
         initial="initial"
         animate="animate"
-        className="flex justify-start px-2 mb-4 overflow-x-auto scrollbar-thin"
+        className="flex justify-between items-center px-2 mb-4"
       >
-        <div className="flex gap-1 bg-muted/30 rounded-lg p-1 shadow-sm border min-w-fit">
+        <div className="flex gap-1 bg-muted/30 rounded-lg p-1 shadow-sm border min-w-fit overflow-x-auto scrollbar-thin">
           {(['Critical', 'High', 'Medium', 'Low'] as Priority[]).map((priority) => {
-            const count = tasks.filter(t => !t.completedAt && !t.isMuted && !t.parentId && t.priority === priority).length;
+            const count = getAvailableTaskCount(priority);
             const isActive = currentPriority === priority;
             return (
               <Button
@@ -388,6 +527,25 @@ export function TaskSuggestion() {
             );
           })}
         </div>
+        
+        {/* Keyboard shortcuts help button */}
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowKeyboardHelp(true)}
+                className="h-7 w-7 p-0 opacity-60 hover:opacity-100"
+              >
+                <Keyboard className="h-3 w-3" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Keyboard shortcuts</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
       </motion.div>
 
       {/* Modern Carousel with Fixed Navigation */}
@@ -484,6 +642,11 @@ export function TaskSuggestion() {
                       <div className="space-y-4">
                         {/* Compact Badges */}
                         <div className="flex flex-wrap gap-1.5">
+                          {isTaskOverdue(task.reminderAt) && (
+                            <Badge variant="destructive" className="text-xs px-2 py-0.5 animate-pulse">
+                              🚨 Overdue
+                            </Badge>
+                          )}
                           <Badge variant="secondary" className="text-xs px-2 py-0.5">
                             {task.category}
                           </Badge>
@@ -767,6 +930,52 @@ export function TaskSuggestion() {
         itemId={shareDialog.task.id}
       />
     )}
+    
+    {/* Keyboard Shortcuts Help Dialog */}
+    <AlertDialog open={showKeyboardHelp} onOpenChange={setShowKeyboardHelp}>
+      <AlertDialogContent className="max-w-md">
+        <AlertDialogHeader>
+          <AlertDialogTitle className="flex items-center gap-2">
+            <Keyboard className="w-5 h-5 text-primary" />
+            Keyboard Shortcuts
+          </AlertDialogTitle>
+          <AlertDialogDescription>
+            Use these shortcuts to navigate tasks quickly
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <div className="space-y-3 py-4">
+          <div className="grid grid-cols-2 gap-2 text-sm">
+            <div className="flex items-center gap-2">
+              <kbd className="px-2 py-1 bg-muted rounded text-xs">Enter</kbd>
+              <span>Accept task</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <kbd className="px-2 py-1 bg-muted rounded text-xs">X</kbd>
+              <span>Reject task</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <kbd className="px-2 py-1 bg-muted rounded text-xs">←</kbd>
+              <span>Previous task</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <kbd className="px-2 py-1 bg-muted rounded text-xs">→</kbd>
+              <span>Next task</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <kbd className="px-2 py-1 bg-muted rounded text-xs">E</kbd>
+              <span>Edit task</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <kbd className="px-2 py-1 bg-muted rounded text-xs">B</kbd>
+              <span>Break down</span>
+            </div>
+          </div>
+        </div>
+        <AlertDialogFooter>
+          <Button onClick={() => setShowKeyboardHelp(false)}>Got it</Button>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
     </div>
   );
 }

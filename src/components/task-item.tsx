@@ -8,7 +8,7 @@ import { useTouchGestures } from '@/hooks/use-touch-gestures';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Check, Edit, Trash2, ChevronDown, ChevronUp, RotateCcw, CalendarIcon, Loader2, ExternalLink, Repeat, Plus } from 'lucide-react';
+import { Check, Edit, Trash2, ChevronDown, ChevronUp, RotateCcw, CalendarIcon, Loader2, ExternalLink, Repeat, Plus, Calendar } from 'lucide-react';
 import { TaskForm } from './task-form';
 import { SubtaskList } from './subtask-list';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
@@ -20,7 +20,7 @@ import { useCompletionAudio } from '@/hooks/use-completion-audio';
 import { ItemActionsDropdown } from './item-actions-dropdown';
 import { ShareDialog } from './share-dialog';
 import { SharingHistory } from './sharing-history';
-import { safeDate, safeDateFormat } from '@/lib/utils';
+import { safeDate, safeDateFormat, isTaskOverdue } from '@/lib/utils';
 
 
 interface TaskItemProps {
@@ -28,9 +28,10 @@ interface TaskItemProps {
   extraActions?: React.ReactNode;
   isSubtask?: boolean;
   isHistoryView?: boolean;
+  hideSubtaskButton?: boolean;
 }
 
-export function TaskItem({ task, extraActions, isSubtask = false, isHistoryView = false, className = "" }: TaskItemProps & { className?: string }) {
+export function TaskItem({ task, extraActions, isSubtask = false, isHistoryView = false, hideSubtaskButton = false, className = "" }: TaskItemProps & { className?: string }) {
   const { tasks, deleteTask, acceptTask, uncompleteTask, startEditingTask } = useTasks();
   const { deleteNotification } = useNotifications();
   const { handleTaskCompletion } = useCompletionAudio();
@@ -139,7 +140,7 @@ export function TaskItem({ task, extraActions, isSubtask = false, isHistoryView 
           </Button>
         )}
 
-        {!isSubtask && subtasks.length === 0 && (
+        {!isSubtask && subtasks.length === 0 && !hideSubtaskButton && (
           <Button variant="ghost" size="sm" onClick={() => setShowAddSubtask(!showAddSubtask)}>
             <Plus className="h-4 w-4 mr-2" />
             <span className="hidden md:inline">Add Subtask</span>
@@ -267,6 +268,16 @@ export function TaskItem({ task, extraActions, isSubtask = false, isHistoryView 
       {!isHistoryView && (
         <div className={`${isSubtask ? "px-3" : "px-4"} pb-3`}>
           <div className="flex items-center gap-2 flex-wrap">
+            {/* Overdue badge - shows first for high visibility */}
+            {!task.completedAt && isTaskOverdue(task.reminderAt) && (
+              <Badge 
+                variant="destructive" 
+                className="text-xs font-medium bg-red-600 text-white border-red-600 animate-pulse"
+              >
+                🚨 Overdue
+              </Badge>
+            )}
+            
             {/* Priority badge with icon */}
             <Badge
               variant={
@@ -314,6 +325,50 @@ export function TaskItem({ task, extraActions, isSubtask = false, isHistoryView 
                 </Tooltip>
               </TooltipProvider>
             )}
+            
+            {/* Google Calendar sync status */}
+            {task.syncToGoogleCalendar && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Badge 
+                      variant={task.googleCalendarSyncStatus === 'synced' ? 'default' : 
+                               task.googleCalendarSyncStatus === 'error' ? 'destructive' : 'secondary'} 
+                      className="text-xs flex items-center gap-1 cursor-default"
+                    >
+                      <Calendar className="h-3 w-3" />
+                      {task.googleCalendarSyncStatus === 'synced' ? 'Synced' :
+                       task.googleCalendarSyncStatus === 'error' ? 'Sync Error' :
+                       task.googleCalendarSyncStatus === 'pending' ? 'Syncing...' : 'Google Cal'}
+                    </Badge>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <div className="text-xs">
+                      {task.googleCalendarSyncStatus === 'synced' && (
+                        <>
+                          <p>Synced with Google Calendar</p>
+                          {task.googleCalendarUrl && (
+                            <p className="text-blue-600 underline cursor-pointer mt-1"
+                               onClick={() => window.open(task.googleCalendarUrl, '_blank')}>
+                              Open in Google Calendar
+                            </p>
+                          )}
+                        </>
+                      )}
+                      {task.googleCalendarSyncStatus === 'error' && (
+                        <p>Failed to sync: {task.googleCalendarError || 'Unknown error'}</p>
+                      )}
+                      {task.googleCalendarSyncStatus === 'pending' && (
+                        <p>Syncing with Google Calendar...</p>
+                      )}
+                      {!task.googleCalendarSyncStatus && (
+                        <p>Scheduled for Google Calendar sync</p>
+                      )}
+                    </div>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
           </div>
         </div>
       )}
@@ -335,16 +390,17 @@ export function TaskItem({ task, extraActions, isSubtask = false, isHistoryView 
               </Button>
             )}
 
-            {/* Add subtask button for tasks without subtasks */}
-            {!isSubtask && subtasks.length === 0 && (
+            {/* Add subtask button for tasks without subtasks - mobile optimized to show only icon */}
+            {!isSubtask && subtasks.length === 0 && !hideSubtaskButton && (
               <Button 
                 variant="ghost" 
                 size="sm" 
                 onClick={() => setShowAddSubtask(!showAddSubtask)}
-                className="h-8 px-2 text-xs"
+                className="h-8 w-8 p-0 sm:w-auto sm:px-2"
+                title="Add Subtask"
               >
-                <Plus className="h-3 w-3 mr-1" />
-                Add Subtask
+                <Plus className="h-3 w-3 sm:mr-1" />
+                <span className="hidden sm:inline text-xs">Add Subtask</span>
               </Button>
             )}
             
@@ -362,6 +418,28 @@ export function TaskItem({ task, extraActions, isSubtask = false, isHistoryView 
           {/* Action buttons */}
           <div className="flex items-center gap-1">
             {extraActions}
+            
+            {/* Google Calendar action button */}
+            {task.syncToGoogleCalendar && task.googleCalendarUrl && task.googleCalendarSyncStatus === 'synced' && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      onClick={() => window.open(task.googleCalendarUrl, '_blank')}
+                      size="sm"
+                      variant="ghost"
+                      className="h-8 w-8 p-0 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                    >
+                      <Calendar className="h-4 w-4" />
+                      <span className="sr-only">Open in Google Calendar</span>
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Open in Google Calendar</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
             
             {/* Complete button - prominent on mobile */}
             {!task.completedAt && !hasPendingSubtasks && (
