@@ -1,8 +1,8 @@
-name: Send DELETE to /api/notifications/comprehensive-check
+name: Send POST to /api/notifications/comprehensive-check
 
 on:
   schedule:
-    - cron: '*/30 * * * *' # Every 30 minutes
+    - cron: '*/1 * * * *' # Every 1 minutes
 
 jobs:
   call-api:
