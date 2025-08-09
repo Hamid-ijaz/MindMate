@@ -48,7 +48,57 @@ Here is a summary of the key features implemented so far:
     -   **Theme Picker**: Personalize the app's look with different color themes and light/dark modes.
     -   **Custom Settings**: Define your own task categories and default durations.
     -   **Smart Notifications**: Get reminders for upcoming tasks right in your browser.
--   **🔐 User Authentication**: Secure sign-up and login system to manage personal accounts and settings.
+
+## 🚀 Newly Implemented & Advanced Features
+
+- **Advanced Calendar & Time Management**
+    - Drag-and-drop task scheduling
+    - Time blocking interface
+    - Multiple calendar views (day/week/month/agenda)
+    - Pomodoro timer integration
+    - Conflict detection and resolution for calendar sync
+    - Mobile-optimized responsive design
+    - Advanced task visualization
+    - Session tracking and statistics
+
+- **External Calendar Sync**
+    - Google Calendar integration (sync, conflict resolution, two-way sync)
+    - Outlook Calendar integration (framework present)
+    - Sync token management for incremental sync
+
+- **Push Notification System**
+    - Comprehensive API for notifications (subscribe, unsubscribe, preferences, reminders)
+    - Smart notification scheduling (quiet hours, customizable timing, multiple types)
+    - Notification dashboard and history UI
+    - Advanced user preferences (sound, vibration, priority, grouping, max daily, etc.)
+    - Background sync for notifications and tasks (offline support via service worker)
+
+- **Task Management Enhancements**
+    - Recurring tasks (basic and advanced patterns)
+    - Time-blocked tasks
+    - Pomodoro session tracking
+    - Task reminders and overdue notifications
+
+- **Sharing & Collaboration**
+    - Share tasks and notes via unique links
+    - Permission management for shared items
+
+- **Notes System**
+    - Rich note-taking (grid layout, formatting, images, color-coding, search)
+
+- **Mobile & PWA Features**
+    - Offline support (service worker caches, background sync)
+    - App install prompt
+    - Responsive/mobile-first design
+
+- **User Customization**
+    - Theme picker (light/dark, color themes)
+    - Custom notification settings
+    - Custom task categories and durations
+
+- **Accessibility**
+    - Keyboard navigation
+    - Screen reader support
 
 ## 🛠️ Tech Stack
 
@@ -86,15 +136,43 @@ To get a local copy up and running, follow these simple steps.
     -   Create a Firebase project at [console.firebase.google.com](https://console.firebase.google.com/).
     -   Enable the **Firestore Database**.
     -   Copy your Firebase project configuration credentials.
-    -   Create a `.env.local` file in the root of the project and add your credentials:
-        ```env
-        NEXT_PUBLIC_FIREBASE_API_KEY=AIza...
-        NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=your-project-id.firebaseapp.com
-        NEXT_PUBLIC_FIREBASE_PROJECT_ID=your-project-id
-        NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=your-project-id.appspot.com
-        NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=...
-        NEXT_PUBLIC_FIREBASE_APP_ID=...
-        ```
+
+    -   Create a `.env.local` file in the root of the project and add your credentials. Below is a full list of required and optional fields:
+    
+    ```env
+    # Firebase Configuration
+    NEXT_PUBLIC_FIREBASE_API_KEY=your_firebase_api_key_here
+    NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=your_project.firebaseapp.com
+    NEXT_PUBLIC_FIREBASE_PROJECT_ID=your_project_id
+    NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=your_project.firebasestorage.app
+    NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=your_messaging_sender_id
+    NEXT_PUBLIC_FIREBASE_APP_ID=your_app_id
+    NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=your_measurement_id
+
+    # Google AI Configuration
+    GOOGLE_AI_API_KEY=your_google_ai_api_key_here
+
+    # External Calendar Integration - Google Calendar
+    GOOGLE_CLIENT_ID=your_google_oauth_client_id
+    GOOGLE_CLIENT_SECRET=your_google_oauth_client_secret
+    GOOGLE_REDIRECT_URI=http://localhost:3000/api/calendar/google
+
+    # External Calendar Integration - Microsoft Outlook
+    OUTLOOK_CLIENT_ID=your_outlook_app_client_id
+    OUTLOOK_CLIENT_SECRET=your_outlook_app_client_secret
+    OUTLOOK_REDIRECT_URI=http://localhost:3000/api/calendar/outlook
+
+    # Development Settings
+    NEXT_PUBLIC_USE_FIREBASE_EMULATOR=false
+
+    # Push Notification Configuration (VAPID Keys)
+    NEXT_PUBLIC_VAPID_PUBLIC_KEY=your_vapid_public_key_here
+    VAPID_PRIVATE_KEY=your_vapid_private_key_here
+
+    # Optional: Analytics
+    NEXT_PUBLIC_GA_MEASUREMENT_ID=your_ga_measurement_id
+    ```
+
     -   Refer to `FIREBASE_MIGRATION.md` for details on the Firestore data structure.
 
 4.  **Set up Genkit (for AI features):**

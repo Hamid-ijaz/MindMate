@@ -70,16 +70,42 @@ const LOOP_CONTROL_DOC = 'notificationLoop/control';
 
 async function setLoopRunningState(isRunning: boolean) {
   const db = getFirestore();
-  await db.doc(LOOP_CONTROL_DOC).set({ isLoopRunning: isRunning, updatedAt: new Date().toISOString() }, { merge: true });
-}
+  const pkDate = new Date();
+  const pkTimeString = pkDate.toLocaleString('en-US', {
+    timeZone: 'Asia/Karachi',
+    hour12: true,
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  });
+  // pkTimeString will be in "MM/DD/YYYY, hh:mm:ss AM/PM" format
+  await db.doc(LOOP_CONTROL_DOC).set(
+    { isLoopRunning: isRunning, updatedAt: pkTimeString },
+    { merge: true }
+  );
+  }
 
-async function getLoopRunningState(): Promise<boolean> {
-  const db = getFirestore();
-  const docRef = db.doc(LOOP_CONTROL_DOC);
-  const doc = await docRef.get();
-  // Update the 'updatedAt' field to current date/time whenever status is checked
-  await docRef.set({ updatedAt: new Date().toISOString() }, { merge: true });
-  return !!doc.data()?.isLoopRunning;
+  async function getLoopRunningState(): Promise<boolean> {
+    const db = getFirestore();
+    const docRef = db.doc(LOOP_CONTROL_DOC);
+    const doc = await docRef.get();
+    // Update the 'updatedAt' field to current date/time in Pakistan timezone in 12-hour AM/PM format
+    const pkDate = new Date();
+    const pkTimeString = pkDate.toLocaleString('en-US', {
+      timeZone: 'Asia/Karachi',
+      hour12: true,
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    });
+    await docRef.set({ updatedAt: pkTimeString }, { merge: true });
+    return !!doc.data()?.isLoopRunning;
 }
 
 let loopStartTime: Date | null = null;
@@ -305,6 +331,8 @@ async function startNotificationLoop() {
     
     while (Date.now() - startTime < maxRunTime && (await getLoopRunningState())) {
       try {
+        await setLoopRunningState(true);
+
         console.log(`Starting notification check cycle ${totalResults.cycles + 1}...`);
         const cycleStart = new Date();
         const cycleResults = await executeNotificationCheck();
