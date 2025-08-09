@@ -2,6 +2,7 @@
 "use client";
 
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -18,6 +19,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { NotificationSettings } from '@/components/notification-settings';
 import { CalendarConnections } from '@/components/calendar-connections';
 import { ThemePicker } from '@/components/theme-picker';
+import { PWASettings } from '@/components/pwa-settings';
 import { Trash2, Plus, Bell, BellOff, Palette } from 'lucide-react';
 import { Separator } from "@/components/ui/separator";
 import { Loader2 } from "lucide-react";
@@ -94,12 +96,16 @@ function SettingsSkeleton() {
   );
 }
 
-export default function SettingsPage() {
+import { NotificationProvider } from '@/contexts/notification-context';
+
+function SettingsPageInner() {
+  const searchParams = useSearchParams();
   const { user, updateUser, loading: authLoading } = useAuth();
   const { toast } = useToast();
   const { taskCategories, setTaskCategories, taskDurations, setTaskDurations, isLoading: tasksLoading } = useTasks();
   const { permission, requestPermission } = useNotifications();
   const [isRequestingPermission, setIsRequestingPermission] = useState(false);
+  const [calendarRefreshTrigger, setCalendarRefreshTrigger] = useState(0);
 
   const isLoading = authLoading || tasksLoading;
 
@@ -130,6 +136,8 @@ export default function SettingsPage() {
           lastName: user.lastName,
           email: user.email,
         });
+        setIsAdmin(user.email === "hamid.ijaz91@gmail.com");
+
     }
   }, [isLoading, user, profileForm]);
 
@@ -141,6 +149,53 @@ export default function SettingsPage() {
         });
      }
   }, [isLoading, taskCategories, taskDurations, taskSettingsForm]);
+
+  // Handle OAuth callback parameters
+  useEffect(() => {
+    const success = searchParams.get('success');
+    const error = searchParams.get('error');
+    const googleConnected = searchParams.get('google_connected');
+    const googleEmail = searchParams.get('google_email');
+    
+    if (success === 'google_calendar_connected' || googleConnected === 'true') {
+      toast({
+        title: "Connected Successfully",
+        description: `Google Calendar has been connected to your account${googleEmail ? ` (${decodeURIComponent(googleEmail)})` : ''}.`,
+      });
+      setCalendarRefreshTrigger(prev => prev + 1);
+      
+      // If we get the google_connected=true format, trigger a manual refresh
+      if (googleConnected === 'true') {
+        // Force refresh the calendar settings after a short delay
+        setTimeout(() => {
+          setCalendarRefreshTrigger(prev => prev + 1);
+        }, 1000);
+      }
+      
+      // Clean up URL parameters
+      window.history.replaceState({}, '', '/settings');
+    } else if (error) {
+      let errorMessage = "An error occurred.";
+      switch (error) {
+        case 'google_calendar_denied':
+          errorMessage = "Google Calendar access was denied.";
+          break;
+        case 'google_calendar_no_code':
+          errorMessage = "Authorization code was not received.";
+          break;
+        case 'google_calendar_connection_failed':
+          errorMessage = "Failed to connect to Google Calendar.";
+          break;
+      }
+      toast({
+        title: "Connection Failed",
+        description: errorMessage,
+        variant: "destructive",
+      });
+      // Clean up URL parameters
+      window.history.replaceState({}, '', '/settings');
+    }
+  }, [searchParams, toast]);
 
 
   const { fields: categoryFields, append: appendCategory, remove: removeCategory } = useFieldArray({
@@ -183,6 +238,42 @@ export default function SettingsPage() {
     setIsRequestingPermission(false);
   }
 
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    setIsAdmin(user?.email === "hamid.ijaz91@gmail.com");
+  }, [user]);
+  const [adminLoading, setAdminLoading] = useState(false);
+  const handleAdminPost = async () => {
+    // setAdminLoading(true);
+    try {
+      toast({ title: "POST Sending", description: "Comprehensive check POST request sent." });
+      const res = await fetch("/api/notifications/comprehensive-check", { method: "POST" });
+      // setAdminLoading(false);
+      if (res.ok) {
+        toast({ title: "POST Success", description: "Comprehensive check POST request sent." });
+      } else {
+        toast({ title: "POST Failed", description: "Request failed.", variant: "destructive" });
+      }
+    } catch (e) {
+      toast({ title: "POST Error", description: "An error occurred.", variant: "destructive" });
+    }
+  };
+  const handleAdminDelete = async () => {
+    setAdminLoading(true);
+    try {
+      const res = await fetch("/api/notifications/comprehensive-check", { method: "DELETE" });
+      if (res.ok) {
+        toast({ title: "DELETE Success", description: "Comprehensive check DELETE request sent." });
+      } else {
+        toast({ title: "DELETE Failed", description: "Request failed.", variant: "destructive" });
+      }
+    } catch (e) {
+      toast({ title: "DELETE Error", description: "An error occurred.", variant: "destructive" });
+    }
+    setAdminLoading(false);
+  };
+
   return (
     <motion.div 
       className="container mx-auto max-w-4xl py-8 md:py-12 px-4"
@@ -195,6 +286,25 @@ export default function SettingsPage() {
         <h1 className="text-3xl font-bold tracking-tighter sm:text-4xl">Settings</h1>
         <p className="mt-2 text-muted-foreground">Manage your account and application settings.</p>
       </motion.div>
+
+      {isAdmin && (
+        <motion.div variants={cardVariants}>
+          <Card className="mb-8 border-2 border-red-500">
+            <CardHeader>
+              <CardTitle>Admin Section</CardTitle>
+              <CardDescription>Developer tools for admin only</CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-4">
+              <Button variant="destructive" onClick={handleAdminPost} disabled={adminLoading}>
+                Send POST to /api/notifications/comprehensive-check
+              </Button>
+              <Button variant="outline" onClick={handleAdminDelete} disabled={adminLoading}>
+                Send DELETE to /api/notifications/comprehensive-check
+              </Button>
+            </CardContent>
+          </Card>
+        </motion.div>
+      )}
 
       {isLoading ? (
         <SettingsSkeleton />
@@ -391,18 +501,30 @@ export default function SettingsPage() {
             </motion.div>
 
             <motion.div variants={cardVariants}>
+              <PWASettings />
+            </motion.div>
+
+            <motion.div variants={cardVariants}>
               <Card>
                 <CardHeader>
                   <CardTitle>Calendar Integration</CardTitle>
                   <CardDescription>Connect external calendars to sync your tasks and events.</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <CalendarConnections />
+                  <CalendarConnections key={calendarRefreshTrigger} />
                 </CardContent>
               </Card>
             </motion.div>
         </motion.div>
       )}
     </motion.div>
+  );
+}
+
+export default function SettingsPageWrapper(props: any) {
+  return (
+    <NotificationProvider>
+      <SettingsPageInner {...props} />
+    </NotificationProvider>
   );
 }

@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack -p 9002",
+    "debug": "next dev -p 9002",
     "genkit:dev": "genkit start -- tsx src/ai/dev.ts",
     "genkit:watch": "genkit start -- tsx --watch src/ai/dev.ts",
     "build": "next build",
@@ -38,6 +39,7 @@
     "@radix-ui/react-toast": "^1.2.6",
     "@radix-ui/react-tooltip": "^1.1.8",
     "@types/web-push": "^3.6.4",
+    "@vercel/node": "^3.2.29",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
@@ -45,6 +47,7 @@
     "dotenv": "^16.5.0",
     "embla-carousel-react": "^8.6.0",
     "firebase": "^11.9.1",
+    "firebase-admin": "^12.7.0",
     "framer-motion": "^12.23.12",
     "genkit": "^1.13.0",
     "js-cookie": "^3.0.5",

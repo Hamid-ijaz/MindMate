@@ -3,7 +3,6 @@
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Separator } from '@/components/ui/separator';
@@ -12,364 +11,210 @@ import {
   CheckCircle, 
   AlertTriangle,
   RotateCw,
-  Settings,
   Link,
   XCircle
 } from 'lucide-react';
-import type { ExternalCalendar, CalendarProvider } from '@/lib/types';
+import { useGoogleCalendar } from '@/hooks/use-google-calendar';
+import { useAuth } from '@/contexts/auth-context';
+import { Skeleton } from '@/components/ui/skeleton';
 
 interface CalendarConnectionsProps {
-  onConnectionChange?: (provider: CalendarProvider, connected: boolean) => void;
+  onConnectionChange?: (provider: string, connected: boolean) => void;
 }
 
-interface ConnectionStatus {
+interface GoogleCalendarSettings {
   connected: boolean;
   email?: string;
-  error?: string;
-  syncing?: boolean;
-  lastSync?: Date;
+  accessToken?: string;
+  refreshToken?: string;
+  connectedAt?: any;
+  lastSync?: any;
 }
 
 export function CalendarConnections({ onConnectionChange }: CalendarConnectionsProps) {
-  const [googleStatus, setGoogleStatus] = useState<ConnectionStatus>({ connected: false });
-  const [outlookStatus, setOutlookStatus] = useState<ConnectionStatus>({ connected: false });
-  const [loading, setLoading] = useState<string | null>(null);
+  const [settings, setSettings] = useState<GoogleCalendarSettings | null>(null);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { user } = useAuth();
+  const { connect, disconnect, loading: googleCalendarLoading } = useGoogleCalendar();
 
-  // Check for OAuth callback parameters on component mount
-  useEffect(() => {
-    const urlParams = new URLSearchParams(window.location.search);
-    
-    // Handle Google OAuth callback
-    if (urlParams.get('google_connected') === 'true') {
-      const email = urlParams.get('google_email');
-      setGoogleStatus({ connected: true, email: email || undefined });
-      onConnectionChange?.('google', true);
-      
-      // Clean up URL parameters
-      const newUrl = window.location.pathname;
-      window.history.replaceState({}, document.title, newUrl);
-    }
+  // Load Google Calendar settings
+  const loadSettings = async () => {
+    if (!user?.email) return;
 
-    // Handle Outlook OAuth callback
-    if (urlParams.get('outlook_connected') === 'true') {
-      const email = urlParams.get('outlook_email');
-      setOutlookStatus({ connected: true, email: email || undefined });
-      onConnectionChange?.('outlook', true);
-      
-      // Clean up URL parameters
-      const newUrl = window.location.pathname;
-      window.history.replaceState({}, document.title, newUrl);
-    }
-
-    // Handle OAuth errors
-    const authError = urlParams.get('error');
-    if (authError) {
-      const message = urlParams.get('message');
-      setError(`Authentication failed: ${message || authError}`);
-      
-      // Clean up URL parameters
-      const newUrl = window.location.pathname;
-      window.history.replaceState({}, document.title, newUrl);
-    }
-  }, [onConnectionChange]);
-
-  const connectProvider = async (provider: CalendarProvider) => {
     try {
-      setLoading(provider);
+      setLoading(true);
       setError(null);
-
-      const response = await fetch(`/api/calendar/${provider}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ action: 'authorize' }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`Failed to initiate ${provider} authorization`);
-      }
-
-      const data = await response.json();
       
-      if (data.authUrl) {
-        // Redirect to OAuth provider
-        window.location.href = data.authUrl;
-      } else {
-        throw new Error('No authorization URL received');
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : `Failed to connect to ${provider}`);
-      setLoading(null);
-    }
-  };
+      console.log('Loading Google Calendar settings for:', user.email);
 
-  const disconnectProvider = async (provider: CalendarProvider) => {
-    try {
-      setLoading(provider);
-      setError(null);
-
-      const response = await fetch(`/api/calendar/${provider}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ action: 'disconnect' }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`Failed to disconnect ${provider}`);
-      }
-
-      // Update status
-      if (provider === 'google') {
-        setGoogleStatus({ connected: false });
-      } else if (provider === 'outlook') {
-        setOutlookStatus({ connected: false });
-      }
-
-      onConnectionChange?.(provider, false);
-      setLoading(null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : `Failed to disconnect from ${provider}`);
-      setLoading(null);
-    }
-  };
-
-  const testConnection = async (provider: CalendarProvider) => {
-    try {
-      setLoading(`test-${provider}`);
+      const response = await fetch('/api/calendar/google/settings');
       
-      const response = await fetch('/api/calendar/sync', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ 
-          action: 'test_connection',
-          provider,
-          calendarId: 'primary' 
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`Connection test failed for ${provider}`);
-      }
-
-      const data = await response.json();
+      console.log('API response status:', response.status);
       
-      if (data.connected) {
-        // Update last test time
-        const now = new Date();
-        if (provider === 'google') {
-          setGoogleStatus(prev => ({ ...prev, lastSync: now }));
-        } else if (provider === 'outlook') {
-          setOutlookStatus(prev => ({ ...prev, lastSync: now }));
+      if (!response.ok) {
+        if (response.status === 404) {
+          console.log('No Google Calendar settings found, setting connected: false');
+          setSettings({ connected: false });
+          return;
         }
-      }
-
-      setLoading(null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : `Connection test failed for ${provider}`);
-      setLoading(null);
-    }
-  };
-
-  const syncCalendar = async (provider: CalendarProvider) => {
-    try {
-      setLoading(`sync-${provider}`);
-      
-      // Update syncing status
-      if (provider === 'google') {
-        setGoogleStatus(prev => ({ ...prev, syncing: true }));
-      } else if (provider === 'outlook') {
-        setOutlookStatus(prev => ({ ...prev, syncing: true }));
-      }
-
-      const response = await fetch('/api/calendar/sync', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ 
-          action: 'sync_calendar',
-          calendarIds: ['primary'] 
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`Sync failed for ${provider}`);
+        throw new Error('Failed to load Google Calendar settings');
       }
 
       const data = await response.json();
-      
-      // Update sync status
-      const now = new Date();
-      if (provider === 'google') {
-        setGoogleStatus(prev => ({ ...prev, syncing: false, lastSync: now }));
-      } else if (provider === 'outlook') {
-        setOutlookStatus(prev => ({ ...prev, syncing: false, lastSync: now }));
-      }
-
-      setLoading(null);
+      console.log('Received Google Calendar settings:', data);
+      setSettings(data);
+      onConnectionChange?.('google', data.connected);
     } catch (err) {
-      // Update syncing status on error
-      if (provider === 'google') {
-        setGoogleStatus(prev => ({ ...prev, syncing: false }));
-      } else if (provider === 'outlook') {
-        setOutlookStatus(prev => ({ ...prev, syncing: false }));
-      }
-
-      setError(err instanceof Error ? err.message : `Sync failed for ${provider}`);
-      setLoading(null);
+      console.error('Error loading Google Calendar settings:', err);
+      setError(err instanceof Error ? err.message : 'Failed to load settings');
+      setSettings({ connected: false });
+    } finally {
+      setLoading(false);
     }
   };
 
-  const formatLastSync = (lastSync?: Date) => {
-    if (!lastSync) return 'Never';
+  useEffect(() => {
+    loadSettings();
+  }, [user?.email]);
+
+  // Check URL parameters for success/error and reload settings accordingly
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search);
+      const success = urlParams.get('success');
+      const error = urlParams.get('error');
+      
+      if (success === 'google_calendar_connected') {
+        console.log('Google Calendar connection success detected, reloading settings');
+        setTimeout(() => {
+          loadSettings();
+          // Clean URL without the success parameter to remove clutter from URL
+          const newUrl = new URL(window.location.href);
+          newUrl.searchParams.delete('success');
+          window.history.replaceState({}, '', newUrl.toString());
+        }, 1000);
+      } else if (success && success.includes('google_calendar')) {
+        console.log('Google Calendar connection success variant detected:', success);
+        setTimeout(() => {
+          loadSettings();
+          // Clean URL without the success parameter to remove clutter from URL
+          const newUrl = new URL(window.location.href);
+          newUrl.searchParams.delete('success');
+          window.history.replaceState({}, '', newUrl.toString());
+        }, 1000);
+      } else if (error && error.includes('google_calendar')) {
+        console.log('Google Calendar connection error detected:', error);
+        let errorMessage = 'Failed to connect to Google Calendar.';
+        
+        if (error.includes('api_disabled')) {
+          errorMessage = 'Google Calendar API is not enabled. The administrator needs to enable the Google Calendar API in the Google Cloud Console for this application to work properly.';
+        } else if (error.includes('permission_denied')) {
+          errorMessage = 'Permission denied by Google Calendar API. Please ensure the application has the necessary permissions and try again.';
+        } else if (error.includes('token_expired')) {
+          errorMessage = 'Authentication expired. Please disconnect and reconnect your Google Calendar.';
+        } else if (error.includes('connection_failed')) {
+          errorMessage = 'Google Calendar API configuration issue. Please ensure that the Google Calendar API is properly configured in the backend. Contact your administrator if this issue persists.';
+        } else if (error.includes('denied')) {
+          errorMessage = 'Google Calendar connection was denied. Please try again and grant the necessary permissions when prompted.';
+        } else if (error.includes('auth_required')) {
+          errorMessage = 'Authentication required. Please try connecting to Google Calendar again.';
+        } else if (error.includes('invalid_grant')) {
+          errorMessage = 'Authentication expired. Please disconnect and reconnect your Google Calendar.';
+        }
+        
+        setError(errorMessage);
+        // Clean URL without the error parameter to prevent showing error in URL
+        const newUrl = new URL(window.location.href);
+        newUrl.searchParams.delete('error');
+        window.history.replaceState({}, '', newUrl.toString());
+      }
+    }
+  }, []);
+
+  // Force reload when component receives new key prop (calendarRefreshTrigger)
+  useEffect(() => {
+    if (user?.email) {
+      console.log('CalendarConnections: Forced reload triggered');
+      loadSettings();
+    }
+  }, []);  // This will run on every new component mount due to key prop
+
+  // Also reload settings when the window comes back into focus (after OAuth redirect)
+  useEffect(() => {
+    const handleFocus = () => {
+      if (user?.email) {
+        console.log('Window focus detected - checking for calendar connection updates');
+        setTimeout(() => loadSettings(), 1000); // Small delay to ensure backend has processed
+      }
+    };
     
-    const now = new Date();
-    const diffMs = now.getTime() - lastSync.getTime();
-    const diffMins = Math.floor(diffMs / 60000);
+    const handleVisibilityChange = () => {
+      if (!document.hidden && user?.email) {
+        console.log('Visibility change detected - checking for calendar connection updates');
+        setTimeout(() => loadSettings(), 1000);
+      }
+    };
     
-    if (diffMins < 1) return 'Just now';
-    if (diffMins < 60) return `${diffMins}m ago`;
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
     
-    const diffHours = Math.floor(diffMins / 60);
-    if (diffHours < 24) return `${diffHours}h ago`;
-    
-    const diffDays = Math.floor(diffHours / 24);
-    return `${diffDays}d ago`;
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [user?.email]);
+
+  const handleConnect = async () => {
+    try {
+      setError(null); // Clear any previous errors
+      await connect();
+      // After successful connection, wait a bit and reload settings
+      setTimeout(() => {
+        loadSettings();
+      }, 2000);
+    } catch (err) {
+      console.error('Failed to connect to Google Calendar:', err);
+      setError(err instanceof Error ? err.message : 'Failed to connect to Google Calendar. Please try again.');
+    }
   };
 
-  const CalendarCard = ({ 
-    provider, 
-    title, 
-    description, 
-    status, 
-    color 
-  }: {
-    provider: CalendarProvider;
-    title: string;
-    description: string;
-    status: ConnectionStatus;
-    color: string;
-  }) => (
-    <Card className="relative">
-      <CardHeader className="pb-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <div className={`p-2 rounded-lg ${color}`}>
-              <Calendar className="h-5 w-5 text-white" />
-            </div>
-            <div>
-              <CardTitle className="text-lg">{title}</CardTitle>
-              <CardDescription>{description}</CardDescription>
-            </div>
-          </div>
-          <div className="flex items-center space-x-2">
-            {status.connected ? (
-              <Badge variant="default" className="text-xs bg-green-100 text-green-800 border-green-200">
-                <CheckCircle className="h-3 w-3 mr-1" />
-                Connected
-              </Badge>
-            ) : (
-              <Badge variant="secondary" className="text-xs">
-                <XCircle className="h-3 w-3 mr-1" />
-                Disconnected
-              </Badge>
-            )}
-          </div>
-        </div>
-      </CardHeader>
+  const handleDisconnect = async () => {
+    try {
+      await disconnect();
+      setSettings({ connected: false });
+      onConnectionChange?.('google', false);
+    } catch (err) {
+      console.error('Failed to disconnect from Google Calendar:', err);
+    }
+  };
 
-      <CardContent className="space-y-4">
-        {status.connected && (
-          <div className="bg-muted/50 rounded-lg p-3 space-y-2">
-            {status.email && (
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">Account:</span>
-                <span className="font-medium">{status.email}</span>
-              </div>
-            )}
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">Last sync:</span>
-              <span className={`font-medium ${status.syncing ? 'text-blue-600' : ''}`}>
-                {status.syncing ? 'Syncing...' : formatLastSync(status.lastSync)}
-              </span>
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <Card>
+          <CardHeader>
+            <div className="flex items-center space-x-2">
+              <Calendar className="h-5 w-5 text-blue-600" />
+              <CardTitle>Google Calendar</CardTitle>
             </div>
-          </div>
-        )}
-
-        <div className="flex items-center space-x-2">
-          {status.connected ? (
-            <>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => testConnection(provider)}
-                disabled={loading === `test-${provider}`}
-                className="flex-1"
-              >
-                {loading === `test-${provider}` ? (
-                  <RotateCw className="h-4 w-4 mr-2 animate-spin" />
-                ) : (
-                  <Link className="h-4 w-4 mr-2" />
-                )}
-                Test
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => syncCalendar(provider)}
-                disabled={loading === `sync-${provider}` || status.syncing}
-                className="flex-1"
-              >
-                {loading === `sync-${provider}` || status.syncing ? (
-                  <RotateCw className="h-4 w-4 mr-2 animate-spin" />
-                ) : (
-                  <RotateCw className="h-4 w-4 mr-2" />
-                )}
-                Sync
-              </Button>
-              <Button
-                variant="destructive"
-                size="sm"
-                onClick={() => disconnectProvider(provider)}
-                disabled={loading === provider}
-              >
-                Disconnect
-              </Button>
-            </>
-          ) : (
-            <Button
-              onClick={() => connectProvider(provider)}
-              disabled={loading === provider}
-              className="w-full"
-            >
-              {loading === provider ? (
-                <RotateCw className="h-4 w-4 mr-2 animate-spin" />
-              ) : (
-                <Link className="h-4 w-4 mr-2" />
-              )}
-              Connect {title}
-            </Button>
-          )}
-        </div>
-      </CardContent>
-    </Card>
-  );
+            <CardDescription>
+              Sync your tasks with Google Calendar
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Skeleton className="h-4 w-32" />
+              <Skeleton className="h-10 w-full" />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
-      <div>
-        <h3 className="text-lg font-semibold mb-2">Calendar Connections</h3>
-        <p className="text-sm text-muted-foreground">
-          Connect your external calendars to sync tasks and events automatically.
-        </p>
-      </div>
-
       {error && (
         <Alert variant="destructive">
           <AlertTriangle className="h-4 w-4" />
@@ -377,57 +222,143 @@ export function CalendarConnections({ onConnectionChange }: CalendarConnectionsP
         </Alert>
       )}
 
-      <div className="grid gap-4 md:grid-cols-2">
-        <CalendarCard
-          provider="google"
-          title="Google Calendar"
-          description="Sync with Google Calendar"
-          status={googleStatus}
-          color="bg-blue-600"
-        />
-        <CalendarCard
-          provider="outlook"
-          title="Outlook Calendar"
-          description="Sync with Microsoft Outlook"
-          status={outlookStatus}
-          color="bg-blue-500"
-        />
-      </div>
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <Calendar className="h-5 w-5 text-blue-600" />
+              <div>
+                <CardTitle>Google Calendar</CardTitle>
+                <CardDescription>
+                  Sync your tasks with Google Calendar automatically
+                </CardDescription>
+              </div>
+            </div>
+            <div className="flex items-center space-x-2">
+              {settings?.connected ? (
+                <Badge variant="default" className="bg-green-100 text-green-800 border-green-200">
+                  <CheckCircle className="h-3 w-3 mr-1" />
+                  Connected
+                </Badge>
+              ) : (
+                <Badge variant="secondary">
+                  <XCircle className="h-3 w-3 mr-1" />
+                  Not Connected
+                </Badge>
+              )}
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {error && (
+            <Alert variant="destructive">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertDescription>
+                {error}
+                {error.includes('Google Calendar API is not enabled') && (
+                  <div className="mt-2">
+                    <p className="text-sm">This is a configuration issue that needs to be resolved by the application administrator.</p>
+                  </div>
+                )}
+              </AlertDescription>
+            </Alert>
+          )}
+          
+          {settings?.connected ? (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg border border-green-200">
+                <div>
+                  <p className="text-sm font-medium text-green-900">Connected Account</p>
+                  <p className="text-sm text-green-700">{settings.email}</p>
+                  {settings.connectedAt && (
+                    <p className="text-xs text-green-600 mt-1">
+                      Connected {new Date(settings.connectedAt.seconds * 1000).toLocaleDateString()}
+                    </p>
+                  )}
+                  {settings.lastSync && (
+                    <p className="text-xs text-green-600">
+                      Last sync: {new Date(settings.lastSync.seconds * 1000).toLocaleString()}
+                    </p>
+                  )}
+                </div>
+              </div>
 
-      <Separator />
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium">Calendar Sync</p>
+                  <p className="text-sm text-muted-foreground">
+                    Tasks with calendar sync enabled will be automatically synced
+                  </p>
+                </div>
+              </div>
 
-      <div className="space-y-4">
-        <h4 className="font-medium">Sync Settings</h4>
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <div>
-              <label className="text-sm font-medium">Auto-sync</label>
-              <p className="text-xs text-muted-foreground">
-                Automatically sync calendars every 5 minutes
-              </p>
+              <Separator />
+
+              <div className="flex justify-between items-center">
+                <Button
+                  variant="outline"
+                  onClick={handleDisconnect}
+                  disabled={googleCalendarLoading}
+                  className="text-red-600 border-red-200 hover:bg-red-50"
+                >
+                  {googleCalendarLoading ? (
+                    <>
+                      <RotateCw className="h-4 w-4 mr-2 animate-spin" />
+                      Disconnecting...
+                    </>
+                  ) : (
+                    <>
+                      <XCircle className="h-4 w-4 mr-2" />
+                      Disconnect
+                    </>
+                  )}
+                </Button>
+              </div>
             </div>
-            <Switch defaultChecked />
-          </div>
-          <div className="flex items-center justify-between">
-            <div>
-              <label className="text-sm font-medium">Two-way sync</label>
-              <p className="text-xs text-muted-foreground">
-                Allow changes to sync both ways
-              </p>
+          ) : (
+            <div className="space-y-4">
+              <div className="text-center py-6">
+                <Calendar className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                <h3 className="text-lg font-medium mb-2">Connect Google Calendar</h3>
+                <p className="text-sm text-muted-foreground mb-4">
+                  Sync your tasks with Google Calendar to keep everything in one place. 
+                  Tasks with reminder dates will automatically appear in your calendar.
+                </p>
+                <Button
+                  onClick={handleConnect}
+                  disabled={googleCalendarLoading}
+                  className="bg-blue-600 hover:bg-blue-700"
+                >
+                  {googleCalendarLoading ? (
+                    <>
+                      <RotateCw className="h-4 w-4 mr-2 animate-spin" />
+                      Connecting...
+                    </>
+                  ) : (
+                    <>
+                      <Link className="h-4 w-4 mr-2" />
+                      Connect Google Calendar
+                    </>
+                  )}
+                </Button>
+              </div>
+
+              <Alert>
+                <AlertTriangle className="h-4 w-4" />
+                <AlertDescription>
+                  <strong>What happens when you connect:</strong>
+                  <ul className="list-disc list-inside mt-2 text-sm">
+                    <li>Tasks with "Sync to Google Calendar" enabled will be added to your calendar</li>
+                    <li>Reminder dates and times will be synced automatically</li>
+                    <li>You can open tasks directly in Google Calendar</li>
+                    <li>Your calendar data is stored securely</li>
+                  </ul>
+                </AlertDescription>
+              </Alert>
             </div>
-            <Switch defaultChecked />
-          </div>
-          <div className="flex items-center justify-between">
-            <div>
-              <label className="text-sm font-medium">Include completed tasks</label>
-              <p className="text-xs text-muted-foreground">
-                Sync completed tasks to external calendars
-              </p>
-            </div>
-            <Switch />
-          </div>
-        </div>
-      </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

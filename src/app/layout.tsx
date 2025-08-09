@@ -47,13 +47,6 @@ export const metadata: Metadata = {
     ],
   },
   manifest: '/manifest.json',
-  viewport: {
-    width: 'device-width',
-    initialScale: 1,
-    maximumScale: 1,
-    userScalable: false,
-    viewportFit: 'cover'
-  },
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
@@ -62,6 +55,14 @@ export const metadata: Metadata = {
   formatDetection: {
     telephone: false
   },
+};
+
+export const viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+  viewportFit: 'cover'
 };
 
 function AppInitializer({ children }: { children: React.ReactNode }) {
@@ -143,9 +144,9 @@ export default function RootLayout({
         <ErrorBoundary>
           <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
             <AuthProvider>
-              <TaskProvider>
-                <NoteProvider>
-                  <NotificationProvider>
+              <NotificationProvider>
+                <TaskProvider>
+                  <NoteProvider>
                     <AppInitializer>
                       <div className="relative flex min-h-screen flex-col">
                         <Header />
@@ -156,9 +157,9 @@ export default function RootLayout({
                       <ManageTasksSheet />
                       <KeyboardNavigation />
                     </AppInitializer>
-                  </NotificationProvider>
-                </NoteProvider>
-              </TaskProvider>
+                  </NoteProvider>
+                </TaskProvider>
+              </NotificationProvider>
             </AuthProvider>
           </ThemeProvider>
         </ErrorBoundary>

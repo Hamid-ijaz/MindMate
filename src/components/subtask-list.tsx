@@ -11,6 +11,7 @@ import { Badge } from './ui/badge';
 import { Card, CardContent } from './ui/card';
 import { PlusCircle, Edit, Trash2, Check, RotateCcw, Loader2 } from 'lucide-react';
 import { TaskForm } from './task-form';
+import { isTaskOverdue } from '@/lib/utils';
 
 interface SubtaskListProps {
   parentTask: Task;
@@ -193,6 +194,11 @@ export function SubtaskList({
 
                       {/* Mobile-optimized metadata */}
                       <div className="flex items-center gap-1.5 flex-wrap mb-2">
+                        {isTaskOverdue(subtask.reminderAt) && (
+                          <Badge variant="destructive" className="text-xs px-1.5 py-0.5 h-5 animate-pulse">
+                            🚨 Overdue
+                          </Badge>
+                        )}
                         <Badge
                           variant={
                             subtask.priority === 'Critical' ? 'destructive' :
@@ -306,7 +312,7 @@ export function SubtaskList({
                     </Button>
                   </div>
                   <TaskForm
-                    parentTaskId={parentTask.id}
+                    parentId={parentTask.id}
                     onFinished={handleFormFinish}
                     defaultValues={{
                       category: parentTask.category,

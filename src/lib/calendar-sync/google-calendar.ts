@@ -51,7 +51,10 @@ export class GoogleCalendarService {
   private static readonly DISCOVERY_URL = 'https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest';
   private static readonly SCOPES = [
     'https://www.googleapis.com/auth/calendar',
-    'https://www.googleapis.com/auth/calendar.events'
+    'https://www.googleapis.com/auth/calendar.events',
+    'openid',
+    'email',
+    'profile',
   ];
 
   private accessToken: string | null = null;

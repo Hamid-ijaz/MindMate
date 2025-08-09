@@ -179,6 +179,22 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
 export const useNotifications = (): NotificationContextType => {
   const context = useContext(NotificationContext);
   if (context === undefined) {
+    // Instead of throwing an error, provide safe defaults for SSR
+    if (typeof window === 'undefined') {
+      return {
+        permission: 'default',
+        requestPermission: () => {},
+        sendNotification: () => {},
+        notifications: [],
+        unreadCount: 0,
+        markAllAsRead: () => {},
+        markAsRead: () => {},
+        deleteNotification: async () => {},
+        clearAllNotifications: async () => {},
+        snoozeNotification: () => {},
+        setRecurringNotification: () => {},
+      };
+    }
     throw new Error('useNotifications must be used within a NotificationProvider');
   }
   return context;

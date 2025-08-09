@@ -1,11 +1,12 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode, useRef } from 'react';
-import type { Task, Accomplishment, TaskCategory, TaskDuration, TimeOfDay } from '@/lib/types';
+import type { Task, Accomplishment, TaskCategory, TaskDuration, TimeOfDay, Note } from '@/lib/types';
 import { taskService, accomplishmentService, userSettingsService } from '@/lib/firestore';
 import { useAuth } from './auth-context';
 import { useToast } from '@/hooks/use-toast';
 import { useNotifications } from './notification-context';
+import { usePushNotificationHelper } from '@/hooks/use-push-notification-helper';
 import { addDays, addMonths, addWeeks } from 'date-fns';
 
 // Default values for when a user has no settings yet.
@@ -34,6 +35,8 @@ interface TaskContextType {
   editingTask: Task | null;
   startEditingTask: (taskId: string) => void;
   stopEditingTask: () => void;
+  preFilledData: Partial<Task> | null;
+  setPreFilledData: (data: Partial<Task> | null) => void;
 }
 
 const TaskContext = createContext<TaskContextType | undefined>(undefined);
@@ -47,10 +50,15 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
   const [taskDurations, setTaskDurations] = useState<TaskDuration[]>(DEFAULT_DURATIONS);
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
+  
+  // Use notification context safely - it will provide defaults during SSR
+  const { sendNotification } = useNotifications();
+  const pushNotifications = usePushNotificationHelper();
 
 
   const [isSheetOpen, setIsSheetOpen] = useState(false);
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
+  const [preFilledData, setPreFilledData] = useState<Partial<Task> | null>(null);
   
   const editingTask = tasks.find(t => t.id === editingTaskId) || null;
 
@@ -86,10 +94,10 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
       const userTasks = await taskService.getTasks(user.email);
       setTasks(userTasks);
       // Load notes
-      if (taskService.getNotes) {
-        const userNotes = await taskService.getNotes(user.email);
-        setNotes(userNotes);
-      }
+      // if (taskService.getNotes) {
+      //   const userNotes = await taskService.getNotes(user.email);
+      //   setNotes(userNotes);
+      // }
       // Load accomplishments  
       const userAccomplishments = await accomplishmentService.getAccomplishments(user.email);
       setAccomplishments(userAccomplishments);
@@ -180,6 +188,11 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
       const parentTask = { ...parentTaskData, id: parentId, createdAt: now };
       setTasks(prev => [...prev, parentTask as Task]);
 
+      // Schedule push notification reminder if reminder time is set
+      if (parentTask.reminderAt) {
+        await pushNotifications.scheduleTaskReminder(parentTask as Task);
+      }
+
       if (subtasksToCreate.length > 0) {
         const newSubtasks = subtasksToCreate.map((sub, index) => ({
           ...sub,
@@ -190,6 +203,14 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
           createdAt: now + index + 1, // Ensure unique timestamps
         }));
         setTasks(prev => [...prev, ...newSubtasks as Task[]]);
+        
+        // Schedule reminders for subtasks too if they have reminder times
+        for (const subtask of newSubtasks) {
+          if (subtask.reminderAt) {
+            await pushNotifications.scheduleTaskReminder(subtask as Task);
+          }
+        }
+        
         toast({
           title: "Task and Subtasks Added!",
           description: `${subtasksToCreate.length} subtasks were created from your description.`
@@ -339,9 +360,9 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
     if (task) {
       const childrenIds = tasks.filter(t => t.parentId === id).map(t => t.id);
       const updates = { 
-        completedAt: null, 
-        lastRejectedAt: null,
-        notifiedAt: null,
+        completedAt: undefined, 
+        lastRejectedAt: undefined,
+        notifiedAt: undefined,
         rejectionCount: 0,
       };
 
@@ -397,12 +418,13 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
   
   return (
     <TaskContext.Provider value={{ 
-        tasks, accomplishments, taskCategories, taskDurations, 
+        tasks, notes, accomplishments, taskCategories, taskDurations, 
         setTaskCategories: handleSetTaskCategories, 
         setTaskDurations: handleSetTaskDurations,
         addAccomplishment, addTask, updateTask, deleteTask, acceptTask, rejectTask, muteTask, uncompleteTask, 
         isLoading: isLoading || authLoading,
-        isSheetOpen, setIsSheetOpen, editingTask, startEditingTask, stopEditingTask
+        isSheetOpen, setIsSheetOpen, editingTask, startEditingTask, stopEditingTask,
+        preFilledData, setPreFilledData
     }}>
       {children}
     </TaskContext.Provider>

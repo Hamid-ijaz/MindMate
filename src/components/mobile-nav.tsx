@@ -37,7 +37,7 @@ export function MobileNav() {
     { label: 'Notes', href: '/notes', icon: Notebook },
     { label: 'Chat', href: '/chat', icon: MessageSquare },
     { label: 'Pending', href: '/pending', icon: Clock, badge: 5 },
-    { label: 'Analytics', href: '/analytics', icon: TrendingUp, isNew: true },
+    { label: 'History', href: '/history', icon: TrendingUp },
   ];
 
   return (
@@ -119,36 +119,17 @@ export function MobileNav() {
             
             {/* Floating Add Button */}
             <div className="flex justify-center items-center">
-              <motion.div
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                className="relative"
+              <AddTaskButton 
+                isMobile 
+                className={cn(
+                  "h-14 w-14 rounded-2xl shadow-xl bg-gradient-to-br from-primary to-primary/80",
+                  "hover:from-primary/90 hover:to-primary/70 border-2 border-background",
+                  "transition-all duration-300 hover:shadow-2xl hover:shadow-primary/25",
+                  "relative z-10"
+                )}
               >
-                <AddTaskButton 
-                  isMobile 
-                  className={cn(
-                    "h-14 w-14 rounded-2xl shadow-xl bg-gradient-to-br from-primary to-primary/80",
-                    "hover:from-primary/90 hover:to-primary/70 border-2 border-background",
-                    "transition-all duration-300 hover:shadow-2xl hover:shadow-primary/25"
-                  )}
-                >
-                  <Plus className="h-6 w-6 text-primary-foreground" />
-                </AddTaskButton>
-                
-                {/* Floating ring animation */}
-                <motion.div
-                  animate={{ 
-                    scale: [1, 1.2, 1],
-                    opacity: [0.5, 0, 0.5]
-                  }}
-                  transition={{ 
-                    duration: 2,
-                    repeat: Infinity,
-                    ease: "easeInOut"
-                  }}
-                  className="absolute inset-0 rounded-2xl border-2 border-primary/30"
-                />
-              </motion.div>
+                <Plus className="h-6 w-6 text-primary-foreground" />
+              </AddTaskButton>
             </div>
           </div>
           

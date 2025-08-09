@@ -262,6 +262,13 @@ export interface Task {
   attendees?: string[]; // Email addresses of attendees
   isRecurring?: boolean; // Whether this task repeats
   originalTaskId?: string; // For recurring tasks, reference to original
+  // Google Calendar Integration
+  syncToGoogleCalendar?: boolean; // Whether this task should sync to Google Calendar
+  googleCalendarEventId?: string; // Google Calendar event ID
+  googleCalendarSyncStatus?: 'pending' | 'synced' | 'error' | 'deleted';
+  googleCalendarLastSync?: number; // Timestamp of last sync
+  googleCalendarUrl?: string; // Direct link to Google Calendar event
+  googleCalendarError?: string; // Error message if sync failed
 }
 
 export interface User {
@@ -271,6 +278,91 @@ export interface User {
   phone?: string;
   dob?: string;
   password?: string; // In a real app, this would be a hash
+  // Push Notification Settings
+  notificationPreferences?: NotificationPreferences;
+  // Google Calendar Integration Settings
+  googleCalendarSettings?: GoogleCalendarSettings;
+}
+
+// Google Calendar Integration Types
+export interface GoogleCalendarSettings {
+  isConnected: boolean;
+  accessToken?: string;
+  refreshToken?: string;
+  tokenExpiresAt?: number;
+  userEmail?: string;
+  defaultCalendarId?: string; // Which Google calendar to sync with
+  syncEnabled: boolean; // Global sync toggle
+  lastSyncAt?: number;
+  connectedAt?: number; // When the calendar was first connected
+  syncStatus?: 'idle' | 'syncing' | 'success' | 'error';
+  lastError?: string;
+}
+
+// Push Notification Types
+export interface NotificationPreferences {
+  pushEnabled: boolean;
+  emailEnabled: boolean;
+  reminderEnabled: boolean;
+  overdueEnabled: boolean;
+  quietHoursEnabled: boolean;
+  quietHours: {
+    start: string; // "22:00"
+    end: string;   // "08:00"
+  };
+  reminderTiming: {
+    beforeMinutes: number; // 15, 30, 60, etc.
+    smartTiming: boolean; // Use AI to optimize timing
+  };
+  notificationTypes: {
+    taskReminders: boolean;
+    overdueTasks: boolean;
+    recurringTasks: boolean;
+    collaborationUpdates: boolean;
+    systemNotifications: boolean;
+  };
+  deliverySettings: {
+    sound: boolean;
+    vibration: boolean;
+    priority: 'low' | 'normal' | 'high';
+    groupSimilar: boolean; // Group similar notifications
+    maxDaily: number; // Maximum notifications per day
+  };
+}
+
+// Push Subscription Types for Firestore
+export interface PushSubscriptionDocument {
+  id?: string;
+  userId: string; // Use userEmail for consistency
+  userEmail: string; // Primary identifier for user
+  endpoint: string;
+  keys: {
+    p256dh: string;
+    auth: string;
+  };
+  isActive: boolean;
+  subscribedAt: number;
+  lastUsedAt?: number;
+  deviceInfo: {
+    userAgent: string;
+    platform: string;
+    vendor: string;
+    browserName?: string;
+    browserVersion?: string;
+    deviceType?: 'mobile' | 'tablet' | 'desktop';
+  };
+  notificationStats: {
+    totalSent: number;
+    totalDelivered: number;
+    lastNotificationAt?: number;
+    failureCount: number;
+    lastFailureAt?: number;
+    lastFailureReason?: string;
+  };
+  preferences: {
+    enabled: boolean;
+    allowedTypes: string[]; // ['reminders', 'overdue', 'recurring', etc.]
+  };
 }
 
 export interface Accomplishment {

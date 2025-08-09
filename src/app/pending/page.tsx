@@ -76,8 +76,8 @@ function PendingTasksContent() {
   
   // Search and filter state
   const [search, setSearch] = useState("");
-  const [category, setCategory] = useState("");
-  const [priority, setPriority] = useState("");
+  const [category, setCategory] = useState("all");
+  const [priority, setPriority] = useState("all");
   const [sortBy, setSortBy] = useState<'date' | 'priority' | 'alphabetical'>('date');
   const [showFilters, setShowFilters] = useState(false);
   
@@ -94,8 +94,8 @@ function PendingTasksContent() {
       const matchesSearch = search === "" || 
         task.title.toLowerCase().includes(search.toLowerCase()) || 
         (task.description || "").toLowerCase().includes(search.toLowerCase());
-      const matchesCategory = category === "" || category === "all-categories" || task.category === category;
-      const matchesPriority = priority === "" || priority === "all-priorities" || task.priority === priority;
+      const matchesCategory = category === "all" || category === "" || category === "all-categories" || task.category === category;
+      const matchesPriority = priority === "all" || priority === "" || priority === "all-priorities" || task.priority === priority;
       
       return matchesSearch && matchesCategory && matchesPriority;
     });
@@ -317,7 +317,7 @@ function PendingTasksContent() {
                             <SelectValue placeholder="All Categories" />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="">All Categories</SelectItem>
+                            <SelectItem value="all">All Categories</SelectItem>
                             <SelectItem value="Work">💼 Work</SelectItem>
                             <SelectItem value="Personal">🏠 Personal</SelectItem>
                             <SelectItem value="Health">❤️ Health</SelectItem>
@@ -334,7 +334,7 @@ function PendingTasksContent() {
                             <SelectValue placeholder="All Priorities" />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="">All Priorities</SelectItem>
+                            <SelectItem value="all">All Priorities</SelectItem>
                             <SelectItem value="Critical">🔥 Critical</SelectItem>
                             <SelectItem value="High">⚡ High</SelectItem>
                             <SelectItem value="Medium">📋 Medium</SelectItem>

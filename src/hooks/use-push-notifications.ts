@@ -8,6 +8,14 @@ interface PushSubscription {
     p256dh: string;
     auth: string;
   };
+  userId?: string;
+  userEmail?: string;
+  deviceInfo?: {
+    userAgent: string;
+    platform: string;
+    vendor: string;
+  };
+  subscribedAt?: number;
 }
 
 interface NotificationOptions {
@@ -21,12 +29,16 @@ interface NotificationOptions {
     title: string;
     icon?: string;
   }>;
+  tag?: string;
+  requireInteraction?: boolean;
+  silent?: boolean;
 }
 
 export function usePushNotifications() {
   const [isSupported, setIsSupported] = useState(false);
   const [subscription, setSubscription] = useState<PushSubscription | null>(null);
   const [permission, setPermission] = useState<NotificationPermission>('default');
+  const [isLoading, setIsLoading] = useState(false);
   const { user } = useAuth();
   const { toast } = useToast();
 
@@ -65,6 +77,7 @@ export function usePushNotifications() {
       return false;
     }
 
+    setIsLoading(true);
     try {
       const permission = await Notification.requestPermission();
       setPermission(permission);
@@ -91,33 +104,47 @@ export function usePushNotifications() {
         variant: "destructive",
       });
       return false;
+    } finally {
+      setIsLoading(false);
     }
   }, [isSupported, toast]);
 
   const subscribe = useCallback(async (): Promise<boolean> => {
-    if (!isSupported || permission !== 'granted') {
+    if (!isSupported || permission !== 'granted' || !user) {
       return false;
     }
 
+    setIsLoading(true);
     try {
       const registration = await navigator.serviceWorker.ready;
       
-      // VAPID public key - replace with your actual VAPID public key
-      const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || 
-        'BEl62iUYgUivxIkv69yViEuiBIa40HI8PzJqJGb3b3_3bW-bBw8Y7vhM9qJ8PJwOEwGh1L3A4K4YxYK0e6R3cHE';
+      // Get VAPID public key from environment
+      const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+      
+      if (!vapidPublicKey) {
+        throw new Error('VAPID public key not configured');
+      }
       
       const subscription = await registration.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: urlBase64ToUint8Array(vapidPublicKey),
       });
 
-      // Convert subscription to our format
+      // Convert subscription to our format with user info
       const subscriptionData: PushSubscription = {
         endpoint: subscription.endpoint,
         keys: {
           p256dh: arrayBufferToBase64(subscription.getKey('p256dh')!),
           auth: arrayBufferToBase64(subscription.getKey('auth')!),
         },
+        userId: user.email, // Use email as consistent identifier
+        userEmail: user.email,
+        deviceInfo: {
+          userAgent: navigator.userAgent,
+          platform: navigator.platform,
+          vendor: navigator.vendor,
+        },
+        subscribedAt: Date.now(),
       };
 
       setSubscription(subscriptionData);
@@ -139,17 +166,22 @@ export function usePushNotifications() {
         variant: "destructive",
       });
       return false;
+    } finally {
+      setIsLoading(false);
     }
-  }, [isSupported, permission, toast]);
+  }, [isSupported, permission, toast, user]);
 
   const unsubscribe = useCallback(async (): Promise<boolean> => {
+    if (!user) return false;
+
+    setIsLoading(true);
     try {
       const registration = await navigator.serviceWorker.ready;
       const subscription = await registration.pushManager.getSubscription();
 
       if (subscription) {
         await subscription.unsubscribe();
-        await removeSubscription();
+        await removeSubscription(user.email);
         setSubscription(null);
 
         toast({
@@ -166,12 +198,16 @@ export function usePushNotifications() {
         description: "Failed to unsubscribe from push notifications.",
         variant: "destructive",
       });
+    } finally {
+      setIsLoading(false);
     }
 
     return false;
-  }, [toast]);
+  }, [toast, user]);
 
   const getSubscription = useCallback(async () => {
+    if (!user) return;
+
     try {
       const registration = await navigator.serviceWorker.ready;
       const subscription = await registration.pushManager.getSubscription();
@@ -183,13 +219,15 @@ export function usePushNotifications() {
             p256dh: arrayBufferToBase64(subscription.getKey('p256dh')!),
             auth: arrayBufferToBase64(subscription.getKey('auth')!),
           },
+          userId: user.email, // Use email as consistent identifier
+          userEmail: user.email,
         };
         setSubscription(subscriptionData);
       }
     } catch (error) {
       console.error('Error getting subscription:', error);
     }
-  }, []);
+  }, [user]);
 
   const sendNotification = useCallback(async (options: NotificationOptions) => {
     if (!isSupported || permission !== 'granted') {
@@ -204,8 +242,10 @@ export function usePushNotifications() {
         badge: options.badge || '/icon-192.png',
         data: options.data,
         actions: options.actions,
-        requireInteraction: true,
-        silent: false,
+        tag: options.tag,
+        requireInteraction: options.requireInteraction !== false,
+        silent: options.silent || false,
+        timestamp: Date.now(),
       });
 
       return true;
@@ -215,14 +255,24 @@ export function usePushNotifications() {
     }
   }, [isSupported, permission]);
 
+  const testNotification = useCallback(async () => {
+    return await sendNotification({
+      title: "Test Notification",
+      body: "This is how your task reminders will appear!",
+      data: { test: true },
+    });
+  }, [sendNotification]);
+
   return {
     isSupported,
     permission,
     subscription,
+    isLoading,
     requestPermission,
     subscribe,
     unsubscribe,
     sendNotification,
+    testNotification,
   };
 }
 
@@ -253,7 +303,7 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
 
 async function saveSubscription(subscription: PushSubscription) {
   try {
-    const response = await fetch('/api/push/subscribe', {
+    const response = await fetch('/api/push/manage', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -262,26 +312,41 @@ async function saveSubscription(subscription: PushSubscription) {
     });
 
     if (!response.ok) {
-      throw new Error('Failed to save subscription');
+      const errorData = await response.json();
+      throw new Error(`Failed to save subscription: ${errorData.error || 'Unknown error'}`);
     }
+
+    const result = await response.json();
+    console.log('Subscription saved successfully:', result);
   } catch (error) {
     console.error('Error saving subscription:', error);
+    throw error;
   }
 }
 
-async function removeSubscription() {
+async function removeSubscription(userEmail?: string) {
   try {
-    const response = await fetch('/api/push/unsubscribe', {
-      method: 'POST',
+    const queryParams = new URLSearchParams();
+    if (userEmail) {
+      queryParams.append('userEmail', userEmail);
+    }
+
+    const response = await fetch(`/api/push/manage?${queryParams.toString()}`, {
+      method: 'DELETE',
       headers: {
         'Content-Type': 'application/json',
       },
     });
 
     if (!response.ok) {
-      throw new Error('Failed to remove subscription');
+      const errorData = await response.json();
+      throw new Error(`Failed to remove subscription: ${errorData.error || 'Unknown error'}`);
     }
+
+    const result = await response.json();
+    console.log('Subscription removed successfully:', result);
   } catch (error) {
     console.error('Error removing subscription:', error);
+    throw error;
   }
 }

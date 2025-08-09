@@ -16,7 +16,7 @@ import {
   writeBatch
 } from 'firebase/firestore';
 import { db } from './firebase';
-import type { Task, User, Accomplishment, Note, SharedItem, ShareHistoryEntry, SharePermission, ShareCollaborator, ShareAnalytics } from './types';
+import type { Task, User, Accomplishment, Note, SharedItem, ShareHistoryEntry, SharePermission, ShareCollaborator, ShareAnalytics, GoogleCalendarSettings } from './types';
 
 // Collection names
 export const COLLECTIONS = {
@@ -401,6 +401,98 @@ export const userSettingsService = {
       userEmail,
       updatedAt: Timestamp.now()
     }, { merge: true });
+  }
+};
+
+// Google Calendar settings operations
+export const googleCalendarService = {
+  async getGoogleCalendarSettings(userEmail: string): Promise<GoogleCalendarSettings | null> {
+    try {
+      const userRef = doc(db, COLLECTIONS.USERS, userEmail);
+      const userSnap = await getDoc(userRef);
+      
+      if (userSnap.exists()) {
+        const userData = userSnap.data();
+        return userData.googleCalendarSettings || null;
+      }
+      return null;
+    } catch (error) {
+      console.error('Error getting Google Calendar settings:', error);
+      return null;
+    }
+  },
+
+  async updateGoogleCalendarSettings(userEmail: string, settings: Partial<GoogleCalendarSettings>): Promise<void> {
+    try {
+      const userRef = doc(db, COLLECTIONS.USERS, userEmail);
+      
+      // Get existing settings to preserve connectedAt if it exists
+      const existingDoc = await getDoc(userRef);
+      const existingSettings = existingDoc.exists() ? existingDoc.data()?.googleCalendarSettings : null;
+      
+      const updateData = {
+        ...settings,
+        lastSyncAt: settings.lastSyncAt || Date.now()
+      };
+      
+      // Only set connectedAt if it doesn't exist and we're connecting
+      if (!existingSettings?.connectedAt && settings.isConnected) {
+        updateData.connectedAt = Date.now();
+      }
+      
+      await updateDoc(userRef, {
+        [`googleCalendarSettings`]: updateData
+      });
+    } catch (error) {
+      console.error('Error updating Google Calendar settings:', error);
+      throw error;
+    }
+  },
+
+  async disconnectGoogleCalendar(userEmail: string): Promise<void> {
+    try {
+      const userRef = doc(db, COLLECTIONS.USERS, userEmail);
+      await updateDoc(userRef, {
+        [`googleCalendarSettings`]: {
+          isConnected: false,
+          syncEnabled: false,
+          accessToken: undefined,
+          refreshToken: undefined,
+          tokenExpiresAt: undefined,
+          userEmail: undefined,
+          defaultCalendarId: undefined,
+          syncStatus: 'idle',
+          lastError: undefined,
+          connectedAt: undefined,
+          lastSyncAt: undefined
+        }
+      });
+    } catch (error) {
+      console.error('Error disconnecting Google Calendar:', error);
+      throw error;
+    }
+  },
+
+  async syncTaskToGoogleCalendar(userEmail: string, taskId: string, syncData: {
+    googleCalendarEventId?: string;
+    syncStatus: 'pending' | 'synced' | 'error' | 'deleted';
+    lastSync?: number;
+    googleCalendarUrl?: string;
+    error?: string;
+  }): Promise<void> {
+    try {
+      const taskRef = doc(db, COLLECTIONS.TASKS, taskId);
+      await updateDoc(taskRef, {
+        googleCalendarEventId: syncData.googleCalendarEventId || null,
+        googleCalendarSyncStatus: syncData.syncStatus,
+        googleCalendarLastSync: syncData.lastSync || Date.now(),
+        googleCalendarUrl: syncData.googleCalendarUrl || null,
+        ...(syncData.error && { googleCalendarError: syncData.error })
+      });
+    } catch (error) {
+      console.error('Error updating task Google Calendar sync status:', error);
+      throw error;
+    }
   }
 };
 

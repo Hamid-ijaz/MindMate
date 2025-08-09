@@ -11,6 +11,7 @@
 		},
 		{
 			"type": "shell",
+			"runOn": "folderOpen",
 			"label": "Start Development Server",
 			"command": "npm run dev",
 			"group": "build",

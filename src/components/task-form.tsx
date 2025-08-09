@@ -30,7 +30,7 @@ import { getDefaultPriority } from "@/lib/utils";
 import { useState, useTransition, useEffect } from "react";
 import { summarizeUrl } from "@/ai/flows/summarize-url-flow";
 import { enhanceTask } from "@/ai/flows/enhance-task-flow";
-import { Loader2, Wand2 } from "lucide-react";
+import { Loader2, Wand2, Calendar as CalendarIcon2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { CalendarIcon } from "lucide-react";
@@ -38,6 +38,10 @@ import { Calendar } from "./ui/calendar";
 import { cn } from "@/lib/utils";
 import { format, setHours, setMinutes, startOfDay } from "date-fns";
 import { Separator } from "./ui/separator";
+import { Switch } from "./ui/switch";
+import { Label } from "./ui/label";
+import { useGoogleCalendar } from "@/hooks/use-google-calendar";
+import { Badge } from "./ui/badge";
 
 const formSchema = z.object({
   title: z.string().min(3, "Title must be at least 3 characters long."),
@@ -47,6 +51,9 @@ const formSchema = z.object({
   duration: z.coerce.number().min(1, "Duration is required"),
   timeOfDay: z.enum(timesOfDay),
   reminderAt: z.date().optional(),
+  location: z.string().optional(),
+  isAllDay: z.boolean().optional().default(true), // Always true in background
+  syncToGoogleCalendar: z.boolean().optional().default(false),
   recurrence: z.object({
       frequency: z.enum(['none', 'daily', 'weekly', 'monthly']),
       endDate: z.date().optional(),
@@ -80,14 +87,18 @@ const urlRegex = new RegExp(
 
 
 export function TaskForm({ task, onFinished, parentId, defaultValues: propDefaults, customSaveHandler, customAddHandler }: TaskFormProps) {
-  const { addTask, updateTask, taskCategories, taskDurations } = useTasks();
+  const { addTask, updateTask, taskCategories, taskDurations, preFilledData, setPreFilledData } = useTasks();
   const [isSummarizing, startSummarizeTransition] = useTransition();
   const [isEnhancing, startEnhanceTransition] = useTransition();
   const { toast } = useToast();
+  const { isConnected: googleCalendarConnected, syncTask } = useGoogleCalendar();
 
   const defaultValues: Partial<TaskFormValues> = task ? {
     ...task,
     duration: Number(task.duration) as TaskDuration,
+    location: task.location || "",
+    isAllDay: true, // Always true
+    syncToGoogleCalendar: task.syncToGoogleCalendar || false,
     reminderAt: task.reminderAt ? (() => {
       try {
         const date = new Date(task.reminderAt);
@@ -116,13 +127,16 @@ export function TaskForm({ task, onFinished, parentId, defaultValues: propDefaul
         })() : undefined,
     } : { frequency: 'none' },
   } : {
-    title: "",
-    description: "",
-    category: taskCategories[0] || "",
-    priority: typeof getDefaultPriority === 'function' ? getDefaultPriority() : "Medium",
-    duration: taskDurations[1] || 30,
-    timeOfDay: "Afternoon",
+    title: preFilledData?.title || "",
+    description: preFilledData?.description || "",
+    category: preFilledData?.category || taskCategories[0] || "",
+    priority: preFilledData?.priority || (typeof getDefaultPriority === 'function' ? getDefaultPriority() : "Medium"),
+    duration: preFilledData?.duration || taskDurations[1] || 30,
+    timeOfDay: preFilledData?.timeOfDay || "Afternoon",
     reminderAt: undefined,
+    location: "",
+    isAllDay: true, // Always true
+    syncToGoogleCalendar: false,
     recurrence: { frequency: 'none', endDate: undefined },
     ...propDefaults,
   };
@@ -135,6 +149,33 @@ export function TaskForm({ task, onFinished, parentId, defaultValues: propDefaul
   useEffect(() => {
     form.reset(defaultValues);
   }, [task, form, taskCategories, taskDurations]);
+
+  // Effect to reset form when preFilledData changes
+  useEffect(() => {
+    if (preFilledData && !task) {
+      const newDefaultValues: Partial<TaskFormValues> = {
+        title: preFilledData?.title || "",
+        description: preFilledData?.description || "",
+        category: preFilledData?.category || taskCategories[0] || "",
+        priority: preFilledData?.priority || (typeof getDefaultPriority === 'function' ? getDefaultPriority() : "Medium"),
+        duration: preFilledData?.duration || taskDurations[1] || 30,
+        timeOfDay: preFilledData?.timeOfDay || "Afternoon",
+        reminderAt: undefined,
+        location: "",
+        isAllDay: true,
+        syncToGoogleCalendar: false,
+        recurrence: { frequency: 'none', endDate: undefined },
+        ...propDefaults,
+      };
+
+      form.reset(newDefaultValues);
+      
+      // Clear preFilledData after using it to avoid reusing stale data
+      setTimeout(() => {
+        setPreFilledData(null);
+      }, 100);
+    }
+  }, [preFilledData, task, taskCategories, taskDurations, propDefaults, form, setPreFilledData]);
 
   const handleTitleBlur = (e: React.FocusEvent<HTMLInputElement>) => {
     // No summarization. Just leave the title as-is. If it's a URL, it will be rendered as a clickable link in the task card.
@@ -178,6 +219,7 @@ export function TaskForm({ task, onFinished, parentId, defaultValues: propDefaul
   const onSubmit = async (data: TaskFormValues) => {
     const taskData = {
         ...data,
+        isAllDay: true, // Always set to true
         reminderAt: data.reminderAt ? data.reminderAt.getTime() : undefined,
         recurrence: data.recurrence && data.recurrence.frequency !== 'none' ? {
             ...data.recurrence,
@@ -186,20 +228,58 @@ export function TaskForm({ task, onFinished, parentId, defaultValues: propDefaul
     }
 
     try {
+      let savedTaskId = task?.id;
+      
       if (task) {
         // Update existing task
         if (customSaveHandler) {
           await customSaveHandler(taskData as Partial<Task>);
         } else {
-          updateTask(task.id, taskData as Partial<Task>);
+          await updateTask(task.id, taskData as Partial<Task>);
         }
+        savedTaskId = task.id;
       } else {
         // Add new task
         if (customAddHandler) {
-          await customAddHandler({ ...taskData, parentId } as Omit<Task, 'id' | 'createdAt' | 'rejectionCount' | 'isMuted' | 'completedAt' | 'lastRejectedAt' | 'notifiedAt'>);
+          const newTask = await customAddHandler({ ...taskData, parentId } as Omit<Task, 'id' | 'createdAt' | 'rejectionCount' | 'isMuted' | 'completedAt' | 'lastRejectedAt' | 'notifiedAt'>);
+          savedTaskId = (newTask as any)?.id; // Assuming the handler returns the task with ID
         } else {
-          addTask({ ...taskData, parentId } as Omit<Task, 'id' | 'createdAt' | 'rejectionCount' | 'isMuted' | 'completedAt' | 'lastRejectedAt' | 'notifiedAt'>);
+          const newTask = await addTask({ ...taskData, parentId } as Omit<Task, 'id' | 'createdAt' | 'rejectionCount' | 'isMuted' | 'completedAt' | 'lastRejectedAt' | 'notifiedAt'>);
+          savedTaskId = (newTask as any)?.id;
         }
+      }
+
+      // Handle Google Calendar sync if enabled and connected
+      if (data.syncToGoogleCalendar && googleCalendarConnected && savedTaskId) {
+        try {
+          const syncAction = task ? 'update' : 'create';
+          const syncResult = await syncTask(savedTaskId, syncAction);
+          
+          if (syncResult.success) {
+            toast({
+              title: task ? "Task Updated" : "Task Created",
+              description: `Task ${syncResult.success ? 'synced with Google Calendar' : 'saved locally'}`,
+            });
+          } else {
+            toast({
+              title: task ? "Task Updated" : "Task Created", 
+              description: `Task saved, but Google Calendar sync failed: ${syncResult.error}`,
+              variant: "default", // Still show success since task was saved
+            });
+          }
+        } catch (syncError) {
+          console.error('Google Calendar sync error:', syncError);
+          toast({
+            title: task ? "Task Updated" : "Task Created",
+            description: "Task saved, but Google Calendar sync failed",
+            variant: "default",
+          });
+        }
+      } else {
+        toast({
+          title: task ? "Task Updated" : "Task Created",
+          description: "Your task has been saved successfully.",
+        });
       }
       
       onFinished?.();
@@ -249,6 +329,35 @@ export function TaskForm({ task, onFinished, parentId, defaultValues: propDefaul
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+        {/* Move Add Task Button to Top */}
+        <div className="flex flex-col-reverse sm:flex-row justify-between items-start sm:items-center gap-4 pb-4 border-b border-border/30">
+          <div className="w-full sm:w-auto">
+            <h2 className="text-xl font-semibold">
+              {task ? "Edit Task" : parentId ? "Add Sub-task" : "Add New Task"}
+            </h2>
+            <p className="text-sm text-muted-foreground mt-1">
+              {task ? "Update your task details" : "Create a new task to stay organized"}
+            </p>
+          </div>
+          <div className="flex gap-2 w-full sm:w-auto">
+            {onFinished && (
+              <Button 
+                variant="ghost" 
+                type="button" 
+                onClick={onFinished}
+                className="flex-1 sm:flex-none h-10 text-sm touch-manipulation"
+              >
+                Cancel
+              </Button>
+            )}
+            <Button 
+              type="submit"
+              className="flex-1 sm:flex-none h-10 text-sm font-medium touch-manipulation bg-primary hover:bg-primary/90"
+            >
+              {task ? "Save Changes" : parentId ? "Add Sub-task" : "Add Task"}
+            </Button>
+          </div>
+        </div>
         <FormField
           control={form.control}
           name="title"
@@ -540,24 +649,96 @@ export function TaskForm({ task, onFinished, parentId, defaultValues: propDefaul
             </div>
         </div>
 
-        <div className="flex flex-col-reverse sm:flex-row justify-end gap-2 sm:gap-2 pt-4 mt-6 border-t border-border/30">
-            {onFinished && (
-                <Button 
-                  variant="ghost" 
-                  type="button" 
-                  onClick={onFinished}
-                  className="w-full sm:w-auto h-10 sm:h-9 text-sm touch-manipulation"
-                >
-                  Cancel
-                </Button>
+        <Separator />
+        
+        {/* Google Calendar Integration - Compact & Mobile Responsive */}
+        <div className="space-y-3">
+            <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                    <CalendarIcon2 className="h-4 w-4 text-blue-600" />
+                    <h3 className="text-base font-medium">Google Calendar</h3>
+                    {googleCalendarConnected ? (
+                        <Badge variant="default" className="text-xs bg-green-100 text-green-800 border-green-200">
+                            Connected
+                        </Badge>
+                    ) : (
+                        <Badge variant="secondary" className="text-xs bg-orange-100 text-orange-800 border-orange-200">
+                            Not Connected
+                        </Badge>
+                    )}
+                </div>
+            </div>
+
+            {!googleCalendarConnected && (
+                <div className="bg-orange-50 border border-orange-200 rounded-lg p-3">
+                    <p className="text-xs sm:text-sm text-orange-800">
+                        Connect your Google Calendar in 
+                        <a href="/settings" className="font-medium underline ml-1">Settings</a> to sync tasks.
+                    </p>
+                </div>
             )}
-            <Button 
-              type="submit"
-              className="w-full sm:w-auto h-10 sm:h-9 text-sm font-medium touch-manipulation bg-primary hover:bg-primary/90"
-            >
-              {task ? "Save Changes" : parentId ? "Add Sub-task" : "Add Task"}
-            </Button>
+            
+            {/* Compact Sync Toggle */}
+            <FormField
+                control={form.control}
+                name="syncToGoogleCalendar"
+                render={({ field }) => (
+                    <FormItem>
+                        <div className="flex items-center space-x-2">
+                            <FormControl>
+                                <Switch
+                                    checked={field.value && googleCalendarConnected}
+                                    onCheckedChange={(checked) => {
+                                        if (!googleCalendarConnected && checked) {
+                                            toast({
+                                                title: "Google Calendar Not Connected",
+                                                description: "Please connect your Google Calendar in Settings first.",
+                                                variant: "destructive"
+                                            });
+                                            return;
+                                        }
+                                        field.onChange(checked);
+                                    }}
+                                    disabled={!googleCalendarConnected}
+                                    className="data-[state=checked]:bg-blue-600"
+                                />
+                            </FormControl>
+                            <div className="space-y-0">
+                                <FormLabel className="text-sm font-normal cursor-pointer">
+                                    Sync to Google Calendar
+                                </FormLabel>
+                                <FormDescription className="text-xs text-muted-foreground">
+                                    Add this task to your calendar when created
+                                </FormDescription>
+                            </div>
+                        </div>
+                        <FormMessage />
+                    </FormItem>
+                )}
+            />
+            
+            {/* Location Field - Only shown when sync is enabled */}
+            {form.watch('syncToGoogleCalendar') && (
+                <FormField
+                    control={form.control}
+                    name="location"
+                    render={({ field }) => (
+                        <FormItem>
+                            <FormLabel className="text-sm">Location (Optional)</FormLabel>
+                            <FormControl>
+                                <Input 
+                                    placeholder="e.g., Conference Room A, 123 Main St" 
+                                    {...field} 
+                                    className="text-sm h-9"
+                                />
+                            </FormControl>
+                            <FormMessage />
+                        </FormItem>
+                    )}
+                />
+            )}
         </div>
+
       </form>
     </Form>
   );

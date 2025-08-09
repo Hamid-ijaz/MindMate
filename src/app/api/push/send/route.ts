@@ -3,18 +3,33 @@ import webpush from 'web-push';
 
 // Configure VAPID keys (you should set these as environment variables)
 const vapidKeys = {
-  publicKey: process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || 'BKzpVHtE7e5HZtyN-ZzfnWQh8JMN3XW2btzp4PPdEqoofR_51byv1858Vmj5Aufc62w59PxBZWVb_PNbU9ehsRQ',
-  privateKey: process.env.VAPID_PRIVATE_KEY || 'wBh74X3AO3rerrBHhSTQhtB176H7h5U17snwWfagcFA'
+  publicKey: process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY,
+  privateKey: process.env.VAPID_PRIVATE_KEY
 };
 
-webpush.setVapidDetails(
-  'mailto:hamid.ijaz91@gmail.com',
-  vapidKeys.publicKey,
-  vapidKeys.privateKey
-);
+// Only configure webpush if both keys are available
+if (vapidKeys.publicKey && vapidKeys.privateKey) {
+  try {
+    webpush.setVapidDetails(
+      'mailto:hamid.ijaz91@gmail.com',
+      vapidKeys.publicKey,
+      vapidKeys.privateKey
+    );
+  } catch (error) {
+    console.warn('Failed to configure VAPID keys:', error);
+  }
+}
 
 export async function POST(request: NextRequest) {
   try {
+    // Check if VAPID keys are configured
+    if (!vapidKeys.publicKey || !vapidKeys.privateKey) {
+      return NextResponse.json(
+        { error: 'Push notifications not configured' },
+        { status: 503 }
+      );
+    }
+
     const { subscription, title, body, data } = await request.json();
 
     if (!subscription) {

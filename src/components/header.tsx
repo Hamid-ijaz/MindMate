@@ -24,7 +24,7 @@ import {
 } from 'lucide-react';
 import { ThemePicker } from './theme-picker';
 import { ThemePickerDialog } from './theme-picker-dialog';
-import { NotificationHistory } from './notification-history';
+import { NotificationDropdown } from './notification-dropdown';
 import { PWAInstallPrompt } from './pwa-install-prompt';
 import { KeyboardShortcutsHelp } from './keyboard-shortcuts-help';
 import { ClientOnly } from './ui/client-only';
@@ -88,6 +88,91 @@ export function Header() {
   const [isCommandOpen, setIsCommandOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [isThemePickerOpen, setIsThemePickerOpen] = useState(false);
+
+  // Lock body scroll when mobile menu is open
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    
+    if (isMobileMenuOpen) {
+      // Store current scroll position
+      const scrollY = window.scrollY;
+      
+      // Lock body scroll and prevent scrolling
+      document.body.style.overflow = 'hidden';
+      document.body.style.position = 'fixed';
+      document.body.style.top = `-${scrollY}px`;
+      document.body.style.left = '0';
+      document.body.style.right = '0';
+      document.body.style.width = '100%';
+      
+      // Enhanced touch action prevention
+      document.body.style.touchAction = 'none';
+      (document.body.style as any).webkitOverflowScrolling = 'touch';
+      
+      // Prevent overscroll behavior
+      document.body.style.overscrollBehavior = 'none';
+      document.documentElement.style.overscrollBehavior = 'none';
+      
+      // Store scroll position to restore later
+      document.body.dataset.scrollY = scrollY.toString();
+      
+      // Prevent default touch events on the document
+      const preventTouchMove = (e: TouchEvent) => {
+        // Allow scrolling within the mobile menu only
+        const target = e.target as Element;
+        const menuContainer = target.closest('[data-mobile-menu-content]');
+        if (!menuContainer) {
+          e.preventDefault();
+        }
+      };
+      
+      document.addEventListener('touchmove', preventTouchMove, { passive: false });
+      
+      return () => {
+        document.removeEventListener('touchmove', preventTouchMove);
+      };
+    } else {
+      // Restore scroll position
+      const scrollY = document.body.dataset.scrollY;
+      
+      // Reset all styles
+      document.body.style.overflow = '';
+      document.body.style.position = '';
+      document.body.style.top = '';
+      document.body.style.left = '';
+      document.body.style.right = '';
+      document.body.style.width = '';
+      document.body.style.touchAction = '';
+      (document.body.style as any).webkitOverflowScrolling = '';
+      document.body.style.overscrollBehavior = '';
+      document.documentElement.style.overscrollBehavior = '';
+      
+      // Restore scroll position
+      if (scrollY) {
+        window.scrollTo(0, parseInt(scrollY));
+        delete document.body.dataset.scrollY;
+      }
+    }
+
+    // Cleanup on unmount
+    return () => {
+      document.body.style.overflow = '';
+      document.body.style.position = '';
+      document.body.style.top = '';
+      document.body.style.left = '';
+      document.body.style.right = '';
+      document.body.style.width = '';
+      document.body.style.touchAction = '';
+      (document.body.style as any).webkitOverflowScrolling = '';
+      document.body.style.overscrollBehavior = '';
+      document.documentElement.style.overscrollBehavior = '';
+      if (document.body.dataset.scrollY) {
+        const scrollY = document.body.dataset.scrollY;
+        window.scrollTo(0, parseInt(scrollY));
+        delete document.body.dataset.scrollY;
+      }
+    };
+  }, [isMobileMenuOpen]);
 
   // Get OS-appropriate modifier keys
   const modifiers = getModifiers();
@@ -518,9 +603,11 @@ export function Header() {
                 </div>
 
                 {/* Utility Buttons */}
-                <div className="hidden md:flex items-center gap-1">
-                  <PWAInstallPrompt />
-                  <NotificationHistory />
+                <div className="flex items-center gap-1">
+                  <div className="hidden md:block">
+                    <PWAInstallPrompt />
+                  </div>
+                  <NotificationDropdown />
                 </div>
 
                 {/* User Menu */}
@@ -554,21 +641,6 @@ export function Header() {
                         Keyboard Shortcuts
                       </DropdownMenuItem>
                     </DropdownMenuGroup>
-                    
-                    <div className="md:hidden">
-                      <DropdownMenuSeparator />
-                      <DropdownMenuGroup>
-                        <DropdownMenuItem>
-                          <div className="flex items-center justify-between w-full">
-                            <span className="flex items-center">
-                              <Bell className="h-4 w-4 mr-2" />
-                              Notifications
-                            </span>
-                            <NotificationHistory />
-                          </div>
-                        </DropdownMenuItem>
-                      </DropdownMenuGroup>
-                    </div>
                     
                     <DropdownMenuSeparator />
                     <DropdownMenuItem onClick={handleLogout} className="text-destructive">
@@ -614,86 +686,103 @@ export function Header() {
         <AnimatePresence>
           {isMobileMenuOpen && isAuthenticated && (
             <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: "auto" }}
-              exit={{ opacity: 0, height: 0 }}
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
               transition={{ duration: 0.3, ease: "easeInOut" }}
-              className="lg:hidden border-t bg-background/98 backdrop-blur-sm"
+              className="lg:hidden fixed inset-0 top-16 z-[60] bg-background border-t"
+              style={{ minHeight: 'calc(100vh - 4rem)' }}
             >
-              <div className="container py-6 px-4">
-                <div className="space-y-6">
-                  {/* Search Bar */}
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      placeholder="Search anything..."
-                      className="pl-10 h-11"
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      onFocus={() => setIsCommandOpen(true)}
-                    />
-                  </div>
-
-                  {/* Quick Actions */}
-                  <div className="flex gap-2">
-                    <AddTaskButton className="flex-1" />
-                    <Button variant="outline" size="default" className="px-6">
-                      <MessageSquare className="h-4 w-4 mr-2" />
-                      AI Chat
-                    </Button>
-                  </div>
-
-                  {/* Primary Navigation */}
-                  <div>
-                    <h3 className="text-sm font-semibold text-muted-foreground mb-3 px-2">
-                      Workspace
-                    </h3>
-                    <div className="space-y-1">
-                      {primaryItems.map((item) => (
-                        <NavLink key={item.href} item={item} mobile showDescription />
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Secondary Navigation */}
-                  <div>
-                    <h3 className="text-sm font-semibold text-muted-foreground mb-3 px-2">
-                      Tools & Analytics
-                    </h3>
-                    <div className="space-y-1">
-                      {[...secondaryItems, ...toolsItems].map((item) => (
-                        <NavLink key={item.href} item={item} mobile showDescription />
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Admin Navigation */}
-                  <div>
-                    <h3 className="text-sm font-semibold text-muted-foreground mb-3 px-2">
-                      Task Management
-                    </h3>
-                    <div className="space-y-1">
-                      {adminItems.map((item) => (
-                        <NavLink key={item.href} item={item} mobile showDescription />
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Mobile Utilities */}
-                  <div className="pt-4 border-t">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <ThemePicker />
-                        <PWAInstallPrompt />
+              <div className="h-full flex flex-col min-h-0">
+                <div 
+                  data-mobile-menu-content
+                  className="flex-1 overflow-y-auto overscroll-contain scrollbar-thin scrollbar-thumb-muted-foreground/20 scrollbar-track-transparent"
+                  style={{ 
+                    touchAction: 'pan-y',
+                    WebkitOverflowScrolling: 'touch',
+                    overscrollBehavior: 'contain',
+                    minHeight: 'calc(100vh - 4rem)'
+                  }}
+                >
+                  <div className="container py-6 px-4 min-h-full">
+                    <div className="space-y-6">
+                      {/* Search Bar */}
+                      <div className="relative">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Input
+                          placeholder="Search anything..."
+                          className="pl-10 h-11"
+                          value={searchQuery}
+                          onChange={(e) => setSearchQuery(e.target.value)}
+                          onFocus={() => setIsCommandOpen(true)}
+                        />
                       </div>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setIsShortcutsHelpOpen(true)}
-                      >
-                        <Keyboard className="h-4 w-4 mr-2" />
-                        Shortcuts
-                      </Button>
+
+                      {/* Quick Actions */}
+                      <div className="flex gap-2">
+                        <AddTaskButton className="flex-1" />
+                        <Button variant="outline" size="default" className="px-6">
+                          <MessageSquare className="h-4 w-4 mr-2" />
+                          AI Chat
+                        </Button>
+                      </div>
+
+                      {/* Primary Navigation */}
+                      <div>
+                        <h3 className="text-sm font-semibold text-muted-foreground mb-3 px-2">
+                          Workspace
+                        </h3>
+                        <div className="space-y-1">
+                          {primaryItems.map((item) => (
+                            <NavLink key={item.href} item={item} mobile showDescription />
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Secondary Navigation */}
+                      <div>
+                        <h3 className="text-sm font-semibold text-muted-foreground mb-3 px-2">
+                          Tools & Analytics
+                        </h3>
+                        <div className="space-y-1">
+                          {[...secondaryItems, ...toolsItems].map((item) => (
+                            <NavLink key={item.href} item={item} mobile showDescription />
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Admin Navigation */}
+                      <div>
+                        <h3 className="text-sm font-semibold text-muted-foreground mb-3 px-2">
+                          Task Management
+                        </h3>
+                        <div className="space-y-1">
+                          {adminItems.map((item) => (
+                            <NavLink key={item.href} item={item} mobile showDescription />
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Mobile Utilities */}
+                      <div className="pt-4 border-t">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <ThemePicker />
+                            <PWAInstallPrompt />
+                          </div>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setIsShortcutsHelpOpen(true)}
+                          >
+                            <Keyboard className="h-4 w-4 mr-2" />
+                            Shortcuts
+                          </Button>
+                        </div>
+                      </div>
+                      
+                      {/* Bottom spacing for safe scrolling */}
+                      <div className="h-8" />
                     </div>
                   </div>
                 </div>

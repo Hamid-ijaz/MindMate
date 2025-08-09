@@ -323,8 +323,8 @@ export function EditNoteDialog({ note, isOpen, onClose, shareToken, sharedBy }: 
                     animate={{ opacity: 1 }}
                     transition={{ duration: 0.3, delay: 0.1 }}
                 >
-                    <div className="px-3 sm:px-4 md:px-6 flex-1 min-h-0 flex flex-col">
-                        <Tabs defaultValue="content" className="w-full flex-1 flex flex-col">
+                    <div className="px-3 sm:px-4 md:px-6 flex-1 min-h-0 flex flex-col overflow-y-auto">
+                        <Tabs defaultValue="content" className="w-full flex-1 flex flex-col min-h-0">
                             <TabsList className="grid w-full grid-cols-2 rounded-xl bg-muted/50 h-10 sm:h-12 flex-shrink-0 mb-3 sm:mb-4">
                                 <TabsTrigger 
                                     value="content" 
@@ -348,30 +348,11 @@ export function EditNoteDialog({ note, isOpen, onClose, shareToken, sharedBy }: 
                             <TabsContent 
                                 value="content" 
                                 className="mt-0 flex-1 min-h-0 flex flex-col"
-                                style={{ minHeight: 'calc(100vh - 280px)' }}
                             >
-                                <div className="space-y-3 sm:space-y-4 flex-1 flex flex-col">
-                                    {/* Enhanced Toolbar - Mobile Optimized */}
-                                    <motion.div 
-                                        className="flex items-center justify-between p-2 sm:p-3 bg-muted/30 rounded-xl border backdrop-blur-sm"
-                                        initial={{ scale: 0.95, opacity: 0 }}
-                                        animate={{ scale: 1, opacity: 1 }}
-                                        transition={{ duration: 0.2, delay: 0.2 }}
-                                    >
-                                        <NoteToolbar
-                                            onSetColor={setColor}
-                                            onSetImageUrl={setImageUrl}
-                                            onSetFontSize={setFontSize}
-                                            initialFontSize={fontSize}
-                                        />
-                                        <div className="text-xs text-muted-foreground bg-background/50 px-2 py-1 rounded-md">
-                                            {fontSize}px
-                                        </div>
-                                    </motion.div>
-                                    
+                                <div className="space-y-3 sm:space-y-4 flex-1 flex flex-col min-h-0">
                                     {/* Rich Text Editor - Ultra Mobile Responsive */}
                                     <motion.div 
-                                        className="relative flex-1 min-h-[180px] sm:min-h-[200px] md:min-h-[250px] p-3 sm:p-4 rounded-xl border-2 border-dashed border-muted-foreground/20 focus-within:border-primary/30 transition-colors bg-background/50 backdrop-blur-sm"
+                                        className="relative flex-1 min-h-0 p-3 sm:p-4 rounded-xl border-2 border-dashed border-muted-foreground/20 focus-within:border-primary/30 transition-colors bg-background/50 backdrop-blur-sm flex flex-col"
                                         initial={{ scale: 0.98, opacity: 0 }}
                                         animate={{ scale: 1, opacity: 1 }}
                                         transition={{ duration: 0.3, delay: 0.3 }}
@@ -381,12 +362,13 @@ export function EditNoteDialog({ note, isOpen, onClose, shareToken, sharedBy }: 
                                             suppressContentEditableWarning={true}
                                             contentEditable
                                             dangerouslySetInnerHTML={{ __html: note?.content || '' }}
-                                            className="w-full h-full min-h-[180px] sm:min-h-[200px] md:min-h-[250px] border-none focus:outline-none resize-none bg-transparent leading-relaxed overflow-y-auto touch-manipulation"
+                                            className="w-full flex-1 min-h-[180px] sm:min-h-[200px] md:min-h-[250px] border-none focus:outline-none resize-none bg-transparent leading-relaxed overflow-y-auto touch-manipulation"
                                             style={{ 
                                                 fontSize: `${fontSize}px`,
                                                 color: 'hsl(var(--foreground))',
                                                 WebkitTouchCallout: 'none',
-                                                WebkitUserSelect: 'text'
+                                                WebkitUserSelect: 'text',
+                                                WebkitOverflowScrolling: 'touch'
                                             }}
                                             onInput={handleInput}
                                         />
@@ -414,27 +396,32 @@ export function EditNoteDialog({ note, isOpen, onClose, shareToken, sharedBy }: 
                                 </div>
                             </TabsContent>
                             
-                            <TabsContent value="audio" className="mt-0 flex-1 min-h-0">
+                            <TabsContent value="audio" className="mt-0 flex-1 min-h-0 overflow-y-auto">
                                 <motion.div 
-                                    className="p-3 sm:p-4 rounded-xl border-2 border-dashed border-muted-foreground/20 bg-background/50 backdrop-blur-sm min-h-[180px] sm:min-h-[200px]"
+                                    className="p-3 sm:p-4 rounded-xl border-2 border-dashed border-muted-foreground/20 bg-background/50 backdrop-blur-sm h-full min-h-[180px] sm:min-h-[200px]"
                                     initial={{ scale: 0.98, opacity: 0 }}
                                     animate={{ scale: 1, opacity: 1 }}
                                     transition={{ duration: 0.3 }}
                                 >
-                                    <AudioRecorder
-                                        onAudioSave={handleAudioSave}
-                                        onAudioDelete={handleAudioDelete}
-                                        existingAudioUrl={audioUrl}
-                                        maxDuration={300}
-                                        maxFileSize={10}
-                                    />
+                                    <div className="h-full flex flex-col">
+                                        <h3 className="text-sm font-medium mb-3 text-muted-foreground">Audio Recording</h3>
+                                        <div className="flex-1">
+                                            <AudioRecorder
+                                                onAudioSave={handleAudioSave}
+                                                onAudioDelete={handleAudioDelete}
+                                                existingAudioUrl={audioUrl}
+                                                maxDuration={300}
+                                                maxFileSize={10}
+                                            />
+                                        </div>
+                                    </div>
                                 </motion.div>
                             </TabsContent>
                         </Tabs>
                     </div>
                 </motion.div>
 
-                {/* Enhanced Footer - Mobile First Always Visible */}
+                {/* Enhanced Footer with Toolbar - Mobile First Always Visible */}
                 <motion.div 
                     className="p-3 sm:p-4 border-t bg-muted/30 backdrop-blur-sm flex-shrink-0 safe-area-bottom"
                     initial={{ opacity: 0, y: 20 }}
@@ -443,25 +430,23 @@ export function EditNoteDialog({ note, isOpen, onClose, shareToken, sharedBy }: 
                 >
                     <div className="flex items-center justify-between gap-2 sm:gap-3">
                         <div className="flex items-center gap-1 sm:gap-2 min-w-0 flex-1">
-                            {/* Quick Actions - Mobile Optimized */}
-                            <div className="flex items-center gap-1">
-                                <Button 
-                                    variant="outline" 
-                                    size="sm"
-                                    className="h-7 px-2 sm:h-8 sm:px-2 rounded-lg text-xs flex-shrink-0"
-                                >
-                                    <Palette className="w-3 h-3" />
-                                    <span className="ml-1 hidden md:inline">Style</span>
-                                </Button>
-                                <Button 
-                                    variant="outline" 
-                                    size="sm"
-                                    className="h-7 px-2 sm:h-8 sm:px-2 rounded-lg text-xs flex-shrink-0"
-                                >
-                                    <ImageIcon className="w-3 h-3" />
-                                    <span className="ml-1 hidden md:inline">Image</span>
-                                </Button>
-                            </div>
+                            {/* Enhanced Toolbar - Mobile Optimized */}
+                            <motion.div 
+                                className="flex items-center justify-between flex-1 p-2 sm:p-3 bg-background/50 rounded-xl border backdrop-blur-sm"
+                                initial={{ scale: 0.95, opacity: 0 }}
+                                animate={{ scale: 1, opacity: 1 }}
+                                transition={{ duration: 0.2, delay: 0.2 }}
+                            >
+                                <NoteToolbar
+                                    onSetColor={setColor}
+                                    onSetImageUrl={setImageUrl}
+                                    onSetFontSize={setFontSize}
+                                    initialFontSize={fontSize}
+                                />
+                                <div className="text-xs text-muted-foreground bg-background/50 px-2 py-1 rounded-md ml-2">
+                                    {fontSize}px
+                                </div>
+                            </motion.div>
                             
                             {/* Word count and info - Responsive */}
                             <div className="hidden sm:flex items-center gap-2 text-xs text-muted-foreground min-w-0 ml-2">

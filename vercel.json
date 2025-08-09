@@ -1,0 +1,17 @@
+{
+  "functions": {
+    "src/app/api/**/route.ts": {
+      "maxDuration": 60
+    }
+  },
+  "crons": [
+    {
+      "path": "/api/notifications/comprehensive-check",
+      "schedule": "0 18 * * *"
+    },
+    {
+      "path": "/api/notifications/trigger-overdue-check",
+      "schedule": "0 18 * * *"
+    }
+  ]
+}

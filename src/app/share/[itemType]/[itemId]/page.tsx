@@ -35,7 +35,7 @@ import { TaskItem } from '@/components/task-item';
 import { SubtaskList } from '@/components/subtask-list';
 import { useTasks } from '@/contexts/task-context';
 import { useNotes } from '@/contexts/note-context';
-import { safeDateFormat } from '@/lib/utils';
+import { safeDateFormat, isTaskOverdue } from '@/lib/utils';
 
 interface SharedContentPageProps {
   params: {
@@ -680,6 +680,11 @@ export default function SharedContentPage() {
                     <CardContent className="pt-0">
                       {/* Task Metadata */}
                       <div className="flex flex-wrap gap-2 mb-4">
+                        {isTaskOverdue((content as Task).reminderAt) && (
+                          <Badge variant="destructive" className="font-medium animate-pulse">
+                            🚨 Overdue
+                          </Badge>
+                        )}
                         <Badge variant="secondary" className="font-medium">
                           {(content as Task).category}
                         </Badge>
