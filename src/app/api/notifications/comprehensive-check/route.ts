@@ -75,7 +75,10 @@ async function setLoopRunningState(isRunning: boolean) {
 
 async function getLoopRunningState(): Promise<boolean> {
   const db = getFirestore();
-  const doc = await db.doc(LOOP_CONTROL_DOC).get();
+  const docRef = db.doc(LOOP_CONTROL_DOC);
+  const doc = await docRef.get();
+  // Update the 'updatedAt' field to current date/time whenever status is checked
+  await docRef.set({ updatedAt: new Date().toISOString() }, { merge: true });
   return !!doc.data()?.isLoopRunning;
 }
 

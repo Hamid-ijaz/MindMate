@@ -485,3 +485,74 @@ export interface ShareSettings {
   notifyOnView: boolean;
   notifyOnEdit: boolean;
 }
+
+// Chat Types for AI Conversation Hub
+export interface ChatMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp: number;
+  suggestedTasks?: SuggestedTask[] | null;
+  quickActions?: QuickAction[] | null;
+  taskReferences?: TaskReference[] | null;
+  metadata?: {
+    processingTime?: number;
+    tokensUsed?: number;
+    error?: string;
+  };
+}
+
+export interface SuggestedTask {
+  title: string;
+  description: string;
+  category?: string;
+  priority?: Priority;
+  duration?: number;
+  timeOfDay?: TimeOfDay;
+}
+
+export interface QuickAction {
+  id: string;
+  label: string;
+  action: string;
+  icon?: string;
+  data?: any;
+}
+
+export interface TaskReference {
+  taskId: string;
+  taskTitle: string;
+  action: 'view' | 'edit' | 'complete' | 'delete';
+}
+
+export interface ChatSession {
+  id: string;
+  userEmail: string;
+  title: string;
+  createdAt: number;
+  updatedAt: number;
+  messageCount: number;
+  lastMessage?: string;
+  isActive: boolean;
+  context?: {
+    taskCount: number;
+    categoryCount: number;
+    completedTasksCount: number;
+  };
+}
+
+export interface ChatContext {
+  tasks: Task[];
+  categories: string[];
+  accomplishments: Accomplishment[];
+  userSettings?: {
+    taskCategories: TaskCategory[];
+    taskDurations: TaskDuration[];
+    notificationPreferences?: NotificationPreferences;
+  };
+  recentActivity?: {
+    completedTasks: number;
+    createdTasks: number;
+    overdueTasksCount: number;
+  };
+}
