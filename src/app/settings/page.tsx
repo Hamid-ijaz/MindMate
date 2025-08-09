@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { useForm, useFieldArray } from 'react-hook-form';
@@ -106,6 +106,7 @@ function SettingsPageInner() {
   const { permission, requestPermission } = useNotifications();
   const [isRequestingPermission, setIsRequestingPermission] = useState(false);
   const [calendarRefreshTrigger, setCalendarRefreshTrigger] = useState(0);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   const isLoading = authLoading || tasksLoading;
 
@@ -237,8 +238,6 @@ function SettingsPageInner() {
     await requestPermission();
     setIsRequestingPermission(false);
   }
-
-  const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
     setIsAdmin(user?.email === "hamid.ijaz91@gmail.com");
@@ -524,7 +523,9 @@ function SettingsPageInner() {
 export default function SettingsPageWrapper(props: any) {
   return (
     <NotificationProvider>
-      <SettingsPageInner {...props} />
+      <Suspense fallback={<SettingsSkeleton />}>
+        <SettingsPageInner {...props} />
+      </Suspense>
     </NotificationProvider>
   );
 }
