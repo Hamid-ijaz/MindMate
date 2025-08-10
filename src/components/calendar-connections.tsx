@@ -142,12 +142,12 @@ export function CalendarConnections({ onConnectionChange }: CalendarConnectionsP
 
   // Also reload settings when the window comes back into focus (after OAuth redirect)
   useEffect(() => {
-    const handleFocus = () => {
-      if (user?.email) {
-        console.log('Window focus detected - checking for calendar connection updates');
-        setTimeout(() => loadSettings(), 1000); // Small delay to ensure backend has processed
-      }
-    };
+    // const handleFocus = () => {
+    //   if (user?.email) {
+    //     console.log('Window focus detected - checking for calendar connection updates');
+    //     setTimeout(() => loadSettings(), 1000); // Small delay to ensure backend has processed
+    //   }
+    // };
     
     const handleVisibilityChange = () => {
       if (!document.hidden && user?.email) {
@@ -156,11 +156,11 @@ export function CalendarConnections({ onConnectionChange }: CalendarConnectionsP
       }
     };
     
-    window.addEventListener('focus', handleFocus);
+    // window.addEventListener('focus', handleFocus);
     document.addEventListener('visibilitychange', handleVisibilityChange);
     
     return () => {
-      window.removeEventListener('focus', handleFocus);
+      // window.removeEventListener('focus', handleFocus);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [user?.email]);

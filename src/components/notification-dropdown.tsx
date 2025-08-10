@@ -1,9 +1,9 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Bell, BellRing, X, AlertTriangle, Calendar, CheckCircle, Trash2 } from 'lucide-react';
 import { useAuth } from '@/contexts/auth-context';
-import { useNotifications } from '@/contexts/notification-context';
+import { useUnifiedNotifications } from '@/contexts/unified-notification-context';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { 
@@ -15,10 +15,12 @@ import {
   DropdownMenuLabel
 } from '@/components/ui/dropdown-menu';
 import { formatDistanceToNow } from 'date-fns';
+import { motion, AnimatePresence } from 'framer-motion';
+import type { NotificationDocument } from '@/lib/types';
 
 interface NotificationEvent {
   id: string;
-  type: 'overdue' | 'reminder' | 'daily-digest' | 'weekly-report';
+  type: 'overdue' | 'reminder' | 'daily-digest' | 'weekly-report' | 'system';
   title: string;
   message: string;
   timestamp: Date;
@@ -33,40 +35,49 @@ interface NotificationEvent {
 
 export function NotificationDropdown() {
   const { user } = useAuth();
-  const { notifications, deleteNotification } = useNotifications();
-  const [loading, setLoading] = useState(false);
+  const { 
+    notifications, 
+    unreadCount, 
+    isLoading, 
+    markAsRead, 
+    deleteNotification, 
+    clearAllNotifications 
+  } = useUnifiedNotifications();
   const [isOpen, setIsOpen] = useState(false);
 
-  // Convert notifications from context to dropdown format
+  // Convert Firestore notifications to dropdown format
   const dropdownNotifications: NotificationEvent[] = notifications.map(notif => ({
     id: notif.id,
     type: notif.data?.type === 'task-overdue' ? 'overdue' : 
           notif.data?.type === 'task-reminder' ? 'reminder' : 
           notif.title.toLowerCase().includes('overdue') ? 'overdue' :
           notif.title.toLowerCase().includes('digest') ? 'daily-digest' :
+          notif.title.toLowerCase().includes('system') ? 'system' :
           'reminder',
     title: notif.title,
     message: notif.body || '',
     timestamp: new Date(notif.createdAt),
-    taskId: notif.data?.taskId,
+    taskId: notif.relatedTaskId || notif.data?.taskId,
     isRead: notif.isRead,
     metadata: notif.data ? {
       taskCount: notif.data.taskCount,
-      completionRate: notif.data.completionRate
+      completionRate: notif.data.completionRate,
+      streakDays: notif.data.streakDays
     } : undefined
   }));
 
-  const markAsRead = async (notificationId: string, event: React.MouseEvent) => {
+  const handleMarkAsRead = async (notificationId: string, event: React.MouseEvent) => {
     event.stopPropagation();
-    // Update the notification as read in the context
+    await markAsRead(notificationId);
+  };
+
+  const handleDeleteNotification = async (notificationId: string, event: React.MouseEvent) => {
+    event.stopPropagation();
     await deleteNotification(notificationId);
   };
 
-  const clearHistory = async () => {
-    // Clear all notifications
-    for (const notification of dropdownNotifications) {
-      await deleteNotification(notification.id);
-    }
+  const handleClearAll = async () => {
+    await clearAllNotifications();
     setIsOpen(false);
   };
 
@@ -82,36 +93,68 @@ export function NotificationDropdown() {
         return <Calendar className={className} />;
       case 'weekly-report':
         return <CheckCircle className={className} />;
+      case 'system':
+        return <CheckCircle className={className} />;
       default:
         return <Bell className={className} />;
     }
   };
 
-  const unreadCount = dropdownNotifications.filter(n => !n.isRead).length;
+  const handleNotificationClick = async (notification: NotificationEvent) => {
+    // Mark as read when clicked
+    if (!notification.isRead) {
+      await markAsRead(notification.id);
+    }
+
+    // Handle navigation
+    if (notification.taskId) {
+      // Check if we can navigate to the task or if it was deleted
+      try {
+        window.location.href = `/task/${notification.taskId}`;
+      } catch (error) {
+        console.warn('Task may have been deleted:', notification.taskId);
+        // Could show a toast here about the task being deleted
+      }
+    }
+  };
 
   return (
     <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" size="sm" className="relative h-9 w-9 p-0">
-          {unreadCount > 0 ? (
-            <BellRing className="h-4 w-4" />
-          ) : (
-            <Bell className="h-4 w-4" />
-          )}
-          {unreadCount > 0 && (
-            <Badge 
-              variant="destructive" 
-              className="absolute -top-1 -right-1 h-5 w-5 p-0 text-xs flex items-center justify-center"
-            >
-              {unreadCount > 9 ? '9+' : unreadCount}
-            </Badge>
-          )}
+          <motion.div
+            animate={unreadCount > 0 ? { rotate: [0, -10, 10, -10, 0] } : {}}
+            transition={{ duration: 0.5, repeat: unreadCount > 0 ? Infinity : 0, repeatDelay: 3 }}
+          >
+            {unreadCount > 0 ? (
+              <BellRing className="h-4 w-4" />
+            ) : (
+              <Bell className="h-4 w-4" />
+            )}
+          </motion.div>
+          <AnimatePresence>
+            {unreadCount > 0 && (
+              <motion.div
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                exit={{ scale: 0 }}
+                className="absolute -top-1 -right-1"
+              >
+                <Badge 
+                  variant="destructive" 
+                  className="h-5 w-5 p-0 text-xs flex items-center justify-center animate-pulse"
+                >
+                  {unreadCount > 99 ? '99+' : unreadCount}
+                </Badge>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </Button>
       </DropdownMenuTrigger>
       
       <DropdownMenuContent 
         align="end" 
-        className="w-80 max-h-96 overflow-hidden"
+        className="w-80 md:w-96 max-h-[80vh] md:max-h-96 overflow-hidden"
         sideOffset={5}
       >
         <DropdownMenuLabel className="flex items-center justify-between py-2">
@@ -120,7 +163,7 @@ export function NotificationDropdown() {
             <Button
               variant="ghost"
               size="sm"
-              onClick={clearHistory}
+              onClick={handleClearAll}
               className="h-6 px-2 text-xs text-muted-foreground hover:text-foreground"
             >
               <Trash2 className="h-3 w-3 mr-1" />
@@ -131,7 +174,7 @@ export function NotificationDropdown() {
         
         <DropdownMenuSeparator />
         
-        {loading ? (
+        {isLoading ? (
           <div className="space-y-2 p-2">
             {[1, 2, 3].map(i => (
               <div key={i} className="flex items-center space-x-3 animate-pulse p-2">
@@ -148,11 +191,11 @@ export function NotificationDropdown() {
             <Bell className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
             <p className="text-sm text-muted-foreground">No notifications yet</p>
             <p className="text-xs text-muted-foreground mt-1">
-              Enable push notifications in settings
+              Your task reminders and updates will appear here
             </p>
           </div>
         ) : (
-          <div className="max-h-64 overflow-y-auto pr-1" style={{
+          <div className="max-h-64 md:max-h-80 overflow-y-auto pr-1" style={{
             scrollbarWidth: 'thin',
             scrollbarColor: 'hsl(var(--muted-foreground)) transparent',
           }}>
@@ -172,18 +215,20 @@ export function NotificationDropdown() {
               }
             `}</style>
             {dropdownNotifications.map((notification, index) => (
-              <div key={notification.id}>
+              <motion.div
+                key={notification.id}
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 20 }}
+                transition={{ delay: index * 0.05 }}
+              >
                 <DropdownMenuItem
-                  className={`flex items-start p-3 cursor-pointer ${
+                  className={`flex items-start p-3 cursor-pointer transition-all duration-200 hover:bg-accent/50 ${
                     !notification.isRead 
                       ? 'bg-primary/5 border-l-2 border-primary' 
                       : ''
                   }`}
-                  onClick={() => {
-                    if (notification.taskId) {
-                      window.location.href = `/task/${notification.taskId}`;
-                    }
-                  }}
+                  onClick={() => handleNotificationClick(notification)}
                 >
                   <div className="flex-shrink-0 mt-1 mr-3">
                     {getNotificationIcon(notification.type, notification.isRead)}
@@ -196,16 +241,34 @@ export function NotificationDropdown() {
                       }`}>
                         {notification.title}
                       </h4>
-                      {!notification.isRead && (
+                      <div className="flex items-center ml-2 space-x-1">
+                        <AnimatePresence>
+                          {!notification.isRead && (
+                            <motion.div
+                              initial={{ scale: 0 }}
+                              animate={{ scale: 1 }}
+                              exit={{ scale: 0 }}
+                            >
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={(e) => handleMarkAsRead(notification.id, e)}
+                                className="h-5 w-5 p-0 flex-shrink-0 hover:bg-green-100 hover:text-green-600 transition-colors duration-200"
+                              >
+                                <CheckCircle className="h-3 w-3" />
+                              </Button>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={(e) => markAsRead(notification.id, e)}
-                          className="h-5 w-5 p-0 ml-2 flex-shrink-0"
+                          onClick={(e) => handleDeleteNotification(notification.id, e)}
+                          className="h-5 w-5 p-0 flex-shrink-0 hover:bg-red-100 hover:text-red-600 transition-colors duration-200"
                         >
                           <X className="h-3 w-3" />
                         </Button>
-                      )}
+                      </div>
                     </div>
                     
                     <p className="text-xs text-muted-foreground line-clamp-2 mb-2">
@@ -214,7 +277,9 @@ export function NotificationDropdown() {
                     
                     <div className="flex items-center justify-between">
                       <span className="text-xs text-muted-foreground">
-                        {formatDistanceToNow(notification.timestamp, { addSuffix: true })}
+                        {notification.timestamp instanceof Date && !isNaN(notification.timestamp.getTime())
+                          ? formatDistanceToNow(notification.timestamp, { addSuffix: true })
+                          : 'Unknown'}
                       </span>
                       
                       {notification.metadata && (
@@ -237,7 +302,7 @@ export function NotificationDropdown() {
                 </DropdownMenuItem>
                 
                 {index < dropdownNotifications.length - 1 && <DropdownMenuSeparator />}
-              </div>
+              </motion.div>
             ))}
           </div>
         )}

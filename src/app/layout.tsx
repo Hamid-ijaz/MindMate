@@ -8,6 +8,7 @@ import { ThemeProvider } from '@/contexts/theme-context';
 import { ManageTasksSheet } from '@/components/manage-tasks-sheet';
 import { MobileNav } from '@/components/mobile-nav';
 import { KeyboardNavigation } from '@/components/keyboard-navigation';
+import { UnifiedNotificationProvider } from '@/contexts/unified-notification-context';
 import { NotificationProvider } from '@/contexts/notification-context';
 import { NoteProvider } from '@/contexts/note-context';
 import { ErrorBoundary } from '@/components/error-boundary';
@@ -145,20 +146,22 @@ export default function RootLayout({
           <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
             <AuthProvider>
               <NotificationProvider>
-                <TaskProvider>
-                  <NoteProvider>
-                    <AppInitializer>
-                      <div className="relative flex min-h-screen flex-col">
-                        <Header />
-                        <main className="flex-1 pb-16 md:pb-0">{children}</main>
-                        <MobileNav />
-                      </div>
-                      <Toaster />
-                      <ManageTasksSheet />
-                      <KeyboardNavigation />
-                    </AppInitializer>
-                  </NoteProvider>
-                </TaskProvider>
+                <UnifiedNotificationProvider>
+                  <TaskProvider>
+                    <NoteProvider>
+                      <AppInitializer>
+                        <div className="relative flex min-h-screen flex-col">
+                          <Header />
+                          <main className="flex-1 pb-16 md:pb-0">{children}</main>
+                          <MobileNav />
+                        </div>
+                        <Toaster />
+                        <ManageTasksSheet />
+                        <KeyboardNavigation />
+                      </AppInitializer>
+                    </NoteProvider>
+                  </TaskProvider>
+                </UnifiedNotificationProvider>
               </NotificationProvider>
             </AuthProvider>
           </ThemeProvider>

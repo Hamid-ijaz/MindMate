@@ -58,6 +58,29 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // First, save notification to Firestore
+    const notificationId = `notif_${userEmail.replace('@', '_').replace('.', '_')}_${Date.now()}`;
+    const notificationData = {
+      id: notificationId,
+      userEmail,
+      title,
+      body: message,
+      type: 'push',
+      // Only include relatedTaskId if defined, else set to null
+      relatedTaskId: typeof taskId !== 'undefined' ? taskId : null,
+      isRead: false,
+      createdAt: new Date(),
+      data: {
+        type: 'task-reminder',
+        taskId,
+        taskTitle: title,
+      },
+    };
+    
+    // Save notification to user's notifications subcollection
+    await db.collection(`users/${userEmail}/notifications`).doc(notificationId).set(notificationData);
+    console.log(`💾 Saved notification to Firestore: ${notificationId}`);
+
     // Prepare notification payload
     const payload = {
       title,
@@ -68,6 +91,7 @@ export async function POST(request: NextRequest) {
       data: {
         type: 'task-reminder',
         taskId,
+        notificationId, // Include the Firestore notification ID
         url: `/task/${taskId}`
       }
     };
@@ -97,13 +121,20 @@ export async function POST(request: NextRequest) {
     const successCount = results.filter(r => r.success).length;
     const totalCount = results.length;
 
-    // Update task's last notified timestamp
-    try {
-      await db.collection('tasks').doc(taskId).update({ 
-        notifiedAt: new Date() 
-      });
-    } catch (error) {
-      console.error(`Failed to update task ${taskId} notification timestamp:`, error);
+    // Update notification with sent status and task's notified timestamp
+    const batch = db.batch();
+    
+    if (successCount > 0) {
+      // Update the notification with sentAt timestamp
+      const notificationRef = db.collection(`users/${userEmail}/notifications`).doc(notificationId);
+      batch.update(notificationRef, { sentAt: new Date() });
+      
+      // Update task's last notified timestamp
+      const taskRef = db.collection('tasks').doc(taskId);
+      batch.update(taskRef, { notifiedAt: new Date() });
+      
+      await batch.commit();
+      console.log(`📝 Updated notification sentAt and task notifiedAt for task ${taskId}`);
     }
 
     return NextResponse.json({
@@ -111,6 +142,7 @@ export async function POST(request: NextRequest) {
       message: `Task reminder sent to ${successCount}/${totalCount} subscriptions`,
       taskId,
       userEmail,
+      notificationId,
       notificationsSent: successCount,
       totalSubscriptions: totalCount,
       results

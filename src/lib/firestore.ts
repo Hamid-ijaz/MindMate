@@ -20,7 +20,7 @@ import {
   increment
 } from 'firebase/firestore';
 import { db } from './firebase';
-import type { Task, User, Accomplishment, Note, SharedItem, ShareHistoryEntry, SharePermission, ShareCollaborator, ShareAnalytics, GoogleCalendarSettings, ChatMessage, ChatSession, ChatContext } from './types';
+import type { Task, User, Accomplishment, Note, SharedItem, ShareHistoryEntry, SharePermission, ShareCollaborator, ShareAnalytics, GoogleCalendarSettings, ChatMessage, ChatSession, ChatContext, NotificationDocument, NotificationData, NotificationStats } from './types';
 
 // Collection names
 export const COLLECTIONS = {
@@ -32,6 +32,7 @@ export const COLLECTIONS = {
   SHARED_ITEMS: 'sharedItems',
   CHAT_SESSIONS: 'chatSessions',
   CHAT_MESSAGES: 'chatMessages',
+  NOTIFICATIONS: 'notifications',
 } as const;
 
 // User operations
@@ -898,7 +899,7 @@ export const sharingService = {
     }, {} as Record<string, number>);
     
     const topActions = Object.entries(actionCounts)
-      .map(([action, count]) => ({ action, count }))
+      .map(([action, count]) => ({ action, count: count as number }))
       .sort((a, b) => b.count - a.count)
       .slice(0, 5);
     
@@ -1158,4 +1159,247 @@ export const chatService = {
       updatedAt: Date.now(),
     });
   }
+};
+
+// Unified Notification Service
+export const notificationService = {
+  // Generate unique notification ID
+  generateNotificationId(): string {
+    return `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  },
+
+  // Add notification to Firestore
+  async addNotification(
+    userEmail: string, 
+    notification: Omit<NotificationDocument, 'id' | 'userEmail' | 'createdAt' | 'isRead'>
+  ): Promise<string> {
+    const notificationId = this.generateNotificationId();
+    const notificationRef = doc(db, `users/${userEmail}/notifications`, notificationId);
+    
+    // Remove undefined relatedTaskId before writing
+    const cleanNotification = {
+      ...notification,
+      relatedTaskId:
+        typeof notification.relatedTaskId !== 'undefined'
+          ? notification.relatedTaskId
+          : undefined,
+    };
+    const notificationData: NotificationDocument = {
+      id: notificationId,
+      userEmail,
+      ...cleanNotification,
+      isRead: false,
+      createdAt: Date.now(),
+    };
+    
+    try {
+      await setDoc(notificationRef, notificationData);
+      return notificationId;
+    } catch (error) {
+      console.error('Failed to write notification to Firestore:', error);
+      throw error;
+    }
+  },
+
+  // Get notifications for user
+  async getNotifications(userEmail: string, maxCount?: number): Promise<NotificationDocument[]> {
+    const notificationsRef = collection(db, `users/${userEmail}/notifications`);
+    const q = query(
+      notificationsRef,
+      orderBy('createdAt', 'desc'),
+      ...(maxCount ? [limit(maxCount)] : [])
+    );
+    
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data(),
+      createdAt: doc.data().createdAt || Date.now(),
+      sentAt: doc.data().sentAt,
+      readAt: doc.data().readAt,
+    })) as NotificationDocument[];
+  },
+
+  // Subscribe to real-time notifications
+  subscribeToNotifications(
+    userEmail: string, 
+    callback: (notifications: NotificationDocument[]) => void
+  ): () => void {
+    const notificationsRef = collection(db, `users/${userEmail}/notifications`);
+    const q = query(notificationsRef, orderBy('createdAt', 'desc'));
+    
+    return onSnapshot(q, (querySnapshot) => {
+      const notifications = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        createdAt: doc.data().createdAt || Date.now(),
+        sentAt: doc.data().sentAt,
+        readAt: doc.data().readAt,
+      })) as NotificationDocument[];
+      callback(notifications);
+    });
+  },
+
+  // Mark notification as read
+  async markAsRead(userEmail: string, notificationId: string): Promise<void> {
+    const notificationRef = doc(db, `users/${userEmail}/notifications`, notificationId);
+    await updateDoc(notificationRef, {
+      isRead: true,
+      readAt: Date.now(),
+    });
+  },
+
+  // Mark all notifications as read
+  async markAllAsRead(userEmail: string): Promise<void> {
+    const notificationsRef = collection(db, `users/${userEmail}/notifications`);
+    const q = query(notificationsRef, where('isRead', '==', false));
+    const querySnapshot = await getDocs(q);
+    
+    const batch = writeBatch(db);
+    querySnapshot.docs.forEach(doc => {
+      batch.update(doc.ref, {
+        isRead: true,
+        readAt: Date.now(),
+      });
+    });
+    
+    await batch.commit();
+  },
+
+  // Delete notification
+  async deleteNotification(userEmail: string, notificationId: string): Promise<void> {
+    const notificationRef = doc(db, `users/${userEmail}/notifications`, notificationId);
+    await deleteDoc(notificationRef);
+  },
+
+  // Clear all notifications
+  async clearAllNotifications(userEmail: string): Promise<void> {
+    const notificationsRef = collection(db, `users/${userEmail}/notifications`);
+    const querySnapshot = await getDocs(notificationsRef);
+    
+    const batch = writeBatch(db);
+    querySnapshot.docs.forEach(doc => {
+      batch.delete(doc.ref);
+    });
+    
+    await batch.commit();
+  },
+
+  // Get notification statistics
+  async getNotificationStats(userEmail: string): Promise<NotificationStats> {
+    const notificationsRef = collection(db, `users/${userEmail}/notifications`);
+    const querySnapshot = await getDocs(notificationsRef);
+    
+    const notifications = querySnapshot.docs.map(doc => doc.data()) as NotificationDocument[];
+    const unreadCount = notifications.filter(n => !n.isRead).length;
+    
+    const notificationsByType = notifications.reduce((acc, notif) => {
+      const type = notif.data?.type || notif.type;
+      acc[type] = (acc[type] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+    
+    const now = Date.now();
+    const oneDayAgo = now - 24 * 60 * 60 * 1000;
+    const oneWeekAgo = now - 7 * 24 * 60 * 60 * 1000;
+    
+    const dailyNotificationCount = notifications.filter(n => n.createdAt > oneDayAgo).length;
+    const weeklyNotificationCount = notifications.filter(n => n.createdAt > oneWeekAgo).length;
+    
+    const lastNotification = notifications.sort((a, b) => b.createdAt - a.createdAt)[0];
+    
+    return {
+      totalNotifications: notifications.length,
+      unreadCount,
+      notificationsByType,
+      lastNotificationAt: lastNotification?.createdAt,
+      dailyNotificationCount,
+      weeklyNotificationCount,
+    };
+  },
+
+  // Get unread count only (optimized)
+  async getUnreadCount(userEmail: string): Promise<number> {
+    const notificationsRef = collection(db, `users/${userEmail}/notifications`);
+    const q = query(notificationsRef, where('isRead', '==', false));
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.size;
+  },
+
+  // Subscribe to unread count only (optimized)
+  subscribeToUnreadCount(
+    userEmail: string, 
+    callback: (count: number) => void
+  ): () => void {
+    const notificationsRef = collection(db, `users/${userEmail}/notifications`);
+    const q = query(notificationsRef, where('isRead', '==', false));
+    
+    return onSnapshot(q, (querySnapshot) => {
+      callback(querySnapshot.size);
+    });
+  },
+
+  // Check if notification exists to prevent duplicates
+  async notificationExists(userEmail: string, notificationData: { 
+    title: string, 
+    relatedTaskId?: string,
+    type: string 
+  }): Promise<boolean> {
+    const notificationsRef = collection(db, `users/${userEmail}/notifications`);
+    let q = query(
+      notificationsRef, 
+      where('title', '==', notificationData.title),
+      where('type', '==', notificationData.type),
+      orderBy('createdAt', 'desc'),
+      limit(1)
+    );
+    
+    if (notificationData.relatedTaskId) {
+      q = query(
+        notificationsRef, 
+        where('title', '==', notificationData.title),
+        where('relatedTaskId', '==', notificationData.relatedTaskId),
+        where('type', '==', notificationData.type),
+        orderBy('createdAt', 'desc'),
+        limit(1)
+      );
+    }
+    
+    const querySnapshot = await getDocs(q);
+    
+    if (querySnapshot.empty) {
+      return false;
+    }
+    
+    // Check if the notification was created within the last hour to prevent duplicates
+    const recentNotification = querySnapshot.docs[0].data();
+    const oneHourAgo = Date.now() - 60 * 60 * 1000;
+    const isRecent = recentNotification.createdAt > oneHourAgo;
+    
+    return isRecent;
+  },
+
+  // Add notification with duplicate check
+  async addNotificationSafely(
+    userEmail: string, 
+    notification: Omit<NotificationDocument, 'id' | 'userEmail' | 'createdAt' | 'isRead'>
+  ): Promise<string | null> {
+    // Check for duplicates
+    const exists = await this.notificationExists(userEmail, {
+      title: notification.title,
+      relatedTaskId: notification.relatedTaskId,
+      type: notification.data?.type || notification.type,
+    });
+    
+    if (exists) {
+      return null;
+    }
+    
+    try {
+      return await this.addNotification(userEmail, notification);
+    } catch (error) {
+      console.error('addNotificationSafely failed:', error);
+      return null;
+    }
+  },
 };

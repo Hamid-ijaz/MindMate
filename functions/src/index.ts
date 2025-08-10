@@ -166,6 +166,29 @@ async function processUserOverdueTasks(userId: string, tasks: Task[]): Promise<v
     // Create notification payload
     const notificationPayload = createNotificationPayload(tasksNeedingNotification);
     
+    // First, save notification to Firestore
+    const notificationId = `notif_${userId}_${Date.now()}`;
+    const notificationData = {
+      id: notificationId,
+      userEmail: userId,
+      title: notificationPayload.title,
+      body: notificationPayload.body,
+      type: 'push',
+      relatedTaskId: tasksNeedingNotification.length === 1 ? tasksNeedingNotification[0].id : null,
+      isRead: false,
+      createdAt: admin.firestore.Timestamp.now(),
+      data: {
+        type: 'task-overdue',
+        taskIds: tasksNeedingNotification.map(t => t.id),
+        taskCount: tasksNeedingNotification.length,
+        priority: tasksNeedingNotification.some(t => t.priority === 'high') ? 'high' : 'normal',
+      },
+    };
+    
+    // Save notification to Firestore
+    await db.collection(`users/${userId}/notifications`).doc(notificationId).set(notificationData);
+    console.log(`💾 Saved notification to Firestore: ${notificationId}`);
+    
     // Send notifications to all user's subscriptions
     const sendPromises = subscriptions.map(async (subscription) => {
       try {
@@ -202,10 +225,17 @@ async function processUserOverdueTasks(userId: string, tasks: Task[]): Promise<v
     
     console.log(`📊 User ${userId}: ${successCount}/${subscriptions.length} notifications sent successfully`);
     
-    // Update notifiedAt timestamp for all tasks that we attempted to notify about
+    // Update notification with sent status and notifiedAt timestamp for tasks
     if (successCount > 0) {
       const batch = db.batch();
       
+      // Update the notification with sentAt timestamp
+      const notificationRef = db.collection(`users/${userId}/notifications`).doc(notificationId);
+      batch.update(notificationRef, {
+        sentAt: admin.firestore.Timestamp.now(),
+      });
+      
+      // Update notifiedAt timestamp for all tasks that we attempted to notify about
       tasksNeedingNotification.forEach(task => {
         const taskRef = db.collection('tasks').doc(task.id);
         batch.update(taskRef, {
@@ -214,7 +244,7 @@ async function processUserOverdueTasks(userId: string, tasks: Task[]): Promise<v
       });
       
       await batch.commit();
-      console.log(`📝 Updated notifiedAt for ${tasksNeedingNotification.length} tasks`);
+      console.log(`📝 Updated notification sentAt and task notifiedAt for ${tasksNeedingNotification.length} tasks`);
     }
     
   } catch (error) {
@@ -362,6 +392,30 @@ export const sendTaskReminder = functions.https.onCall(async (data, context) => 
     // Create notification payload for single task
     const notificationPayload = createNotificationPayload([task]);
     
+    // First, save notification to Firestore
+    const notificationId = `notif_${userId}_${Date.now()}`;
+    const notificationData = {
+      id: notificationId,
+      userEmail: userId,
+      title: notificationPayload.title,
+      body: notificationPayload.body,
+      type: 'push',
+      relatedTaskId: task.id ? task.id : null,
+      isRead: false,
+      createdAt: admin.firestore.Timestamp.now(),
+      data: {
+        type: 'task-reminder',
+        taskId: task.id,
+        taskTitle: task.title,
+        priority: task.priority,
+        category: task.category,
+      },
+    };
+    
+    // Save notification to Firestore
+    await db.collection(`users/${userId}/notifications`).doc(notificationId).set(notificationData);
+    console.log(`💾 Saved task reminder notification to Firestore: ${notificationId}`);
+    
     // Send notifications
     const sendPromises = subscriptions.map(async (subscription) => {
       try {
@@ -380,16 +434,32 @@ export const sendTaskReminder = functions.https.onCall(async (data, context) => 
     const results = await Promise.all(sendPromises);
     const successCount = results.filter(r => r.success).length;
     
-    // Update task's notifiedAt timestamp
-    await db.collection('tasks').doc(taskId).update({
-      notifiedAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
+    // Update notification with sent status and task's notifiedAt timestamp
+    if (successCount > 0) {
+      const batch = db.batch();
+      
+      // Update the notification with sentAt timestamp
+      const notificationRef = db.collection(`users/${userId}/notifications`).doc(notificationId);
+      batch.update(notificationRef, {
+        sentAt: admin.firestore.Timestamp.now(),
+      });
+      
+      // Update task's notifiedAt timestamp
+      const taskRef = db.collection('tasks').doc(taskId);
+      batch.update(taskRef, {
+        notifiedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      
+      await batch.commit();
+      console.log(`📝 Updated notification sentAt and task notifiedAt for task ${taskId}`);
+    }
     
     return {
       success: true,
       message: `Task reminder sent to ${successCount}/${subscriptions.length} devices`,
       notificationsSent: successCount,
       totalSubscriptions: subscriptions.length,
+      notificationId,
     };
     
   } catch (error) {

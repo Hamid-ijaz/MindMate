@@ -205,6 +205,31 @@ async function executeNotificationCheck(): Promise<any> {
           for (const task of overdueTasksToNotify) {
             
             const taskTitle = (task._doc && typeof task._doc.data === 'function' && task._doc.data().title) ? task._doc.data().title : 'Untitled Task';
+            
+            // Generate notification ID
+            const notificationId = `notif_${userEmail.replace('@', '_').replace('.', '_')}_${Date.now()}_overdue`;
+            
+            // Save notification to Firestore first
+            const notificationData = {
+              id: notificationId,
+              userEmail,
+              title: 'Task Overdue',
+              body: `"${taskTitle}" is overdue!`,
+              type: 'push',
+              relatedTaskId: task._doc.id,
+              isRead: false,
+              createdAt: new Date(),
+              data: {
+                type: 'overdue-task',
+                taskId: task._doc.id,
+                title: taskTitle,
+                timestamp: now.toISOString()
+              },
+            };
+            
+            await db.collection(`users/${userEmail}/notifications`).doc(notificationId).set(notificationData);
+            console.log(`💾 Saved overdue notification to Firestore: ${notificationId}`);
+            
             const payload = {
               title: 'Task Overdue',
               body: `"${taskTitle}" is overdue!`,
@@ -215,21 +240,32 @@ async function executeNotificationCheck(): Promise<any> {
                 type: 'overdue-task',
                 taskId: task._doc.id,
                 title: taskTitle,
+                notificationId, // Include the Firestore notification ID
                 url: `/task/${task._doc.id}`,
                 timestamp: now.toISOString()
               }
             };
 
+            let successCount = 0;
             // Send to all user's devices
             for (const sub of subscriptions) {
               
               const result = await sendPushNotification(sub.data().subscription, payload);
               if (result.success) {
                 results.totalNotificationsSent++;
+                successCount++;
               } else if (result.error?.includes('410') || result.error?.includes('404')) {
                 // Remove invalid subscription
                 await db.collection('pushSubscriptions').doc(sub.id).delete();
               }
+            }
+
+            // Update notification with sent status if at least one was successful
+            if (successCount > 0) {
+              await db.collection(`users/${userEmail}/notifications`).doc(notificationId).update({ 
+                sentAt: new Date() 
+              });
+              console.log(`📝 Updated overdue notification sentAt for ${notificationId}`);
             }
 
             // Mark this task as having been notified
@@ -258,6 +294,31 @@ async function executeNotificationCheck(): Promise<any> {
           
           const timeUntilDue = Math.round((task.reminderAt - now.getTime()) / (60 * 1000));
           const taskTitle = (task._doc && typeof task._doc.data === 'function' && task._doc.data().title) ? task._doc.data().title : 'Untitled Task';
+          
+          // Generate notification ID
+          const notificationId = `notif_${userEmail.replace('@', '_').replace('.', '_')}_${Date.now()}_reminder`;
+          
+          // Save notification to Firestore first
+          const notificationData = {
+            id: notificationId,
+            userEmail,
+            title: 'Task Reminder',
+            body: `"${taskTitle}" is due in ${timeUntilDue} minutes`,
+            type: 'push',
+            relatedTaskId: task._doc.id,
+            isRead: false,
+            createdAt: new Date(),
+            data: {
+              type: 'task-reminder',
+              taskId: task._doc.id,
+              title: taskTitle,
+              timestamp: now.toISOString()
+            },
+          };
+          
+          await db.collection(`users/${userEmail}/notifications`).doc(notificationId).set(notificationData);
+          console.log(`💾 Saved reminder notification to Firestore: ${notificationId}`);
+          
           const payload = {
             title: 'Task Reminder',
             body: `"${taskTitle}" is due in ${timeUntilDue} minutes`,
@@ -268,21 +329,32 @@ async function executeNotificationCheck(): Promise<any> {
               type: 'task-reminder',
               taskId: task._doc.id,
               title: taskTitle,
+              notificationId, // Include the Firestore notification ID
               url: `/task/${task._doc.id}`,
               timestamp: now.toISOString()
             }
           };
 
+          let successCount = 0;
           // Send to all user's devices
           for (const sub of subscriptions) {
             
             const result = await sendPushNotification(sub.data().subscription, payload);
             if (result.success) {
               results.totalNotificationsSent++;
+              successCount++;
             } else if (result.error?.includes('410') || result.error?.includes('404')) {
               // Remove invalid subscription
               await db.collection('pushSubscriptions').doc(sub.id).delete();
             }
+          }
+
+          // Update notification with sent status if at least one was successful
+          if (successCount > 0) {
+            await db.collection(`users/${userEmail}/notifications`).doc(notificationId).update({ 
+              sentAt: new Date() 
+            });
+            console.log(`📝 Updated reminder notification sentAt for ${notificationId}`);
           }
 
           // Update reminder timestamp
@@ -396,7 +468,7 @@ export async function POST(request: NextRequest) {
 
     // Check if we want to run a single check or start the loop
     const url = new URL(request.url);
-    const mode = url.searchParams.get('mode') || 'loop'; // Default to loop mode
+    const mode = url.searchParams.get('mode') || 'single'; // Default to loop mode
 
     if (mode === 'single') {
       // Single execution mode (for testing)
@@ -451,6 +523,28 @@ export async function GET(request: NextRequest) {
 
       if (subscriptionsSnapshot.empty) continue;
 
+      // Generate notification ID
+      const notificationId = `notif_${userEmail.replace('@', '_').replace('.', '_')}_${Date.now()}_test`;
+      
+      // Save test notification to Firestore
+      const notificationData = {
+        id: notificationId,
+        userEmail,
+        title: 'Test Notification',
+        body: 'This is a test notification from MindMate.',
+        type: 'push',
+        relatedTaskId: null,
+        isRead: false,
+        createdAt: new Date(),
+        data: {
+          type: 'test',
+          timestamp: new Date().toISOString()
+        },
+      };
+      
+      await db.collection(`users/${userEmail}/notifications`).doc(notificationId).set(notificationData);
+      console.log(`💾 Saved test notification to Firestore: ${notificationId}`);
+
       const payload = {
         title: 'Test Notification',
         body: 'This is a test notification from MindMate.',
@@ -459,20 +553,31 @@ export async function GET(request: NextRequest) {
         tag: 'test-notification',
         data: {
           type: 'test',
+          notificationId, // Include the Firestore notification ID
           timestamp: new Date().toISOString()
         }
       };
 
+      let successCount = 0;
       for (const sub of subscriptionsSnapshot.docs) {
         const result = await sendPushNotification(sub.data().subscription, payload);
         if (result.success) {
           totalSent++;
+          successCount++;
         } else {
           errors.push(`User ${userEmail} sub ${sub.id}: ${result.error}`);
           if (result.error?.includes('410') || result.error?.includes('404')) {
             await db.collection('pushSubscriptions').doc(sub.id).delete();
           }
         }
+      }
+
+      // Update notification with sent status if at least one was successful
+      if (successCount > 0) {
+        await db.collection(`users/${userEmail}/notifications`).doc(notificationId).update({ 
+          sentAt: new Date() 
+        });
+        console.log(`📝 Updated test notification sentAt for ${notificationId}`);
       }
     }
 
