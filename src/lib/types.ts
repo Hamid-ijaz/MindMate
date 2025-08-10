@@ -486,6 +486,76 @@ export interface ShareSettings {
   notifyOnEdit: boolean;
 }
 
+// Unified Notification System Types
+export interface NotificationDocument {
+  id: string;
+  userEmail: string;
+  title: string;
+  body: string;
+  type: 'push' | 'in_app';
+  relatedTaskId?: string;
+  isRead: boolean;
+  createdAt: number; // timestamp
+  sentAt?: number; // when push was actually sent
+  readAt?: number; // when marked as read
+  data?: NotificationData; // additional context data
+}
+
+export interface NotificationData {
+  taskId?: string;
+  taskTitle?: string;
+  priority?: Priority;
+  category?: string;
+  dueDate?: number;
+  type?: 'task-overdue' | 'task-reminder' | 'daily-digest' | 'weekly-report' | 'system';
+  taskCount?: number;
+  completionRate?: number;
+  streakDays?: number;
+  metadata?: Record<string, any>;
+}
+
+export interface NotificationStats {
+  totalNotifications: number;
+  unreadCount: number;
+  notificationsByType: Record<string, number>;
+  lastNotificationAt?: number;
+  dailyNotificationCount: number;
+  weeklyNotificationCount: number;
+}
+
+export interface NotificationPreferencesV2 {
+  enabled: boolean;
+  pushEnabled: boolean;
+  overdueReminders: boolean;
+  dailyDigest: boolean;
+  weeklyReport: boolean;
+  taskReminders: boolean;
+  systemNotifications: boolean;
+  quietHours: {
+    enabled: boolean;
+    start: string; // "22:00"
+    end: string;   // "08:00"
+    timezone?: string;
+  };
+  reminderTiming: {
+    beforeDue: number; // minutes before due date
+    afterDue: number;  // minutes after due date for overdue reminders
+    smartTiming?: boolean; // use AI to optimize timing
+  };
+  deliverySettings: {
+    maxDailyNotifications: number;
+    groupSimilar: boolean;
+    batchDelay: number; // minutes to batch similar notifications
+    priority: 'low' | 'normal' | 'high';
+  };
+  categories: {
+    [key in TaskCategory]?: {
+      enabled: boolean;
+      priority: 'low' | 'normal' | 'high';
+    };
+  };
+}
+
 // Chat Types for AI Conversation Hub
 export interface ChatMessage {
   id: string;

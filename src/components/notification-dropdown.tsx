@@ -1,9 +1,9 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Bell, BellRing, X, AlertTriangle, Calendar, CheckCircle, Trash2 } from 'lucide-react';
 import { useAuth } from '@/contexts/auth-context';
-import { useNotifications } from '@/contexts/notification-context';
+import { useUnifiedNotifications } from '@/contexts/unified-notification-context';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { 
@@ -15,10 +15,11 @@ import {
   DropdownMenuLabel
 } from '@/components/ui/dropdown-menu';
 import { formatDistanceToNow } from 'date-fns';
+import type { NotificationDocument } from '@/lib/types';
 
 interface NotificationEvent {
   id: string;
-  type: 'overdue' | 'reminder' | 'daily-digest' | 'weekly-report';
+  type: 'overdue' | 'reminder' | 'daily-digest' | 'weekly-report' | 'system';
   title: string;
   message: string;
   timestamp: Date;
@@ -33,40 +34,49 @@ interface NotificationEvent {
 
 export function NotificationDropdown() {
   const { user } = useAuth();
-  const { notifications, deleteNotification } = useNotifications();
-  const [loading, setLoading] = useState(false);
+  const { 
+    notifications, 
+    unreadCount, 
+    isLoading, 
+    markAsRead, 
+    deleteNotification, 
+    clearAllNotifications 
+  } = useUnifiedNotifications();
   const [isOpen, setIsOpen] = useState(false);
 
-  // Convert notifications from context to dropdown format
+  // Convert Firestore notifications to dropdown format
   const dropdownNotifications: NotificationEvent[] = notifications.map(notif => ({
     id: notif.id,
     type: notif.data?.type === 'task-overdue' ? 'overdue' : 
           notif.data?.type === 'task-reminder' ? 'reminder' : 
           notif.title.toLowerCase().includes('overdue') ? 'overdue' :
           notif.title.toLowerCase().includes('digest') ? 'daily-digest' :
+          notif.title.toLowerCase().includes('system') ? 'system' :
           'reminder',
     title: notif.title,
     message: notif.body || '',
     timestamp: new Date(notif.createdAt),
-    taskId: notif.data?.taskId,
+    taskId: notif.relatedTaskId || notif.data?.taskId,
     isRead: notif.isRead,
     metadata: notif.data ? {
       taskCount: notif.data.taskCount,
-      completionRate: notif.data.completionRate
+      completionRate: notif.data.completionRate,
+      streakDays: notif.data.streakDays
     } : undefined
   }));
 
-  const markAsRead = async (notificationId: string, event: React.MouseEvent) => {
+  const handleMarkAsRead = async (notificationId: string, event: React.MouseEvent) => {
     event.stopPropagation();
-    // Update the notification as read in the context
+    await markAsRead(notificationId);
+  };
+
+  const handleDeleteNotification = async (notificationId: string, event: React.MouseEvent) => {
+    event.stopPropagation();
     await deleteNotification(notificationId);
   };
 
-  const clearHistory = async () => {
-    // Clear all notifications
-    for (const notification of dropdownNotifications) {
-      await deleteNotification(notification.id);
-    }
+  const handleClearAll = async () => {
+    await clearAllNotifications();
     setIsOpen(false);
   };
 
@@ -82,12 +92,23 @@ export function NotificationDropdown() {
         return <Calendar className={className} />;
       case 'weekly-report':
         return <CheckCircle className={className} />;
+      case 'system':
+        return <CheckCircle className={className} />;
       default:
         return <Bell className={className} />;
     }
   };
 
-  const unreadCount = dropdownNotifications.filter(n => !n.isRead).length;
+  const handleNotificationClick = (notification: NotificationEvent) => {
+    if (notification.taskId) {
+      window.location.href = `/task/${notification.taskId}`;
+    }
+    
+    // Mark as read when clicked
+    if (!notification.isRead) {
+      markAsRead(notification.id);
+    }
+  };
 
   return (
     <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
@@ -103,7 +124,7 @@ export function NotificationDropdown() {
               variant="destructive" 
               className="absolute -top-1 -right-1 h-5 w-5 p-0 text-xs flex items-center justify-center"
             >
-              {unreadCount > 9 ? '9+' : unreadCount}
+              {unreadCount > 99 ? '99+' : unreadCount}
             </Badge>
           )}
         </Button>
@@ -120,7 +141,7 @@ export function NotificationDropdown() {
             <Button
               variant="ghost"
               size="sm"
-              onClick={clearHistory}
+              onClick={handleClearAll}
               className="h-6 px-2 text-xs text-muted-foreground hover:text-foreground"
             >
               <Trash2 className="h-3 w-3 mr-1" />
@@ -131,7 +152,7 @@ export function NotificationDropdown() {
         
         <DropdownMenuSeparator />
         
-        {loading ? (
+        {isLoading ? (
           <div className="space-y-2 p-2">
             {[1, 2, 3].map(i => (
               <div key={i} className="flex items-center space-x-3 animate-pulse p-2">
@@ -148,7 +169,7 @@ export function NotificationDropdown() {
             <Bell className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
             <p className="text-sm text-muted-foreground">No notifications yet</p>
             <p className="text-xs text-muted-foreground mt-1">
-              Enable push notifications in settings
+              Your task reminders and updates will appear here
             </p>
           </div>
         ) : (
@@ -179,11 +200,7 @@ export function NotificationDropdown() {
                       ? 'bg-primary/5 border-l-2 border-primary' 
                       : ''
                   }`}
-                  onClick={() => {
-                    if (notification.taskId) {
-                      window.location.href = `/task/${notification.taskId}`;
-                    }
-                  }}
+                  onClick={() => handleNotificationClick(notification)}
                 >
                   <div className="flex-shrink-0 mt-1 mr-3">
                     {getNotificationIcon(notification.type, notification.isRead)}
@@ -196,16 +213,26 @@ export function NotificationDropdown() {
                       }`}>
                         {notification.title}
                       </h4>
-                      {!notification.isRead && (
+                      <div className="flex items-center ml-2 space-x-1">
+                        {!notification.isRead && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => handleMarkAsRead(notification.id, e)}
+                            className="h-5 w-5 p-0 flex-shrink-0"
+                          >
+                            <CheckCircle className="h-3 w-3" />
+                          </Button>
+                        )}
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={(e) => markAsRead(notification.id, e)}
-                          className="h-5 w-5 p-0 ml-2 flex-shrink-0"
+                          onClick={(e) => handleDeleteNotification(notification.id, e)}
+                          className="h-5 w-5 p-0 flex-shrink-0"
                         >
                           <X className="h-3 w-3" />
                         </Button>
-                      )}
+                      </div>
                     </div>
                     
                     <p className="text-xs text-muted-foreground line-clamp-2 mb-2">

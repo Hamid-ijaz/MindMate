@@ -8,7 +8,7 @@ import { ThemeProvider } from '@/contexts/theme-context';
 import { ManageTasksSheet } from '@/components/manage-tasks-sheet';
 import { MobileNav } from '@/components/mobile-nav';
 import { KeyboardNavigation } from '@/components/keyboard-navigation';
-import { NotificationProvider } from '@/contexts/notification-context';
+import { UnifiedNotificationProvider } from '@/contexts/unified-notification-context';
 import { NoteProvider } from '@/contexts/note-context';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { ClientWrapper } from '@/components/client-wrapper';
@@ -144,7 +144,7 @@ export default function RootLayout({
         <ErrorBoundary>
           <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
             <AuthProvider>
-              <NotificationProvider>
+              <UnifiedNotificationProvider>
                 <TaskProvider>
                   <NoteProvider>
                     <AppInitializer>
@@ -159,7 +159,7 @@ export default function RootLayout({
                     </AppInitializer>
                   </NoteProvider>
                 </TaskProvider>
-              </NotificationProvider>
+              </UnifiedNotificationProvider>
             </AuthProvider>
           </ThemeProvider>
         </ErrorBoundary>
