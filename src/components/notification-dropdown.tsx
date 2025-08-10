@@ -15,6 +15,7 @@ import {
   DropdownMenuLabel
 } from '@/components/ui/dropdown-menu';
 import { formatDistanceToNow } from 'date-fns';
+import { motion, AnimatePresence } from 'framer-motion';
 import type { NotificationDocument } from '@/lib/types';
 
 interface NotificationEvent {
@@ -99,14 +100,21 @@ export function NotificationDropdown() {
     }
   };
 
-  const handleNotificationClick = (notification: NotificationEvent) => {
-    if (notification.taskId) {
-      window.location.href = `/task/${notification.taskId}`;
-    }
-    
+  const handleNotificationClick = async (notification: NotificationEvent) => {
     // Mark as read when clicked
     if (!notification.isRead) {
-      markAsRead(notification.id);
+      await markAsRead(notification.id);
+    }
+
+    // Handle navigation
+    if (notification.taskId) {
+      // Check if we can navigate to the task or if it was deleted
+      try {
+        window.location.href = `/task/${notification.taskId}`;
+      } catch (error) {
+        console.warn('Task may have been deleted:', notification.taskId);
+        // Could show a toast here about the task being deleted
+      }
     }
   };
 
@@ -114,25 +122,39 @@ export function NotificationDropdown() {
     <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" size="sm" className="relative h-9 w-9 p-0">
-          {unreadCount > 0 ? (
-            <BellRing className="h-4 w-4" />
-          ) : (
-            <Bell className="h-4 w-4" />
-          )}
-          {unreadCount > 0 && (
-            <Badge 
-              variant="destructive" 
-              className="absolute -top-1 -right-1 h-5 w-5 p-0 text-xs flex items-center justify-center"
-            >
-              {unreadCount > 99 ? '99+' : unreadCount}
-            </Badge>
-          )}
+          <motion.div
+            animate={unreadCount > 0 ? { rotate: [0, -10, 10, -10, 0] } : {}}
+            transition={{ duration: 0.5, repeat: unreadCount > 0 ? Infinity : 0, repeatDelay: 3 }}
+          >
+            {unreadCount > 0 ? (
+              <BellRing className="h-4 w-4" />
+            ) : (
+              <Bell className="h-4 w-4" />
+            )}
+          </motion.div>
+          <AnimatePresence>
+            {unreadCount > 0 && (
+              <motion.div
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                exit={{ scale: 0 }}
+                className="absolute -top-1 -right-1"
+              >
+                <Badge 
+                  variant="destructive" 
+                  className="h-5 w-5 p-0 text-xs flex items-center justify-center animate-pulse"
+                >
+                  {unreadCount > 99 ? '99+' : unreadCount}
+                </Badge>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </Button>
       </DropdownMenuTrigger>
       
       <DropdownMenuContent 
         align="end" 
-        className="w-80 max-h-96 overflow-hidden"
+        className="w-80 md:w-96 max-h-[80vh] md:max-h-96 overflow-hidden"
         sideOffset={5}
       >
         <DropdownMenuLabel className="flex items-center justify-between py-2">
@@ -173,7 +195,7 @@ export function NotificationDropdown() {
             </p>
           </div>
         ) : (
-          <div className="max-h-64 overflow-y-auto pr-1" style={{
+          <div className="max-h-64 md:max-h-80 overflow-y-auto pr-1" style={{
             scrollbarWidth: 'thin',
             scrollbarColor: 'hsl(var(--muted-foreground)) transparent',
           }}>
@@ -193,9 +215,15 @@ export function NotificationDropdown() {
               }
             `}</style>
             {dropdownNotifications.map((notification, index) => (
-              <div key={notification.id}>
+              <motion.div
+                key={notification.id}
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 20 }}
+                transition={{ delay: index * 0.05 }}
+              >
                 <DropdownMenuItem
-                  className={`flex items-start p-3 cursor-pointer ${
+                  className={`flex items-start p-3 cursor-pointer transition-all duration-200 hover:bg-accent/50 ${
                     !notification.isRead 
                       ? 'bg-primary/5 border-l-2 border-primary' 
                       : ''
@@ -214,21 +242,29 @@ export function NotificationDropdown() {
                         {notification.title}
                       </h4>
                       <div className="flex items-center ml-2 space-x-1">
-                        {!notification.isRead && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={(e) => handleMarkAsRead(notification.id, e)}
-                            className="h-5 w-5 p-0 flex-shrink-0"
-                          >
-                            <CheckCircle className="h-3 w-3" />
-                          </Button>
-                        )}
+                        <AnimatePresence>
+                          {!notification.isRead && (
+                            <motion.div
+                              initial={{ scale: 0 }}
+                              animate={{ scale: 1 }}
+                              exit={{ scale: 0 }}
+                            >
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={(e) => handleMarkAsRead(notification.id, e)}
+                                className="h-5 w-5 p-0 flex-shrink-0 hover:bg-green-100 hover:text-green-600 transition-colors duration-200"
+                              >
+                                <CheckCircle className="h-3 w-3" />
+                              </Button>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
                         <Button
                           variant="ghost"
                           size="sm"
                           onClick={(e) => handleDeleteNotification(notification.id, e)}
-                          className="h-5 w-5 p-0 flex-shrink-0"
+                          className="h-5 w-5 p-0 flex-shrink-0 hover:bg-red-100 hover:text-red-600 transition-colors duration-200"
                         >
                           <X className="h-3 w-3" />
                         </Button>
@@ -264,7 +300,7 @@ export function NotificationDropdown() {
                 </DropdownMenuItem>
                 
                 {index < dropdownNotifications.length - 1 && <DropdownMenuSeparator />}
-              </div>
+              </motion.div>
             ))}
           </div>
         )}

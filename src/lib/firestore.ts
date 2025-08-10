@@ -899,7 +899,7 @@ export const sharingService = {
     }, {} as Record<string, number>);
     
     const topActions = Object.entries(actionCounts)
-      .map(([action, count]) => ({ action, count }))
+      .map(([action, count]) => ({ action, count: count as number }))
       .sort((a, b) => b.count - a.count)
       .slice(0, 5);
     
@@ -1189,12 +1189,12 @@ export const notificationService = {
   },
 
   // Get notifications for user
-  async getNotifications(userEmail: string, limit?: number): Promise<NotificationDocument[]> {
+  async getNotifications(userEmail: string, maxCount?: number): Promise<NotificationDocument[]> {
     const notificationsRef = collection(db, `users/${userEmail}/notifications`);
     const q = query(
       notificationsRef,
       orderBy('createdAt', 'desc'),
-      ...(limit ? [limit(limit)] : [])
+      ...(maxCount ? [limit(maxCount)] : [])
     );
     
     const querySnapshot = await getDocs(q);

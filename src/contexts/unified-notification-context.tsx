@@ -79,7 +79,7 @@ export const UnifiedNotificationProvider = ({ children }: NotificationProviderPr
             displayedNotificationsRef.current.add(notif.id);
             
             const { dismiss } = toast({
-              title: notif.title,
+              title: `🔔 ${notif.title}`,
               description: notif.body,
               duration: 5000,
               action: (
