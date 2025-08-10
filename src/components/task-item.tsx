@@ -51,7 +51,7 @@ export function TaskItem({ task, extraActions, isSubtask = false, isHistoryView 
       if (!task.completedAt && !isHistoryView) {
         setSwipeDirection('right');
         setTimeout(() => {
-          handleComplete();
+          // handleComplete();
           setSwipeDirection(null);
         }, 300);
       }
@@ -60,7 +60,7 @@ export function TaskItem({ task, extraActions, isSubtask = false, isHistoryView 
       if (!isHistoryView) {
         setSwipeDirection('left');
         setTimeout(() => {
-          handleDelete();
+          // handleDelete();
           setSwipeDirection(null);
         }, 300);
       }

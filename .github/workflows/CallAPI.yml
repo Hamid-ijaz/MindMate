@@ -2,7 +2,7 @@ name: Send POST to /api/notifications/comprehensive-check
 
 on:
   schedule:
-    - cron: '*/5 * * * *' # Every 5 minutes
+    - cron: '* * * * *' # Every minute
   workflow_dispatch:
   
 jobs:

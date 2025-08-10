@@ -1176,16 +1176,29 @@ export const notificationService = {
     const notificationId = this.generateNotificationId();
     const notificationRef = doc(db, `users/${userEmail}/notifications`, notificationId);
     
+    // Remove undefined relatedTaskId before writing
+    const cleanNotification = {
+      ...notification,
+      relatedTaskId:
+        typeof notification.relatedTaskId !== 'undefined'
+          ? notification.relatedTaskId
+          : undefined,
+    };
     const notificationData: NotificationDocument = {
       id: notificationId,
       userEmail,
-      ...notification,
+      ...cleanNotification,
       isRead: false,
       createdAt: Date.now(),
     };
     
-    await setDoc(notificationRef, notificationData);
-    return notificationId;
+    try {
+      await setDoc(notificationRef, notificationData);
+      return notificationId;
+    } catch (error) {
+      console.error('Failed to write notification to Firestore:', error);
+      throw error;
+    }
   },
 
   // Get notifications for user
@@ -1354,13 +1367,16 @@ export const notificationService = {
     
     const querySnapshot = await getDocs(q);
     
-    if (querySnapshot.empty) return false;
+    if (querySnapshot.empty) {
+      return false;
+    }
     
     // Check if the notification was created within the last hour to prevent duplicates
     const recentNotification = querySnapshot.docs[0].data();
     const oneHourAgo = Date.now() - 60 * 60 * 1000;
+    const isRecent = recentNotification.createdAt > oneHourAgo;
     
-    return recentNotification.createdAt > oneHourAgo;
+    return isRecent;
   },
 
   // Add notification with duplicate check
@@ -1376,10 +1392,14 @@ export const notificationService = {
     });
     
     if (exists) {
-      console.log('Duplicate notification prevented:', notification.title);
       return null;
     }
     
-    return await this.addNotification(userEmail, notification);
+    try {
+      return await this.addNotification(userEmail, notification);
+    } catch (error) {
+      console.error('addNotificationSafely failed:', error);
+      return null;
+    }
   },
 };

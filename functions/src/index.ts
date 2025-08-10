@@ -174,7 +174,7 @@ async function processUserOverdueTasks(userId: string, tasks: Task[]): Promise<v
       title: notificationPayload.title,
       body: notificationPayload.body,
       type: 'push',
-      relatedTaskId: tasksNeedingNotification.length === 1 ? tasksNeedingNotification[0].id : undefined,
+      relatedTaskId: tasksNeedingNotification.length === 1 ? tasksNeedingNotification[0].id : null,
       isRead: false,
       createdAt: admin.firestore.Timestamp.now(),
       data: {
@@ -400,7 +400,7 @@ export const sendTaskReminder = functions.https.onCall(async (data, context) => 
       title: notificationPayload.title,
       body: notificationPayload.body,
       type: 'push',
-      relatedTaskId: task.id,
+      relatedTaskId: task.id ? task.id : null,
       isRead: false,
       createdAt: admin.firestore.Timestamp.now(),
       data: {

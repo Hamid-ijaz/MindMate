@@ -66,7 +66,8 @@ export async function POST(request: NextRequest) {
       title,
       body: message,
       type: 'push',
-      relatedTaskId: taskId,
+      // Only include relatedTaskId if defined, else set to null
+      relatedTaskId: typeof taskId !== 'undefined' ? taskId : null,
       isRead: false,
       createdAt: new Date(),
       data: {

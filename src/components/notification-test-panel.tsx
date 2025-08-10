@@ -181,7 +181,12 @@ export function NotificationTestPanel() {
                       {notification.body}
                     </p>
                     <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground">
-                      <span>{formatDistanceToNow(new Date(notification.createdAt), { addSuffix: true })}</span>
+                      <span>{(() => {
+                        const date = new Date(notification.createdAt);
+                        return date instanceof Date && !isNaN(date.getTime())
+                          ? formatDistanceToNow(date, { addSuffix: true })
+                          : 'Unknown';
+                      })()}</span>
                       <Badge variant="outline" className="text-xs py-0 px-1">
                         {notification.type}
                       </Badge>
