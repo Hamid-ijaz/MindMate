@@ -78,7 +78,8 @@ function PendingTasksContent() {
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("all");
   const [priority, setPriority] = useState("all");
-  const [sortBy, setSortBy] = useState<'date' | 'priority' | 'alphabetical'>('date');
+  const [sortBy, setSortBy] = useState<'date' | 'priority' | 'alphabetical' | 'oldest'>('date');
+  const [overdueOnly, setOverdueOnly] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   
   const searchParams = useSearchParams();
@@ -96,24 +97,36 @@ function PendingTasksContent() {
         (task.description || "").toLowerCase().includes(search.toLowerCase());
       const matchesCategory = category === "all" || category === "" || category === "all-categories" || task.category === category;
       const matchesPriority = priority === "all" || priority === "" || priority === "all-priorities" || task.priority === priority;
-      
-      return matchesSearch && matchesCategory && matchesPriority;
+      let matchesOverdue = true;
+      if (overdueOnly) {
+        if (task.reminderAt) {
+          const due = new Date(task.reminderAt);
+          const now = new Date();
+          matchesOverdue = due < now;
+        } else {
+          matchesOverdue = false;
+        }
+      }
+      return matchesSearch && matchesCategory && matchesPriority && matchesOverdue;
     });
 
     // Sort the filtered tasks
     return filtered.sort((a, b) => {
       switch (sortBy) {
-        case 'priority':
+        case 'priority': {
           const priorityOrder = { 'Critical': 0, 'High': 1, 'Medium': 2, 'Low': 3 };
           return priorityOrder[a.priority] - priorityOrder[b.priority];
+        }
         case 'alphabetical':
           return a.title.localeCompare(b.title);
+        case 'oldest':
+          return a.createdAt - b.createdAt;
         case 'date':
         default:
           return b.createdAt - a.createdAt;
       }
     });
-  }, [uncompletedTasks, search, category, priority, sortBy]);
+  }, [uncompletedTasks, search, category, priority, sortBy, overdueOnly]);
 
   useEffect(() => {
     const taskId = searchParams.get('taskId');
@@ -261,9 +274,18 @@ function PendingTasksContent() {
               >
                 <Filter className="w-4 h-4 mr-2" />
                 Filters
-                {(category || priority) && <span className="ml-1 text-xs bg-primary-foreground text-primary rounded-full px-1">•</span>}
+                {(category || priority || overdueOnly) && <span className="ml-1 text-xs bg-primary-foreground text-primary rounded-full px-1">•</span>}
               </Button>
-              
+              {/* Overdue filter toggle */}
+              <Button
+                variant={overdueOnly ? "default" : "outline"}
+                onClick={() => setOverdueOnly(v => !v)}
+                className="whitespace-nowrap h-10 px-4 rounded-full"
+              >
+                <span className="mr-2">⏰</span>
+                Overdue
+                {overdueOnly && <span className="ml-1 text-xs bg-destructive text-white rounded-full px-1">!</span>}
+              </Button>
               <Button 
                 variant="outline" 
                 onClick={() => {
@@ -272,15 +294,16 @@ function PendingTasksContent() {
                   setPriority("");
                   setSortBy('date');
                   setShowFilters(false);
+                  setOverdueOnly(false);
                 }}
                 className="whitespace-nowrap h-10 px-4 rounded-full"
               >
                 <X className="w-4 h-4 mr-2" />
                 Clear
               </Button>
-
+              
               {/* Quick sort on mobile */}
-              <Select value={sortBy} onValueChange={(value: 'date' | 'priority' | 'alphabetical') => setSortBy(value)}>
+              <Select value={sortBy} onValueChange={(value: 'date' | 'priority' | 'alphabetical' | 'oldest') => setSortBy(value)}>
                 <SelectTrigger className="h-10 w-auto min-w-[140px] rounded-full">
                   <div className="flex items-center gap-2">
                     <SortAsc className="w-4 h-4" />
@@ -289,6 +312,7 @@ function PendingTasksContent() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="date">📅 Recent First</SelectItem>
+                  <SelectItem value="oldest">📅 Oldest First</SelectItem>
                   <SelectItem value="priority">⚡ By Priority</SelectItem>
                   <SelectItem value="alphabetical">🔤 A to Z</SelectItem>
                 </SelectContent>

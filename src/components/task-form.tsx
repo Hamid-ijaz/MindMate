@@ -331,7 +331,8 @@ export function TaskForm({ task, onFinished, parentId, defaultValues: propDefaul
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
         {/* Move Add Task Button to Top */}
         <div className="flex flex-col-reverse sm:flex-row justify-between items-start sm:items-center gap-4 pb-4 border-b border-border/30">
-          <div className="w-full sm:w-auto">
+          {/* Hide on mobile (show only on sm and up) */}
+          <div className="w-full sm:w-auto hidden sm:block">
             <h2 className="text-xl font-semibold">
               {task ? "Edit Task" : parentId ? "Add Sub-task" : "Add New Task"}
             </h2>
@@ -647,12 +648,31 @@ export function TaskForm({ task, onFinished, parentId, defaultValues: propDefaul
                     )}
                 />
             </div>
-        </div>
-
+            
         <Separator />
+
+        </div>
+          <div className="flex gap-2 w-full sm:w-auto justify-end">
+            {onFinished && (
+              <Button 
+                variant="ghost" 
+                type="button" 
+                onClick={onFinished}
+                className="flex-1 sm:flex-none h-10 text-sm touch-manipulation"
+              >
+                Cancel
+              </Button>
+            )}
+            <Button 
+              type="submit"
+              className="flex-1 sm:flex-none h-10 text-sm font-medium touch-manipulation bg-primary hover:bg-primary/90"
+            >
+              {task ? "Save Changes" : parentId ? "Add Sub-task" : "Add Task"}
+            </Button>
+          </div>
         
         {/* Google Calendar Integration - Compact & Mobile Responsive */}
-        <div className="space-y-3">
+        {/* <div className="space-y-3">
             <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                     <CalendarIcon2 className="h-4 w-4 text-blue-600" />
@@ -678,7 +698,6 @@ export function TaskForm({ task, onFinished, parentId, defaultValues: propDefaul
                 </div>
             )}
             
-            {/* Compact Sync Toggle */}
             <FormField
                 control={form.control}
                 name="syncToGoogleCalendar"
@@ -717,7 +736,6 @@ export function TaskForm({ task, onFinished, parentId, defaultValues: propDefaul
                 )}
             />
             
-            {/* Location Field - Only shown when sync is enabled */}
             {form.watch('syncToGoogleCalendar') && (
                 <FormField
                     control={form.control}
@@ -737,7 +755,7 @@ export function TaskForm({ task, onFinished, parentId, defaultValues: propDefaul
                     )}
                 />
             )}
-        </div>
+        </div> */}
 
       </form>
     </Form>

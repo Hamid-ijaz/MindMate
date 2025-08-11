@@ -59,7 +59,7 @@ export function useKeyboardShortcuts() {
   const formatShortcut = (modifiers: string[], key: string): string => {
     const mods = getModifiers();
     const formattedModifiers = modifiers.map(mod => {
-      switch (mod.toLowerCase()) {
+      switch (mod?.toLowerCase()) {
         case 'cmd':
         case 'meta':
           return mods.cmd;
@@ -145,8 +145,8 @@ export function useKeyboardShortcuts() {
     modifiers: string[],
     key: string
   ): boolean => {
-    const normalizedKey = key.toLowerCase();
-    const eventKey = event.key.toLowerCase();
+    const normalizedKey = key?.toLowerCase();
+    const eventKey = event.key?.toLowerCase();
 
     // Check key match
     if (eventKey !== normalizedKey) return false;

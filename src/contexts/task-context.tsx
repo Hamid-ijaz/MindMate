@@ -360,9 +360,9 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
     if (task) {
       const childrenIds = tasks.filter(t => t.parentId === id).map(t => t.id);
       const updates = { 
-        completedAt: undefined, 
-        lastRejectedAt: undefined,
-        notifiedAt: undefined,
+        completedAt: null, 
+        lastRejectedAt: null,
+        notifiedAt: null,
         rejectionCount: 0,
       };
 

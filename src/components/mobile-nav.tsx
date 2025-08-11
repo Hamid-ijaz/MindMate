@@ -36,7 +36,7 @@ export function MobileNav() {
     { label: 'Home', href: '/', icon: HomeIcon },
     { label: 'Notes', href: '/notes', icon: Notebook },
     { label: 'Chat', href: '/chat', icon: MessageSquare },
-    { label: 'Pending', href: '/pending', icon: Clock, badge: 5 },
+    { label: 'Pending', href: '/pending', icon: Clock },
     { label: 'History', href: '/history', icon: TrendingUp },
   ];
 
@@ -68,7 +68,7 @@ export function MobileNav() {
                     {isActive && (
                       <motion.div
                         layoutId="activeTabMobile"
-                        className="absolute -top-0.5 left-1/2 -translate-x-1/2 w-8 h-1 bg-primary rounded-full"
+                        className="absolute -top-0.5 left-1/2 !-translate-x-1/2 w-8 h-1 bg-primary rounded-full"
                         initial={false}
                         transition={{ type: "spring", bounce: 0.3, duration: 0.6 }}
                       />

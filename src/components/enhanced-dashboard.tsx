@@ -271,6 +271,7 @@ export default function EnhancedDashboard() {
   const [showFilters, setShowFilters] = useState(false);
   const [showSearchBar, setShowSearchBar] = useState(false);
   const [searchView, setSearchView] = useState<'unified' | 'separated'>('unified');
+  const [showCompletedTasks, setShowCompletedTasks] = useState(false); // Default to false
   const [editingNote, setEditingNote] = useState<Note | null>(null);
   const [shareDialog, setShareDialog] = useState<{ isOpen: boolean, itemType: 'task' | 'note', itemTitle: string, itemId: string } | null>(null);
   const [showTaskSuggestions, setShowTaskSuggestions] = useState(false);
@@ -292,6 +293,7 @@ export default function EnhancedDashboard() {
     setContentType('all');
     setSortBy('date');
     setShowFilters(false);
+    setShowCompletedTasks(false);
 
     // Force re-render by clearing and restoring state if needed
     console.log('Refreshed home page content');
@@ -377,13 +379,14 @@ export default function EnhancedDashboard() {
       // Check if task has a reminder date set
       if (task.reminderAt) {
         const reminderDate = new Date(task.reminderAt);
-        return reminderDate < startOfDay(today);
+        return reminderDate.getTime() < today.getTime();
+
       }
 
       // For tasks without reminders, consider them overdue if created more than 3 days ago
       const createdDate = new Date(task.createdAt);
       const threeDaysAgo = subDays(startOfDay(today), 3);
-      return createdDate < threeDaysAgo;
+      return false;
     });
 
     // Time spent today
@@ -485,6 +488,13 @@ export default function EnhancedDashboard() {
   // Enhanced filtered tasks/notes with improved date filtering
   const filteredTasks = useMemo(() => {
     return tasks.filter(t => {
+      // Filter out child tasks - only show parent tasks
+      const isParentTask = !t.parentId;
+      if (!isParentTask) return false;
+
+      // Filter by completion status
+      const matchesCompletionStatus = showCompletedTasks || !t.completedAt;
+
       const matchesSearch = search === "" || t.title.toLowerCase().includes(search.toLowerCase()) || (t.description || "").toLowerCase().includes(search.toLowerCase());
       const matchesCategory = category === "all" || category === "" || category === "all-categories" || t.category === category;
 
@@ -500,9 +510,9 @@ export default function EnhancedDashboard() {
       const matchesPriority = priority === "all" || priority === "" || priority === "all-priorities" || t.priority === priority;
       const matchesContentType = contentType === 'all' || contentType === 'tasks';
 
-      return matchesSearch && matchesCategory && matchesDate && matchesPriority && matchesContentType;
+      return matchesCompletionStatus && matchesSearch && matchesCategory && matchesDate && matchesPriority && matchesContentType;
     });
-  }, [tasks, search, category, date, priority, contentType]);
+  }, [tasks, search, category, date, priority, contentType, showCompletedTasks]);
 
   const filteredNotes = useMemo(() => {
     return notes?.filter(n => {
@@ -527,7 +537,8 @@ export default function EnhancedDashboard() {
   // Calculate overdue tasks
   const overdueTasks = useMemo(() => {
     const now = new Date();
-    const todayStart = startOfDay(now);
+    const todayStart = now;
+    console.log("🚀 > EnhancedDashboard > todayStart:", todayStart)
     
     return tasks.filter(task => {
       // Skip completed or muted tasks
@@ -536,13 +547,15 @@ export default function EnhancedDashboard() {
       // Check if task has a reminder date set
       if (task.reminderAt) {
         const reminderDate = new Date(task.reminderAt);
-        return reminderDate < todayStart;
+        // Compare both date and time (not just date)
+        return reminderDate.getTime() < todayStart.getTime();
       }
       
       // For tasks without reminders, consider them overdue if created more than 3 days ago
       const createdDate = new Date(task.createdAt);
       const threeDaysAgo = subDays(todayStart, 3);
-      return createdDate < threeDaysAgo;
+      // return createdDate < threeDaysAgo;
+      return false;
     }).sort((a, b) => {
       // Sort by reminder date first (if available), then by creation date
       const aDate = a.reminderAt || a.createdAt;
@@ -715,10 +728,10 @@ export default function EnhancedDashboard() {
               >
                 <Search className="w-4 h-4 mr-2 text-muted-foreground group-hover:text-primary transition-colors" />
                 <span className="text-sm font-medium">Search</span>
-                <div className="hidden md:flex items-center gap-1 text-xs text-muted-foreground bg-muted/60 px-2 py-1 rounded ml-2">
+                {/* <div className="hidden md:flex items-center gap-1 text-xs text-muted-foreground bg-muted/60 px-2 py-1 rounded ml-2">
                   <span>{modifiers.cmd}</span>
                   <span>K</span>
-                </div>
+                </div> */}
               </Button>
             </div>
           ) : (
@@ -747,6 +760,7 @@ export default function EnhancedDashboard() {
                         setShowSearchBar(false);
                         setSearch("");
                         setShowFilters(false);
+                        setShowCompletedTasks(false);
                       }}
                     >
                       <X className="w-4 h-4" />
@@ -801,6 +815,19 @@ export default function EnhancedDashboard() {
                       </Button>
                     </div>
 
+                    {/* Show Completed Tasks Toggle */}
+                    <div className="flex items-center gap-2 px-3 py-1 border rounded-lg bg-background/50">
+                      <Checkbox
+                        id="show-completed"
+                        checked={showCompletedTasks}
+                        onCheckedChange={(checked) => setShowCompletedTasks(!!checked)}
+                        className="h-3 w-3"
+                      />
+                      <Label htmlFor="show-completed" className="text-xs cursor-pointer">
+                        Show completed
+                      </Label>
+                    </div>
+
                     {/* Layout Control */}
                     <Select value={cardsPerRow.toString()} onValueChange={(value) => setCardsPerRow(parseInt(value) as 1 | 2 | 3 | 4 | 5)}>
                       <SelectTrigger className="h-7 w-20 text-xs border-border/50 bg-background/50">
@@ -842,6 +869,7 @@ export default function EnhancedDashboard() {
                         setDate("");
                         setContentType('all');
                         setSortBy('date');
+                        setShowCompletedTasks(false);
                       }}
                       className="h-7 px-3 text-xs text-muted-foreground hover:text-destructive"
                     >
@@ -850,11 +878,18 @@ export default function EnhancedDashboard() {
                   </div>
 
                   {/* Results Summary */}
-                  <div className="text-xs text-muted-foreground">
-                    {searchView === 'unified'
-                      ? `${unifiedItems.length} results found`
-                      : `${filteredTasks.length} tasks • ${filteredNotes.length} notes`
-                    }
+                  <div className="text-xs text-muted-foreground flex items-center gap-4">
+                    <span>
+                      {searchView === 'unified'
+                        ? `${unifiedItems.length} results found`
+                        : `${filteredTasks.length} tasks • ${filteredNotes.length} notes`
+                      }
+                    </span>
+                    {!showCompletedTasks && (
+                      <span className="text-orange-600 bg-orange-100 dark:bg-orange-900/20 px-2 py-1 rounded-md">
+                        Completed tasks hidden
+                      </span>
+                    )}
                   </div>
                 </div>
 
@@ -970,7 +1005,6 @@ export default function EnhancedDashboard() {
 
         {/* Analytics Cards - Always Visible */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-6">
-          {/* Content will be added here */}
         </div>
 
         {/* Task Suggestion & Quick Actions Row - Better Space Management */}
@@ -1231,7 +1265,7 @@ export default function EnhancedDashboard() {
 
         {/* Quick Stats Overview */}
         <motion.div
-          className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 mb-6"
+          className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 mb-6 mt-5"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}

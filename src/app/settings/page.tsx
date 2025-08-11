@@ -503,7 +503,7 @@ function SettingsPageInner() {
               <PWASettings />
             </motion.div>
 
-            <motion.div variants={cardVariants}>
+            {/* <motion.div variants={cardVariants}>
               <Card>
                 <CardHeader>
                   <CardTitle>Calendar Integration</CardTitle>
@@ -513,7 +513,7 @@ function SettingsPageInner() {
                   <CalendarConnections key={calendarRefreshTrigger} />
                 </CardContent>
               </Card>
-            </motion.div>
+            </motion.div> */}
         </motion.div>
       )}
     </motion.div>

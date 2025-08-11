@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { Bell, BellRing, X, AlertTriangle, Calendar, CheckCircle, Trash2 } from 'lucide-react';
 import { useAuth } from '@/contexts/auth-context';
 import { useUnifiedNotifications } from '@/contexts/unified-notification-context';
+import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { 
@@ -14,7 +15,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuLabel
 } from '@/components/ui/dropdown-menu';
-import { formatDistanceToNow } from 'date-fns';
+import { formatDistanceToNow, parse } from 'date-fns';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { NotificationDocument } from '@/lib/types';
 
@@ -35,6 +36,7 @@ interface NotificationEvent {
 
 export function NotificationDropdown() {
   const { user } = useAuth();
+  const router = useRouter();
   const { 
     notifications, 
     unreadCount, 
@@ -56,7 +58,34 @@ export function NotificationDropdown() {
           'reminder',
     title: notif.title,
     message: notif.body || '',
-    timestamp: new Date(notif.createdAt),
+    timestamp: (() => {
+      // Type guard for Firestore Timestamp
+      const createdAt: any = notif.createdAt;
+      if (
+        createdAt &&
+        typeof createdAt === 'object' &&
+        typeof createdAt.toDate === 'function'
+      ) {
+        return createdAt.toDate();
+      }
+      if (typeof createdAt === 'string') {
+        // Try native Date parsing first
+        const nativeDate = new Date(createdAt);
+        if (!isNaN(nativeDate.getTime())) return nativeDate;
+        // Try to parse human-readable Firebase string
+        // Example: August 11, 2025 at 4:20:56 PM UTC+5
+        const parsed = parse(
+          createdAt.replace(' at ', ' '),
+          "MMMM d, yyyy h:mm:ss a 'UTC'X",
+          new Date()
+        );
+        if (!isNaN(parsed.getTime())) return parsed;
+      }
+      if (typeof createdAt === 'number') {
+        return new Date(createdAt);
+      }
+      return new Date();
+    })(),
     taskId: notif.relatedTaskId || notif.data?.taskId,
     isRead: notif.isRead,
     metadata: notif.data ? {
@@ -108,9 +137,8 @@ export function NotificationDropdown() {
 
     // Handle navigation
     if (notification.taskId) {
-      // Check if we can navigate to the task or if it was deleted
       try {
-        window.location.href = `/task/${notification.taskId}`;
+        router.push(`/task/${notification.taskId}`);
       } catch (error) {
         console.warn('Task may have been deleted:', notification.taskId);
         // Could show a toast here about the task being deleted
@@ -277,9 +305,12 @@ export function NotificationDropdown() {
                     
                     <div className="flex items-center justify-between">
                       <span className="text-xs text-muted-foreground">
-                        {notification.timestamp instanceof Date && !isNaN(notification.timestamp.getTime())
-                          ? formatDistanceToNow(notification.timestamp, { addSuffix: true })
-                          : 'Unknown'}
+                        {(() => {
+                          console.log('notification.timestamp:', notification.timestamp);
+                          return notification.timestamp instanceof Date && !isNaN(notification.timestamp.getTime())
+                            ? formatDistanceToNow(notification.timestamp, { addSuffix: true })
+                            : 'Just now';
+                        })()}
                       </span>
                       
                       {notification.metadata && (

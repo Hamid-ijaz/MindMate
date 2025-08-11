@@ -185,6 +185,9 @@ export function Header() {
   const isAuthPage = pathname === '/login' || pathname === '/signup';
 
   // Enhanced navigation items with Calendar moved to secondary
+  // Calculate actual pending tasks count
+  const pendingCount = tasks ? tasks.filter(t => !t.completedAt && !t.parentId).length : 0;
+
   const navigationItems: NavItem[] = [
     // Primary workspace items
     { 
@@ -246,7 +249,7 @@ export function Header() {
       label: 'Pending Tasks', 
       href: '/pending', 
       icon: Clock, 
-      badge: 5, 
+      badge: pendingCount, 
       category: 'admin',
       description: 'Review incomplete tasks'
     },

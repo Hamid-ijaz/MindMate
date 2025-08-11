@@ -18,11 +18,12 @@ import {
   ExternalLink,
   FileText,
   CheckSquare,
-  Loader2
+  Loader2,
+  TrendingUp
 } from 'lucide-react';
 import { useTasks } from '@/contexts/task-context';
 import { useNotes } from '@/contexts/note-context';
-import type { Task, Note } from '@/lib/types';
+import type { Task, Note, Priority } from '@/lib/types';
 
 interface ItemActionsDropdownProps {
   item: Task | Note;
@@ -55,7 +56,7 @@ export function ItemActionsDropdown({
   showExternalLink = true,
   disabled = false
 }: ItemActionsDropdownProps) {
-  const { deleteTask, startEditingTask } = useTasks();
+  const { deleteTask, startEditingTask, updateTask } = useTasks();
   const { deleteNote } = useNotes();
   const [isOpen, setIsOpen] = useState(false);
 
@@ -106,6 +107,39 @@ export function ItemActionsDropdown({
     setIsOpen(false);
   };
 
+  const handleUpgradePriority = async () => {
+    if (itemType === 'task') {
+      const task = item as Task;
+      const priorityMap: Record<Priority, Priority> = {
+        'Low': 'Medium',
+        'Medium': 'High',
+        'High': 'Critical',
+        'Critical': 'Critical' // Already at highest priority
+      };
+      
+      const newPriority = priorityMap[task.priority];
+      if (newPriority !== task.priority) {
+        await updateTask(task.id, { priority: newPriority });
+      }
+    }
+    setIsOpen(false);
+  };
+
+  // Get the next priority for display purposes
+  const getNextPriority = (): Priority | null => {
+    if (itemType === 'task') {
+      const task = item as Task;
+      const priorityMap: Record<Priority, Priority | null> = {
+        'Low': 'Medium',
+        'Medium': 'High',
+        'High': 'Critical',
+        'Critical': null // Already at highest priority
+      };
+      return priorityMap[task.priority];
+    }
+    return null;
+  };
+
   return (
     <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
       <DropdownMenuTrigger asChild>
@@ -144,6 +178,14 @@ export function ItemActionsDropdown({
           <Copy className="mr-2 h-4 w-4" />
           Duplicate {itemType}
         </DropdownMenuItem>
+        
+        {/* Upgrade Priority option (only for tasks and if not already at highest priority) */}
+        {itemType === 'task' && getNextPriority() && (
+          <DropdownMenuItem onClick={handleUpgradePriority} className="cursor-pointer">
+            <TrendingUp className="mr-2 h-4 w-4" />
+            Upgrade to {getNextPriority()}
+          </DropdownMenuItem>
+        )}
         
         {/* Convert note to task (only for notes) */}
         {itemType === 'note' && (
