@@ -132,7 +132,20 @@ self.addEventListener('notificationclick', (event) => {
   const action = event.action;
   
   if (action === 'dismiss') {
-    // Just close the notification
+    // User explicitly chose the Dismiss action -> tell server this notification was dismissed/read
+    const notificationId = event.notification.data?.notificationId;
+  const userEmail = event.notification.data?.userEmail;
+    if (notificationId) {
+      event.waitUntil(
+        fetch('/api/notifications/dismiss', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ notificationId, userEmail })
+        }).catch(err => console.error('SW: Failed to call dismiss endpoint:', err))
+      );
+    }
+
+    // Close and do not navigate
     return;
   }
   
@@ -157,7 +170,21 @@ self.addEventListener('notificationclick', (event) => {
         }
         
         // Open new window if app is not open
-        return clients.openWindow(url);
+        return clients.openWindow(url)
+          .then((newClient) => {
+            // Try to send NAVIGATE_TO_TASK to the newly opened client so it can mark related notifications read
+            try {
+              if (newClient && taskId) {
+                newClient.postMessage({ type: 'NAVIGATE_TO_TASK', taskId: taskId });
+              }
+            } catch (err) {
+              console.warn('SW: Failed to postMessage to newly opened client', err);
+            }
+            return newClient;
+          })
+          .catch((err) => {
+            console.error('Service Worker: Failed to open window', err);
+          });
       })
       .catch((error) => {
         console.error('Service Worker: Error handling notification click', error);
@@ -168,22 +195,10 @@ self.addEventListener('notificationclick', (event) => {
 // Notification close event
 self.addEventListener('notificationclose', (event) => {
   console.log('Service Worker: Notification closed', event);
-  
-  // Track notification dismissal
-  if (event.notification.data?.taskId) {
-    event.waitUntil(
-      fetch('/api/notifications/dismiss', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          taskId: event.notification.data.taskId,
-          timestamp: Date.now()
-        })
-      }).catch(err => console.error('Failed to track notification dismissal:', err))
-    );
-  }
+  // Previously we called the dismiss endpoint here on close.
+  // We intentionally avoid calling the server on generic close events because those
+  // can happen automatically (timeout) or via system UI — we only want to mark read
+  // when the user explicitly taps the Dismiss action (handled in notificationclick).
 });
 
 // Fetch event - serve cached content when offline

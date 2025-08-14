@@ -92,6 +92,7 @@ export async function POST(request: NextRequest) {
         type: 'task-reminder',
         taskId,
         notificationId, // Include the Firestore notification ID
+  userEmail,
         url: `/task/${taskId}`
       }
     };

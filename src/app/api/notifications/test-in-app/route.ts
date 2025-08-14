@@ -46,14 +46,14 @@ export async function POST(request: NextRequest) {
         metadata: {
           isTest: true,
         },
-      },
+  },
     };
     
     // Save notification to user's notifications subcollection
     await db.collection(`users/${userEmail}/notifications`).doc(notificationId).set(notificationData);
     console.log(`💾 Created test in-app notification: ${notificationId}`);
 
-    return NextResponse.json({
+  return NextResponse.json({
       success: true,
       message: 'Test in-app notification created successfully',
       notificationId,

@@ -54,9 +54,22 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
   const [notifications, setNotifications] = useState<StoredNotification[]>([]);
   const { toast } = useToast();
   const displayedNotificationsRef = useRef<Set<string>>(new Set());
+  const DISMISSED_TOASTS_KEY = 'mindmate-dismissed-toasts';
+  const dismissedNotificationsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
+      // initialize dismissed set from localStorage
+      try {
+        const raw = localStorage.getItem(DISMISSED_TOASTS_KEY);
+        if (raw) {
+          const arr = JSON.parse(raw) as string[];
+          dismissedNotificationsRef.current = new Set(arr || []);
+        }
+      } catch (error) {
+        console.warn('Failed to read dismissed toasts from localStorage', error);
+      }
+
       const storedNotifications = localStorage.getItem(NOTIFICATION_STORAGE_KEY);
       if (storedNotifications) {
         setNotifications(JSON.parse(storedNotifications));
@@ -76,14 +89,26 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
   // This effect safely triggers toasts when new notifications are added.
   useEffect(() => {
     notifications.forEach(notif => {
-      // Check if this notification has already been displayed
-      if (!displayedNotificationsRef.current.has(notif.id)) {
+      // Check if this notification has already been displayed or dismissed by user
+      if (
+        !displayedNotificationsRef.current.has(notif.id) &&
+        !dismissedNotificationsRef.current.has(notif.id)
+      ) {
+        const persistDismiss = (id: string) => {
+          try {
+            dismissedNotificationsRef.current.add(id);
+            localStorage.setItem(DISMISSED_TOASTS_KEY, JSON.stringify(Array.from(dismissedNotificationsRef.current)));
+          } catch (error) {
+            console.warn('Failed to persist dismissed toast id', error);
+          }
+        };
+
         const { dismiss } = toast({
           title: notif.title,
           description: notif.body,
           duration: 30000,
           action: (
-            <Button size="sm" onClick={() => dismiss()}>
+            <Button size="sm" onClick={() => { dismiss(); persistDismiss(notif.id); }}>
               Dismiss
             </Button>
           ),

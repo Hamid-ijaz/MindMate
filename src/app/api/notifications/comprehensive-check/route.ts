@@ -133,7 +133,7 @@ async function executeNotificationCheck(): Promise<any> {
     const userEmail = prefDoc.id;
     console.log("🚀 > executeNotificationCheck > userEmail:", userEmail)
     const preferences = prefDoc.data();
-    console.log("🚀 > executeNotificationCheck > preferences:", preferences)
+    // console.log("🚀 > executeNotificationCheck > preferences:", preferences)
 
     try {
       // Skip if notifications are disabled for this user
@@ -174,7 +174,7 @@ async function executeNotificationCheck(): Promise<any> {
       }
       const allTasks = allTasksSnapshot.docs.map(doc => {
         const data = doc.data();
-        console.log("🚀 > executeNotificationCheck > data:", data.reminderAt)
+        // console.log("🚀 > executeNotificationCheck > data:", data.reminderAt)
         // Normalize all relevant fields to millis if present
         return {
           ...data,
@@ -209,6 +209,28 @@ async function executeNotificationCheck(): Promise<any> {
             // Generate notification ID
             const notificationId = `notif_${userEmail.replace('@', '_').replace('.', '_')}_${Date.now()}_overdue`;
             
+            // Before creating a new overdue notification, check if there's an existing unread
+            // notification for the same task. If so, skip to avoid repeated notifications
+            // until user has seen/read the previous one.
+            try {
+              const unreadQuery = await db
+                .collection(`users/${userEmail}/notifications`)
+                .where('relatedTaskId', '==', task._doc.id)
+                .where('data.type', '==', 'overdue-task')
+                .where('isRead', '==', false)
+                .limit(1)
+                .get();
+              console.log("🚀 > executeNotificationCheck > unreadQuery.empty:", unreadQuery.empty);
+
+              if (!unreadQuery.empty) {
+                console.log(`Skipping overdue notification for task ${task._doc.id} because an unread notification already exists.`);
+                continue;
+              }
+            } catch (checkErr) {
+              console.error('Error checking existing unread overdue notifications:', checkErr);
+              // If the check fails, fall back to original behaviour and proceed to notify
+            }
+
             // Save notification to Firestore first
             const notificationData = {
               id: notificationId,
@@ -241,6 +263,7 @@ async function executeNotificationCheck(): Promise<any> {
                 taskId: task._doc.id,
                 title: taskTitle,
                 notificationId, // Include the Firestore notification ID
+                userEmail,
                 url: `/task/${task._doc.id}`,
                 timestamp: now.toISOString()
               }
@@ -299,6 +322,28 @@ async function executeNotificationCheck(): Promise<any> {
           const notificationId = `notif_${userEmail.replace('@', '_').replace('.', '_')}_${Date.now()}_reminder`;
           
           // Save notification to Firestore first
+          // Before creating a new reminder notification, check if there's an existing unread
+          // reminder for the same task. If so, skip sending another reminder until the
+          // user has seen/read the previous one.
+          try {
+            const unreadReminderQuery = await db
+              .collection(`users/${userEmail}/notifications`)
+              .where('relatedTaskId', '==', task._doc.id)
+              .where('data.type', '==', 'task-reminder')
+              .where('isRead', '==', false)
+              .limit(1)
+              .get();
+
+            console.log("🚀 > executeNotificationCheck > unreadReminderQuery.empty:", unreadReminderQuery.empty);
+            if (!unreadReminderQuery.empty) {
+              console.log(`Skipping reminder for task ${task._doc.id} because an unread reminder notification already exists.`);
+              continue;
+            }
+          } catch (checkErr) {
+            console.error('Error checking existing unread reminder notifications:', checkErr);
+            // Proceed with sending if the check fails
+          }
+
           const notificationData = {
             id: notificationId,
             userEmail,
@@ -330,6 +375,7 @@ async function executeNotificationCheck(): Promise<any> {
               taskId: task._doc.id,
               title: taskTitle,
               notificationId, // Include the Firestore notification ID
+              userEmail,
               url: `/task/${task._doc.id}`,
               timestamp: now.toISOString()
             }

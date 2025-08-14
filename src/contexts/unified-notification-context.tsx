@@ -46,6 +46,8 @@ export const UnifiedNotificationProvider = ({ children }: NotificationProviderPr
   const [isLoading, setIsLoading] = useState(false);
   const [permission, setPermission] = useState<NotificationPermission>('default');
   const displayedNotificationsRef = useRef<Set<string>>(new Set());
+  const dismissedNotificationsRef = useRef<Set<string>>(new Set());
+  const getDismissedKey = (email?: string) => `mindmate-dismissed-toasts:${email ?? 'anon'}`;
   const unsubscribeRef = useRef<(() => void) | null>(null);
 
   // Initialize permission state
@@ -57,6 +59,19 @@ export const UnifiedNotificationProvider = ({ children }: NotificationProviderPr
 
   // Set up real-time subscription when user is available
   useEffect(() => {
+    // initialize dismissed set from localStorage (scoped per user)
+    if (typeof window !== 'undefined') {
+      try {
+        const raw = localStorage.getItem(getDismissedKey(user?.email));
+        if (raw) {
+          const arr = JSON.parse(raw) as string[];
+          dismissedNotificationsRef.current = new Set(arr || []);
+        }
+      } catch (error) {
+        console.warn('Failed to read dismissed toasts from localStorage', error);
+      }
+    }
+
     if (!user?.email) {
       setNotifications([]);
       setUnreadCount(0);
@@ -75,15 +90,32 @@ export const UnifiedNotificationProvider = ({ children }: NotificationProviderPr
         
         // Show toast notifications for new unread notifications
         newNotifications.forEach(notif => {
-          if (!notif.isRead && !displayedNotificationsRef.current.has(notif.id)) {
+          // skip if already displayed in this session or dismissed by user
+          if (
+            !notif.isRead &&
+            !displayedNotificationsRef.current.has(notif.id) &&
+            !dismissedNotificationsRef.current.has(notif.id)
+          ) {
             displayedNotificationsRef.current.add(notif.id);
-            
+
+            const persistDismiss = (id: string) => {
+              try {
+                dismissedNotificationsRef.current.add(id);
+                localStorage.setItem(
+                  getDismissedKey(user?.email),
+                  JSON.stringify(Array.from(dismissedNotificationsRef.current))
+                );
+              } catch (error) {
+                console.warn('Failed to persist dismissed toast id', error);
+              }
+            };
+
             const { dismiss } = toast({
               title: `🔔 ${notif.title}`,
               description: notif.body,
               duration: 5000,
               action: (
-                <Button size="sm" onClick={() => dismiss()}>
+                <Button size="sm" onClick={() => { dismiss(); persistDismiss(notif.id); }}>
                   Dismiss
                 </Button>
               ),
@@ -109,6 +141,58 @@ export const UnifiedNotificationProvider = ({ children }: NotificationProviderPr
       }
     };
   }, []);
+
+  // Listen for messages from the service worker (e.g. notification click)
+  // When SW posts { type: 'NAVIGATE_TO_TASK', taskId }, mark related notifications as read
+  useEffect(() => {
+    if (typeof window === 'undefined' || !('serviceWorker' in navigator)) return;
+
+    const handler = async (event: MessageEvent) => {
+      try {
+        const data = event?.data;
+        if (!data || data.type !== 'NAVIGATE_TO_TASK') return;
+
+        const taskId = data.taskId;
+        if (!taskId || !user?.email) return;
+
+        // Fetch recent notifications and mark any unread notifications related to this task as read
+        const allNotifs = await notificationService.getNotifications(user.email, 200);
+        const related = allNotifs.filter(n => (
+          n.relatedTaskId === taskId || n.data?.taskId === taskId
+        ) && !n.isRead);
+
+        await Promise.all(related.map(n => notificationService.markAsRead(user.email, n.id)));
+      } catch (err) {
+        console.error('Failed to process service worker message for notifications:', err);
+      }
+    };
+
+    navigator.serviceWorker.addEventListener('message', handler);
+    return () => navigator.serviceWorker.removeEventListener('message', handler);
+  }, [user?.email]);
+
+  // If the user opens the app directly at /task/:id (for example from SW openWindow),
+  // mark related notifications read on initial load as a fallback.
+  useEffect(() => {
+    try {
+      if (typeof window === 'undefined' || !user?.email) return;
+      const path = window.location.pathname || '';
+      const match = path.match(/^\/task\/(.+)/);
+      const taskId = match ? match[1] : null;
+      if (!taskId) return;
+
+      (async () => {
+        const allNotifs = await notificationService.getNotifications(user.email, 200);
+        const related = allNotifs.filter(n => (
+          n.relatedTaskId === taskId || n.data?.taskId === taskId
+        ) && !n.isRead);
+
+        await Promise.all(related.map(n => notificationService.markAsRead(user.email, n.id)));
+      })();
+    } catch (err) {
+      console.error('Initial-load notification read marking failed:', err);
+    }
+  }, [user?.email]);
 
   const playNotificationSound = useCallback(() => {
     try {

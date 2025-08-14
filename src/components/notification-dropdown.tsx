@@ -306,7 +306,7 @@ export function NotificationDropdown() {
                     <div className="flex items-center justify-between">
                       <span className="text-xs text-muted-foreground">
                         {(() => {
-                          console.log('notification.timestamp:', notification.timestamp);
+                          // console.log('notification.timestamp:', notification.timestamp);
                           return notification.timestamp instanceof Date && !isNaN(notification.timestamp.getTime())
                             ? formatDistanceToNow(notification.timestamp, { addSuffix: true })
                             : 'Just now';
