@@ -19,7 +19,7 @@ export function usePushNotificationHelper(): PushNotificationHelper {
       if (user?.email) {
         try {
           const now = new Date();
-          const dueDate = task.dueDate ? new Date(task.dueDate) : null;
+          const dueDate = task.reminderAt ? new Date(task.reminderAt) : null;
           const isOverdue = dueDate && dueDate <= now;
           
           let title: string;

@@ -4,8 +4,8 @@
  */
 
 const API_BASE_URL = process.env.NODE_ENV === 'production' 
-  ? 'https://your-vercel-app.vercel.app' 
-  : 'http://localhost:3000';
+  ? 'https://mindmate.hamidijaz.dev' 
+  : 'http://localhost:9002';
 
 /**
  * Send a task reminder notification
@@ -67,31 +67,7 @@ export async function checkOverdueTasks(userId: string, authToken?: string) {
   }
 }
 
-/**
- * Manually trigger overdue task check for all users
- * This is typically called by cron jobs or admin functions
- */
-export async function triggerOverdueCheck(authToken?: string) {
-  try {
-    const response = await fetch(`${API_BASE_URL}/api/notifications/trigger-overdue-check`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(authToken && { 'Authorization': `Bearer ${authToken}` })
-      },
-    });
 
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.error || 'Failed to trigger overdue check');
-    }
-
-    return await response.json();
-  } catch (error) {
-    console.error('Error triggering overdue check:', error);
-    throw error;
-  }
-}
 
 /**
  * Health check for the API endpoints
