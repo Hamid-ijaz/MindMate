@@ -669,6 +669,12 @@ export function TaskSuggestion() {
                           <Badge variant="outline" className="text-xs px-2 py-0.5">
                             {task.timeOfDay}
                           </Badge>
+                          {task.reminderAt && (
+                            <Badge variant="outline" className="text-xs px-2 py-0.5 flex items-center gap-1">
+                              <CalendarIcon className="w-3 h-3 mr-1" />
+                              {safeDateFormat(task.reminderAt, "MMM d, h:mm a", "Invalid date")}
+                            </Badge>
+                          )}
                           {task.rejectionCount > 0 && (
                             <Badge variant="destructive" className="text-xs px-2 py-0.5 animate-pulse">
                               {task.rejectionCount}x Skipped

@@ -243,6 +243,11 @@ export interface Task {
   completedAt?: number;
   parentId?: string;
   reminderAt?: number;
+  /**
+   * If true, only send a single reminder at the exact `reminderAt` time and
+   * skip overdue notifications for this task. Added to support "only notify at reminder" option.
+   */
+  onlyNotifyAtReminder?: boolean;
   notifiedAt?: number;
   recurrence?: {
     frequency: RecurrenceFrequency;

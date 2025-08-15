@@ -197,6 +197,8 @@ async function executeNotificationCheck(): Promise<any> {
         const overdueTasksToNotify = overdueTasks.filter((task: any) => {
           if (typeof task.completedAt !== 'undefined' && task.completedAt) return false;
           if (typeof task.notifiedAt !== 'undefined' && task.notifiedAt >= twentyFourHoursAgo) return false;
+          // If task is flagged to only notify at the exact reminder time, skip overdue notifications
+          if (task.onlyNotifyAtReminder) return false;
           return task.reminderAt < now.getTime();
         });
 

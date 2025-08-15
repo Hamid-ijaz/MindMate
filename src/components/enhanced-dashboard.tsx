@@ -5,6 +5,7 @@ import { QuickActions } from "@/components/quick-actions";
 import { PullToRefresh } from "@/components/pull-to-refresh";
 import { NotificationPrompt } from "@/components/notification-prompt";
 import React, { useState, useMemo, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { useTasks } from "@/contexts/task-context";
 import { useNotes } from "@/contexts/note-context";
 import { useNotifications } from "@/contexts/notification-context";
@@ -356,6 +357,7 @@ export default function EnhancedDashboard() {
   // Weather and time data
   const { weather, isLoading: weatherLoading } = useWeatherData();
   const timeInfo = getTimeBasedInfo();
+  const router = useRouter();
 
   // Analytics calculations
   const analytics = useMemo(() => {
@@ -427,8 +429,13 @@ export default function EnhancedDashboard() {
       streak,
       completionRate,
       highPriorityTasks,
-      totalNotes: notes.length,
-      notifications: notifications.length
+  totalNotes: notes.length,
+  notifications: notifications.length,
+  // overall task counts
+  totalTasks: tasks.length,
+  totalCompleted: completedTasks.length,
+  remainingTasks: tasks.length - completedTasks.length,
+  overallCompletionRate: tasks.length > 0 ? (completedTasks.length / tasks.length) * 100 : 0
     };
   }, [tasks, notes, notifications]);
 
@@ -560,6 +567,21 @@ export default function EnhancedDashboard() {
       // Sort by reminder date first (if available), then by creation date
       const aDate = a.reminderAt || a.createdAt;
       const bDate = b.reminderAt || b.createdAt;
+      return aDate - bDate;
+    });
+  }, [tasks]);
+
+  // Tasks due today (reminderAt or scheduledAt)
+  const dueTodayTasks = useMemo(() => {
+    return tasks.filter(t => {
+      if (t.completedAt || t.isMuted) return false;
+      const reminder = t.reminderAt ? new Date(t.reminderAt) : null;
+      const scheduled = t.scheduledAt ? new Date(t.scheduledAt) : null;
+
+      return (reminder && isToday(reminder)) || (scheduled && isToday(scheduled));
+    }).sort((a, b) => {
+      const aDate = a.reminderAt || a.scheduledAt || a.createdAt;
+      const bDate = b.reminderAt || b.scheduledAt || b.createdAt;
       return aDate - bDate;
     });
   }, [tasks]);
@@ -713,11 +735,11 @@ export default function EnhancedDashboard() {
               <div className="flex items-center gap-4 text-sm text-muted-foreground">
                 <div className="flex items-center gap-1">
                   <CheckSquare className="w-4 h-4 text-green-600" />
-                  <span>{filteredTasks.filter(t => t.completedAt && isToday(new Date(t.completedAt))).length} done today</span>
+                  <span>{analytics.todayCompleted} done today</span>
                 </div>
                 <div className="flex items-center gap-1">
                   <Clock className="w-4 h-4 text-orange-600" />
-                  <span>{filteredTasks.filter(t => !t.completedAt && !t.isMuted).length} pending</span>
+                  <span>{filteredTasks.filter(t => !t.completedAt && !t.isMuted && isToday(new Date(t.reminderAt))).length} due today</span>
                 </div>
               </div>
 
@@ -1031,30 +1053,39 @@ export default function EnhancedDashboard() {
                 <CardHeader className="pb-3">
                   <CardTitle className="text-base flex items-center gap-2">
                     <Activity className="w-4 h-4 text-primary" />
-                    Today's Stats
+                    Task Stats
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3">
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="text-center p-2 bg-gray-50 dark:bg-gray-950/20 rounded-lg">
+                      <div className="text-lg font-semibold text-gray-800 dark:text-gray-200">
+                        {analytics.totalTasks}
+                      </div>
+                      <div className="text-xs text-muted-foreground">Total</div>
+                    </div>
+
                     <div className="text-center p-2 bg-green-50 dark:bg-green-950/20 rounded-lg">
                       <div className="text-lg font-semibold text-green-600 dark:text-green-400">
-                        {filteredTasks.filter(t => t.completedAt && isToday(new Date(t.completedAt))).length}
+                        {analytics.totalCompleted}
                       </div>
                       <div className="text-xs text-green-600/80 dark:text-green-400/80">Completed</div>
                     </div>
-                    <div className="text-center p-2 bg-blue-50 dark:bg-blue-950/20 rounded-lg">
-                      <div className="text-lg font-semibold text-blue-600 dark:text-blue-400">
-                        {filteredTasks.filter(t => !t.completedAt && !t.isMuted).length}
+
+                    <div className="text-center p-2 bg-yellow-50 dark:bg-yellow-950/20 rounded-lg">
+                      <div className="text-lg font-semibold text-yellow-700 dark:text-yellow-300">
+                        {analytics.remainingTasks}
                       </div>
-                      <div className="text-xs text-blue-600/80 dark:text-blue-400/80">Pending</div>
+                      <div className="text-xs text-yellow-700/80 dark:text-yellow-300/80">Remaining</div>
                     </div>
                   </div>
+
                   <div className="space-y-2">
                     <div className="flex justify-between text-xs">
-                      <span className="text-muted-foreground">Progress</span>
-                      <span className="font-medium">{Math.round(completionRate)}%</span>
+                      <span className="text-muted-foreground">Overall Progress</span>
+                      <span className="font-medium">{Math.round(analytics.overallCompletionRate)}%</span>
                     </div>
-                    <Progress value={completionRate} className="h-2" />
+                    <Progress value={analytics.overallCompletionRate} className="h-2" />
                   </div>
                 </CardContent>
               </Card>
@@ -1652,7 +1683,7 @@ export default function EnhancedDashboard() {
 
             {/* Right Column - Context & Tools */}
             <div className="space-y-6">
-              {/* Focus Timer */}
+              {/* Due Today Card (replaces Focus Timer) */}
               <motion.div
                 initial={{ opacity: 0, x: 20 }}
                 animate={{ opacity: 1, x: 0 }}
@@ -1661,59 +1692,63 @@ export default function EnhancedDashboard() {
                 <Card>
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
-                      <Timer className="w-5 h-5" />
-                      Focus Timer
+                      <CalendarIcon className="w-5 h-5" />
+                      Due Today
+                      <Badge variant="secondary" className="ml-auto">{dueTodayTasks.length}</Badge>
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <div className="text-center space-y-4">
-                      <div className="relative w-32 h-32 mx-auto">
-                        <svg className="w-32 h-32 transform -rotate-90">
-                          <circle
-                            cx="64"
-                            cy="64"
-                            r="56"
-                            stroke="currentColor"
-                            strokeWidth="8"
-                            fill="transparent"
-                            className="text-muted"
-                          />
-                          <circle
-                            cx="64"
-                            cy="64"
-                            r="56"
-                            stroke="currentColor"
-                            strokeWidth="8"
-                            fill="transparent"
-                            strokeDasharray={`${2 * Math.PI * 56}`}
-                            strokeDashoffset={`${2 * Math.PI * 56 * (1 - (pomodoroTime / (25 * 60)))}`}
-                            className="text-primary transition-all duration-1000 ease-in-out"
-                          />
-                        </svg>
-                        <div className="absolute inset-0 flex items-center justify-center">
-                          <span className="text-2xl font-mono font-bold">
-                            {formatTime(pomodoroTime)}
-                          </span>
+                    <div className="space-y-3">
+                      {dueTodayTasks.length === 0 ? (
+                        <div className="text-center text-sm text-muted-foreground py-6">
+                          <p>No tasks due today</p>
+                          <Button size="sm" className="mt-3" onClick={() => setShowSearchBar(true)}>Add or schedule a task</Button>
                         </div>
-                      </div>
+                      ) : (
+                        dueTodayTasks.slice(0, 5).map(task => (
+                          <div
+                            key={task.id}
+                            className="flex items-center gap-3 p-3 bg-white/80 dark:bg-gray-800/50 rounded-lg hover:bg-white dark:hover:bg-gray-800 transition-colors cursor-pointer border"
+                            onClick={() => router.push(`/task/${task.id}`)}
+                          >
+                            <div className={cn(
+                              "w-3 h-3 rounded-full",
+                              task.priority === 'Critical' ? 'bg-red-500' :
+                                task.priority === 'High' ? 'bg-orange-500' :
+                                  task.priority === 'Medium' ? 'bg-yellow-500' : 'bg-green-500'
+                            )} />
+                            <div className="flex-1 min-w-0">
+                              <p className="font-medium truncate">{task.title}</p>
+                              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                <Clock className="w-3 h-3" />
+                                {task.reminderAt ? (
+                                  <span>Due {format(new Date(task.reminderAt), 'h:mm a')}</span>
+                                ) : (
+                                  <span>Due today</span>
+                                )}
+                                <Badge variant="outline" className="text-xs">{task.priority}</Badge>
+                              </div>
+                            </div>
+                            <div className="flex gap-2 items-center">
+                              <Button size="sm" variant="ghost" onClick={(e) => { e.stopPropagation(); acceptTask(task.id); }}>
+                                <CheckCircle2 className="w-4 h-4" />
+                              </Button>
+                              <Button size="sm" variant="ghost" onClick={(e) => { e.stopPropagation(); startEditingTask(task.id); }}>
+                                <Edit3 className="w-4 h-4" />
+                              </Button>
+                            </div>
+                          </div>
+                        ))
+                      )}
 
-                      <div className="flex justify-center gap-2">
-                        <Button
-                          onClick={() => setIsTimerRunning(!isTimerRunning)}
-                          variant={isTimerRunning ? 'destructive' : 'default'}
-                        >
-                          {isTimerRunning ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
-                        </Button>
-                        <Button
-                          onClick={() => {
-                            setPomodoroTime(25 * 60);
-                            setIsTimerRunning(false);
-                          }}
-                          variant="outline"
-                        >
-                          <RotateCcw className="w-4 h-4" />
-                        </Button>
-                      </div>
+                      {dueTodayTasks.length > 5 && (
+                        <div className="text-center pt-2">
+                          <Button variant="ghost" size="sm" onClick={() => { setShowSearchBar(true); }}>
+                            View all {dueTodayTasks.length} due today
+                            <ChevronRight className="w-4 h-4 ml-1" />
+                          </Button>
+                        </div>
+                      )}
                     </div>
                   </CardContent>
                 </Card>

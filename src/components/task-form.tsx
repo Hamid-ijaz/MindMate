@@ -51,6 +51,7 @@ const formSchema = z.object({
   duration: z.coerce.number().min(1, "Duration is required"),
   timeOfDay: z.enum(timesOfDay),
   reminderAt: z.date().optional(),
+  onlyNotifyAtReminder: z.boolean().optional().default(false),
   location: z.string().optional(),
   isAllDay: z.boolean().optional().default(true), // Always true in background
   syncToGoogleCalendar: z.boolean().optional().default(false),
@@ -137,6 +138,7 @@ export function TaskForm({ task, onFinished, parentId, defaultValues: propDefaul
     location: "",
     isAllDay: true, // Always true
     syncToGoogleCalendar: false,
+  onlyNotifyAtReminder: false,
     recurrence: { frequency: 'none', endDate: undefined },
     ...propDefaults,
   };
@@ -221,6 +223,7 @@ export function TaskForm({ task, onFinished, parentId, defaultValues: propDefaul
         ...data,
         isAllDay: true, // Always set to true
         reminderAt: data.reminderAt ? data.reminderAt.getTime() : undefined,
+  onlyNotifyAtReminder: data.onlyNotifyAtReminder || false,
         recurrence: data.recurrence && data.recurrence.frequency !== 'none' ? {
             ...data.recurrence,
             endDate: data.recurrence.endDate ? data.recurrence.endDate.getTime() : undefined,
@@ -580,6 +583,25 @@ export function TaskForm({ task, onFinished, parentId, defaultValues: propDefaul
                 </FormItem>
             )}
             />
+
+        <FormField
+          control={form.control}
+          name="onlyNotifyAtReminder"
+          render={({ field }) => (
+            <FormItem>
+              <div className="flex items-center gap-3">
+                <FormControl>
+                  <Switch checked={!!field.value} onCheckedChange={(val) => field.onChange(val)} />
+                </FormControl>
+                <div className="space-y-0">
+                  <FormLabel className="text-sm font-normal cursor-pointer">Only notify at exact reminder time</FormLabel>
+                  <FormDescription className="text-xs text-muted-foreground">When enabled, the task will only send a reminder at the specified time and won't generate overdue notifications.</FormDescription>
+                </div>
+              </div>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
 
         <Separator />
         
