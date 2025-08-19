@@ -2,13 +2,14 @@
 # 🧠 MindMate
 
 <p align="center">
-  <img src="https://mindmate.hamidijaz.dev/logo.png" alt="MindMate Logo" width="120">
+    <img src="public/logo.png" alt="MindMate Logo" width="120">
 </p>
 
 <h3 align="center">An intelligent task companion to help you focus and reduce overwhelm.</h3>
 
 <p align="center">
-  <img alt="GitHub" src="https://img.shields.io/github/license/hamidijaz/MindMate?style=for-the-badge">
+    <!-- Use a static MIT badge to avoid GitHub repo-name resolution issues -->
+    <img alt="License" src="https://img.shields.io/badge/License-MIT-blue?style=for-the-badge&logo=github">
   <img alt="Next.js" src="https://img.shields.io/badge/Next.js-000000?style=for-the-badge&logo=nextdotjs&logoColor=white">
   <img alt="Firebase" src="https://img.shields.io/badge/Firebase-FFCA28?style=for-the-badge&logo=firebase&logoColor=black">
   <img alt="Genkit" src="https://img.shields.io/badge/Genkit-4285F4?style=for-the-badge&logo=google&logoColor=white">
