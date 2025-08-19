@@ -197,8 +197,7 @@ async function executeNotificationCheck(): Promise<any> {
         const overdueTasksToNotify = overdueTasks.filter((task: any) => {
           if (typeof task.completedAt !== 'undefined' && task.completedAt) return false;
           if (typeof task.notifiedAt !== 'undefined' && task.notifiedAt >= twentyFourHoursAgo) return false;
-          // If task is flagged to only notify at the exact reminder time, skip overdue notifications
-          if (task.onlyNotifyAtReminder) return false;
+          
           return task.reminderAt < now.getTime();
         });
 
@@ -312,6 +311,8 @@ async function executeNotificationCheck(): Promise<any> {
           if (typeof task.reminderAt !== 'number') return false;
           if (typeof task.completedAt !== 'undefined' && task.completedAt) return false;
           if (typeof task.lastRemindedAt !== 'undefined' && task.lastRemindedAt >= thirtyMinutesAgo) return false;
+          if (task.onlyNotifyAtReminder) return false;
+
           return task.reminderAt > now.getTime() && task.reminderAt <= reminderTime;
         });
 

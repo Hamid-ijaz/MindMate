@@ -21,9 +21,10 @@ import { Priority, TimeOfDay } from '@/lib/types';
 interface VoiceTaskDialogProps {
   isOpen: boolean;
   onClose: () => void;
+  initialStream?: MediaStream | null;
 }
 
-export function VoiceTaskDialog({ isOpen, onClose }: VoiceTaskDialogProps) {
+export function VoiceTaskDialog({ isOpen, onClose, initialStream }: VoiceTaskDialogProps) {
   const [isRecording, setIsRecording] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [duration, setDuration] = useState(0);
@@ -98,7 +99,8 @@ export function VoiceTaskDialog({ isOpen, onClose }: VoiceTaskDialogProps) {
 
   const startRecording = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ 
+      // Use provided initialStream if available (acquired on touchstart in AddTaskButton).
+      const stream = initialStream ? initialStream : await navigator.mediaDevices.getUserMedia({ 
         audio: {
           echoCancellation: true,
           noiseSuppression: true,
@@ -125,7 +127,12 @@ export function VoiceTaskDialog({ isOpen, onClose }: VoiceTaskDialogProps) {
         setAudioUrl(url);
         
         // Stop all tracks
-        stream.getTracks().forEach(track => track.stop());
+        // If stream was provided by caller, we still stop tracks here to free microphone.
+        try {
+          stream.getTracks().forEach(track => track.stop());
+        } catch (e) {
+          // ignore
+        }
       };
       
       mediaRecorder.start(1000);
@@ -277,6 +284,13 @@ export function VoiceTaskDialog({ isOpen, onClose }: VoiceTaskDialogProps) {
     
     if (recognitionRef.current) {
       recognitionRef.current.stop();
+    }
+
+    // Stop any initialStream tracks (safety) -- it may already be stopped elsewhere
+    if (initialStream) {
+      try {
+        initialStream.getTracks().forEach((t) => t.stop());
+      } catch (e) {}
     }
   };
 

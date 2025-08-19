@@ -115,7 +115,8 @@ export function SubtaskList({
   };
   
   // In history view, show all associated subtasks. Otherwise, show all subtasks (both pending and completed).
-  const subtasksToDisplay = subtasks;
+  // Ensure subtasks are consistently ordered so the latest created subtask appears at the end.
+  const subtasksToDisplay = [...subtasks].sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
 
   return (
     <div className="space-y-2">

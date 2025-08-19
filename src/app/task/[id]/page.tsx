@@ -127,7 +127,7 @@ function TaskPageInner() {
     
     const taskId = Array.isArray(id) ? id[0] : id;
     const task = tasks.find(t => t.id === taskId);
-    const subtasks = tasks.filter(t => t.parentId === taskId);
+    const subtasks = tasks.filter(t => t.parentId === taskId).sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
     const pendingSubtasks = subtasks.filter(t => !t.completedAt);
     const completedSubtasks = subtasks.filter(t => t.completedAt);
     const hasPendingSubtasks = pendingSubtasks.length > 0;

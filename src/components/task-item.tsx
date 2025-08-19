@@ -77,7 +77,7 @@ export function TaskItem({ task, extraActions, isSubtask = false, isHistoryView 
     },
   });
 
-  const subtasks = tasks.filter(t => t.parentId === task.id);
+  const subtasks = tasks.filter(t => t.parentId === task.id).sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
   const pendingSubtasks = subtasks.filter(t => !t.completedAt);
   const hasPendingSubtasks = pendingSubtasks.length > 0;
 

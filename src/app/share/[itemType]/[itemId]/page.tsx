@@ -118,7 +118,7 @@ export default function SharedContentPage() {
         // Load subtasks for tasks
         if (itemContent) {
           const allTasks = await taskService.getTasks(itemContent.userEmail);
-          const taskSubtasks = allTasks.filter(t => t.parentId === itemId);
+          const taskSubtasks = allTasks.filter(t => t.parentId === itemId).sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
           setSubtasks(taskSubtasks);
         }
       } else {
@@ -254,9 +254,9 @@ export default function SharedContentPage() {
       });
 
       // Reload subtasks
-      const allTasks = await taskService.getTasks(content.userEmail);
-      const taskSubtasks = allTasks.filter(t => t.parentId === itemId);
-      setSubtasks(taskSubtasks);
+  const allTasks = await taskService.getTasks(content.userEmail);
+  const taskSubtasks = allTasks.filter(t => t.parentId === itemId).sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+  setSubtasks(taskSubtasks);
       setShowAddSubtask(false);
 
       toast({
@@ -290,9 +290,9 @@ export default function SharedContentPage() {
       });
 
       // Reload subtasks
-      const allTasks = await taskService.getTasks(content.userEmail);
-      const taskSubtasks = allTasks.filter(t => t.parentId === itemId);
-      setSubtasks(taskSubtasks);
+  const allTasks = await taskService.getTasks(content.userEmail);
+  const taskSubtasks = allTasks.filter(t => t.parentId === itemId).sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+  setSubtasks(taskSubtasks);
 
       toast({
         title: "Subtask updated!",
@@ -366,9 +366,9 @@ export default function SharedContentPage() {
       });
 
       // Reload subtasks to get updated state
-      const allTasks = await taskService.getTasks(content.userEmail);
-      const taskSubtasks = allTasks.filter(t => t.parentId === itemId);
-      setSubtasks(taskSubtasks);
+  const allTasks = await taskService.getTasks(content.userEmail);
+  const taskSubtasks = allTasks.filter(t => t.parentId === itemId).sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+  setSubtasks(taskSubtasks);
 
       toast({
         title: "Subtask completed!",
@@ -407,8 +407,8 @@ export default function SharedContentPage() {
 
       // Reload subtasks to get updated state
       const allTasks = await taskService.getTasks(content.userEmail);
-      const taskSubtasks = allTasks.filter(t => t.parentId === itemId);
-      setSubtasks(taskSubtasks);
+  const taskSubtasks = allTasks.filter(t => t.parentId === itemId).sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+  setSubtasks(taskSubtasks);
 
       toast({
         title: "Subtask reopened!",

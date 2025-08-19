@@ -58,6 +58,8 @@ export function AddTaskButton({ isMobile, className, onClick, ...props }: AddTas
     const [isVoiceDialogOpen, setIsVoiceDialogOpen] = useState(false);
     const pressTimerRef = useRef<NodeJS.Timeout | null>(null);
     const isPressedRef = useRef(false);
+    const pendingStreamRef = useRef<MediaStream | null>(null);
+    const [initialStream, setInitialStream] = useState<MediaStream | null>(null);
 
     const handleClick = (e: React.MouseEvent<HTMLButtonElement>) => {
         e.preventDefault();
@@ -75,6 +77,8 @@ export function AddTaskButton({ isMobile, className, onClick, ...props }: AddTas
             isPressedRef.current = false;
             pressTimerRef.current = setTimeout(() => {
                 isPressedRef.current = true;
+                // Open dialog and attach any pending stream
+                setInitialStream(pendingStreamRef.current);
                 setIsVoiceDialogOpen(true);
                 // Add haptic feedback if available
                 if (navigator.vibrate) {
@@ -98,8 +102,22 @@ export function AddTaskButton({ isMobile, className, onClick, ...props }: AddTas
     const handleTouchStart = (e: React.TouchEvent<HTMLButtonElement>) => {
         if (isMobile) {
             isPressedRef.current = false;
+            // Try to get microphone access immediately as this is a user gesture.
+            // Store the stream so the dialog can start recording without being blocked by gesture restrictions.
+            (async () => {
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    pendingStreamRef.current = stream;
+                } catch (err) {
+                    // Ignore; dialog will try to request if needed.
+                    pendingStreamRef.current = null;
+                }
+            })();
+
             pressTimerRef.current = setTimeout(() => {
                 isPressedRef.current = true;
+                // Open dialog and attach any pending stream
+                setInitialStream(pendingStreamRef.current);
                 setIsVoiceDialogOpen(true);
                 // Add haptic feedback if available
                 if (navigator.vibrate) {
@@ -117,6 +135,16 @@ export function AddTaskButton({ isMobile, className, onClick, ...props }: AddTas
         // Reset after a short delay to allow click to process
         setTimeout(() => {
             isPressedRef.current = false;
+
+            // If we acquired a pending stream but the long-press didn't happen, stop tracks and clear it.
+            if (pendingStreamRef.current && !initialStream) {
+                try {
+                    pendingStreamRef.current.getTracks().forEach((t) => t.stop());
+                } catch (e) {
+                    // ignore
+                }
+                pendingStreamRef.current = null;
+            }
         }, 100);
     };
 
@@ -140,7 +168,18 @@ export function AddTaskButton({ isMobile, className, onClick, ...props }: AddTas
                 
                 <VoiceTaskDialog 
                     isOpen={isVoiceDialogOpen}
-                    onClose={() => setIsVoiceDialogOpen(false)}
+                    onClose={() => {
+                        setIsVoiceDialogOpen(false);
+                        // cleanup any initial stream when dialog closes
+                        if (initialStream) {
+                            try {
+                                initialStream.getTracks().forEach((t) => t.stop());
+                            } catch (e) {}
+                            setInitialStream(null);
+                        }
+                        pendingStreamRef.current = null;
+                    }}
+                    initialStream={initialStream}
                 />
             </>
         )

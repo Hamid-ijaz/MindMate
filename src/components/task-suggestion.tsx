@@ -471,7 +471,7 @@ export function TaskSuggestion() {
   }
 
   // Enhanced subtask display with completion tracking
-  const subtasksOfSuggested = currentTask ? tasks.filter(t => t.parentId === currentTask.id) : [];
+  const subtasksOfSuggested = currentTask ? tasks.filter(t => t.parentId === currentTask.id).sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0)) : [];
   const pendingSubtasks = subtasksOfSuggested.filter(t => !t.completedAt);
   const completedSubtasks = subtasksOfSuggested.filter(t => t.completedAt);
   const hasPendingSubtasks = pendingSubtasks.length > 0;
