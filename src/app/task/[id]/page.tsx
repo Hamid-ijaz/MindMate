@@ -14,27 +14,28 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
 import { 
-  AlertCircle, 
-  ArrowLeft, 
-  CalendarIcon, 
-  Check, 
-  Edit, 
-  Loader2, 
-  Repeat, 
-  RotateCcw, 
-  Trash2,
-  Clock,
-  User,
-  Share2,
-  ChevronDown,
-  ChevronUp,
-  PlusCircle,
-  Eye,
-  FileText,
-  Target,
-  Timer,
-  Zap,
-  Plus
+    AlertCircle, 
+    ArrowLeft, 
+    CalendarIcon, 
+    Check, 
+    Edit, 
+    Loader2, 
+    Repeat, 
+    RotateCcw, 
+    Trash2,
+    Clock,
+    User,
+    Share2,
+    ChevronDown,
+    ChevronUp,
+    PlusCircle,
+    Eye,
+    FileText,
+    Target,
+    Timer,
+    Zap,
+    Plus,
+    Archive
 } from 'lucide-react';
 import { SubtaskList } from '@/components/subtask-list';
 import { TaskForm } from '@/components/task-form';
@@ -362,6 +363,12 @@ function TaskPageInner() {
                                     <Target className="h-3 w-3 mr-1" />
                                     {task.category}
                                 </Badge>
+                                {task.isArchived && (
+                                    <Badge variant="secondary" className="ml-2 text-xs flex items-center gap-1 bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-600 dark:text-white dark:border-orange-600">
+                                        <Archive className="w-3 h-3 text-orange-600 dark:text-white" />
+                                        <span className="leading-none">Archived</span>
+                                    </Badge>
+                                )}
                                 <Badge
                                     variant={
                                         task.priority === 'Critical' ? 'destructive' :

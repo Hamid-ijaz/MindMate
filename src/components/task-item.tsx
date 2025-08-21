@@ -8,7 +8,7 @@ import { useTouchGestures } from '@/hooks/use-touch-gestures';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Check, Edit, Trash2, ChevronDown, ChevronUp, RotateCcw, CalendarIcon, Loader2, ExternalLink, Repeat, Plus, Calendar } from 'lucide-react';
+import { Check, Edit, Trash2, ChevronDown, ChevronUp, RotateCcw, CalendarIcon, Loader2, ExternalLink, Repeat, Plus, Calendar, Archive } from 'lucide-react';
 import { TaskForm } from './task-form';
 import { SubtaskList } from './subtask-list';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
@@ -208,6 +208,12 @@ export function TaskItem({ task, extraActions, isSubtask = false, isHistoryView 
               <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
                 {task.category}
               </span>
+              {task.isArchived && (
+                <Badge variant="secondary" className="ml-2 text-xs flex items-center gap-1 bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-600 dark:text-white dark:border-orange-600">
+                  <Archive className="w-3 h-3 text-orange-600 dark:text-white" />
+                  <span className="leading-none">Archived</span>
+                </Badge>
+              )}
             </div>
 
             {/* Title - mobile optimized */}

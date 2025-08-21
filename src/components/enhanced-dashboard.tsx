@@ -435,13 +435,13 @@ export default function EnhancedDashboard() {
   totalTasks: tasks.length,
   totalCompleted: completedTasks.length,
   remainingTasks: tasks.length - completedTasks.length,
-  overallCompletionRate: tasks.length > 0 ? (completedTasks.length / tasks.length) * 100 : 0
+  overallCompletionRate: tasks.length > 0 ? (completedTasks.length / tasks.length) * 100 : 0,
     };
   }, [tasks, notes, notifications]);
 
   // Smart task prioritization
   const smartTasks = useMemo(() => {
-    const activeTasks = tasks.filter(t => !t.completedAt);
+    const activeTasks = tasks.filter(t => !t.completedAt  && !t.isArchived);
 
     return activeTasks
       .map(task => {
@@ -462,20 +462,20 @@ export default function EnhancedDashboard() {
           else score += Math.max(0, 50 - daysUntilDue * 5);
         }
 
-        // Time of day matching
-        const currentHour = new Date().getHours();
-        if (task.timeOfDay === 'Morning' && currentHour < 12) score += 25;
-        else if (task.timeOfDay === 'Afternoon' && currentHour >= 12 && currentHour < 17) score += 25;
-        else if (task.timeOfDay === 'Evening' && currentHour >= 17) score += 25;
+        // // Time of day matching
+        // const currentHour = new Date().getHours();
+        // if (task.timeOfDay === 'Morning' && currentHour < 12) score += 25;
+        // else if (task.timeOfDay === 'Afternoon' && currentHour >= 12 && currentHour < 17) score += 25;
+        // else if (task.timeOfDay === 'Evening' && currentHour >= 17) score += 25;
 
-        // Energy level matching
-        if (task.priority === 'Critical' && energyLevel > 70) score += 30;
-        else if (task.priority === 'Low' && energyLevel < 40) score += 20;
+        // // Energy level matching
+        // if (task.priority === 'Critical' && energyLevel > 70) score += 30;
+        // else if (task.priority === 'Low' && energyLevel < 40) score += 20;
 
         return { ...task, score };
       })
       .sort((a, b) => b.score - a.score)
-      .slice(0, 6);
+      .slice(0, 4);
   }, [tasks, energyLevel]);
 
   // Task suggestions
@@ -1079,6 +1079,7 @@ export default function EnhancedDashboard() {
                       <div className="text-xs text-yellow-700/80 dark:text-yellow-300/80">Remaining</div>
                     </div>
                   </div>
+
 
                   <div className="space-y-2">
                     <div className="flex justify-between text-xs">

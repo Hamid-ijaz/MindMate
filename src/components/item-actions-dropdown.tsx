@@ -19,7 +19,9 @@ import {
   FileText,
   CheckSquare,
   Loader2,
-  TrendingUp
+  TrendingUp,
+  Archive,
+  ArchiveRestore
 } from 'lucide-react';
 import { useTasks } from '@/contexts/task-context';
 import { useNotes } from '@/contexts/note-context';
@@ -57,7 +59,7 @@ export function ItemActionsDropdown({
   disabled = false
 }: ItemActionsDropdownProps) {
   const { deleteTask, startEditingTask, updateTask } = useTasks();
-  const { deleteNote } = useNotes();
+  const { deleteNote, updateNote } = useNotes();
   const [isOpen, setIsOpen] = useState(false);
 
   const handleShare = () => {
@@ -103,6 +105,17 @@ export function ItemActionsDropdown({
   const handleExternalLink = () => {
     if (itemType === 'task') {
       window.open(`/task/${item.id}`, '_blank');
+    }
+    setIsOpen(false);
+  };
+
+  const handleArchiveToggle = async () => {
+    if (itemType === 'task') {
+      const task = item as Task;
+      await updateTask(task.id, { isArchived: !task.isArchived });
+    } else if (itemType === 'note') {
+      const note = item as Note;
+      await updateNote(note.id, { isArchived: !note.isArchived });
     }
     setIsOpen(false);
   };
@@ -200,6 +213,23 @@ export function ItemActionsDropdown({
           <DropdownMenuItem onClick={handleExternalLink} className="cursor-pointer">
             <ExternalLink className="mr-2 h-4 w-4" />
             Open in new tab
+          </DropdownMenuItem>
+        )}
+        
+        {/* Archive option (only for tasks) */}
+        {itemType === 'task' && (
+          <DropdownMenuItem onClick={handleArchiveToggle} className="cursor-pointer">
+            {(item as Task).isArchived ? (
+              <>
+                <ArchiveRestore className="mr-2 h-4 w-4" />
+                Unarchive task
+              </>
+            ) : (
+              <>
+                <Archive className="mr-2 h-4 w-4" />
+                Archive task
+              </>
+            )}
           </DropdownMenuItem>
         )}
         

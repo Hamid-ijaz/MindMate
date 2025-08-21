@@ -240,6 +240,7 @@ export interface Task {
   rejectionCount: number;
   lastRejectedAt?: number;
   isMuted: boolean;
+  isArchived?: boolean;
   completedAt?: number;
   parentId?: string;
   reminderAt?: number;
@@ -385,6 +386,7 @@ export interface Note {
     audioUrl?: string | null;
     color?: string; // e.g., hex code for background color
     fontSize?: number; // New property for font size
+    isArchived?: boolean;
     createdAt: number;
     updatedAt: number;
 }

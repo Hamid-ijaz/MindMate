@@ -8,14 +8,14 @@ import { TaskItem } from '@/components/task-item';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Wand2, Loader2, PlusCircle, Search, Filter, X, SortAsc, Target, CheckCircle2 } from 'lucide-react';
+import { Wand2, Loader2, PlusCircle, Search, Filter, X, SortAsc, Target, CheckCircle2, Archive, ArchiveRestore, ChevronDown, ChevronUp } from 'lucide-react';
 import { AlertDialog, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { rewordTask } from '@/ai/flows/reword-task-flow';
 import { useToast } from '@/hooks/use-toast';
 import type { Task, Priority, TaskCategory } from '@/lib/types';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardHeader } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useSearchParams } from 'next/navigation';
 import { useAuth } from '@/contexts/auth-context';
@@ -66,7 +66,7 @@ function PendingTasksSkeleton() {
 }
 
 function PendingTasksContent() {
-  const { tasks, addTask, isLoading } = useTasks();
+  const { tasks, addTask, updateTask, isLoading } = useTasks();
   const { toast } = useToast();
   const [isRewording, startRewordTransition] = useTransition();
   const [showRewordDialog, setShowRewordDialog] = useState(false);
@@ -80,7 +80,9 @@ function PendingTasksContent() {
   const [priority, setPriority] = useState("all");
   const [sortBy, setSortBy] = useState<'date' | 'priority' | 'alphabetical' | 'oldest'>('date');
   const [overdueOnly, setOverdueOnly] = useState(false);
+  const [showArchived, setShowArchived] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
+  const [archivedOpen, setArchivedOpen] = useState(false);
   
   const searchParams = useSearchParams();
   const taskRefs = useRef<Record<string, HTMLDivElement | null>>({});
@@ -88,6 +90,7 @@ function PendingTasksContent() {
 
   const rootTasks = tasks.filter(t => !t.parentId);
   const uncompletedTasks = rootTasks.filter(t => !t.completedAt);
+  const archivedTasks = rootTasks.filter(t => !t.completedAt && t.isArchived);
 
   // Filtered and sorted tasks
   const filteredAndSortedTasks = useMemo(() => {
@@ -97,6 +100,7 @@ function PendingTasksContent() {
         (task.description || "").toLowerCase().includes(search.toLowerCase());
       const matchesCategory = category === "all" || category === "" || category === "all-categories" || task.category === category;
       const matchesPriority = priority === "all" || priority === "" || priority === "all-priorities" || task.priority === priority;
+      const matchesArchived = showArchived ? true : !task.isArchived; // Show archived only if showArchived is true, otherwise exclude archived
       let matchesOverdue = true;
       if (overdueOnly) {
         if (task.reminderAt) {
@@ -107,7 +111,7 @@ function PendingTasksContent() {
           matchesOverdue = false;
         }
       }
-      return matchesSearch && matchesCategory && matchesPriority && matchesOverdue;
+      return matchesSearch && matchesCategory && matchesPriority && matchesArchived && matchesOverdue;
     });
 
     // Sort the filtered tasks
@@ -126,7 +130,7 @@ function PendingTasksContent() {
           return b.createdAt - a.createdAt;
       }
     });
-  }, [uncompletedTasks, search, category, priority, sortBy, overdueOnly]);
+  }, [uncompletedTasks, search, category, priority, sortBy, overdueOnly, showArchived]);
 
   useEffect(() => {
     const taskId = searchParams.get('taskId');
@@ -274,7 +278,7 @@ function PendingTasksContent() {
               >
                 <Filter className="w-4 h-4 mr-2" />
                 Filters
-                {(category || priority || overdueOnly) && <span className="ml-1 text-xs bg-primary-foreground text-primary rounded-full px-1">•</span>}
+                {(category || priority || overdueOnly || showArchived) && <span className="ml-1 text-xs bg-primary-foreground text-primary rounded-full px-1">•</span>}
               </Button>
               {/* Overdue filter toggle */}
               <Button
@@ -286,6 +290,16 @@ function PendingTasksContent() {
                 Overdue
                 {overdueOnly && <span className="ml-1 text-xs bg-destructive text-white rounded-full px-1">!</span>}
               </Button>
+              {/* Archive filter toggle */}
+              <Button
+                variant={showArchived ? "default" : "outline"}
+                onClick={() => setShowArchived(v => !v)}
+                className="whitespace-nowrap h-10 px-4 rounded-full"
+              >
+                <span className="mr-2">📁</span>
+                {showArchived ? "Show Archived" : "Show Archived"}
+                {showArchived && <span className="ml-1 text-xs bg-primary text-white rounded-full px-1">✓</span>}
+              </Button>
               <Button 
                 variant="outline" 
                 onClick={() => {
@@ -295,6 +309,7 @@ function PendingTasksContent() {
                   setSortBy('date');
                   setShowFilters(false);
                   setOverdueOnly(false);
+                  setShowArchived(false);
                 }}
                 className="whitespace-nowrap h-10 px-4 rounded-full"
               >
@@ -404,13 +419,13 @@ function PendingTasksContent() {
                 transition={{ delay: 0.4 }}
               >
                 <div className="w-24 h-24 bg-muted/50 rounded-full flex items-center justify-center mx-auto mb-6">
-                  {search || category || priority ? (
+                  {search || category || priority || showArchived ? (
                     <Search className="w-12 h-12 text-muted-foreground" />
                   ) : (
                     <CheckCircle2 className="w-12 h-12 text-muted-foreground" />
                   )}
                 </div>
-                {search || category || priority ? (
+                {search || category || priority || showArchived ? (
                   <div className="space-y-3">
                     <h3 className="text-xl font-semibold">No tasks match your filters</h3>
                     <p className="text-muted-foreground max-w-md mx-auto">
@@ -423,6 +438,7 @@ function PendingTasksContent() {
                         setCategory("");
                         setPriority("");
                         setShowFilters(false);
+                        setShowArchived(false);
                       }}
                       className="mt-4"
                     >
@@ -477,6 +493,66 @@ function PendingTasksContent() {
             )}
           </div>
         </motion.div>
+
+        {/* Archived Tasks Section */}
+        {!showArchived && archivedTasks.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2 }}
+            className="mt-8"
+          >
+            <Card className="border-muted bg-muted/20">
+              <CardHeader className="pb-3 cursor-pointer" onClick={() => setArchivedOpen(o => !o)}>
+                <div className="flex items-center justify-between w-full">
+                  <div className="flex items-center gap-2 text-lg">
+                    <Archive className="h-5 w-5 text-muted-foreground" />
+                    <CardTitle className="text-lg">Archived Tasks ({archivedTasks.length})</CardTitle>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <CardDescription className="text-sm text-muted-foreground mr-2">Tasks that are archived but notifications will still be sent</CardDescription>
+                    {archivedOpen ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {archivedOpen && (
+                    <>
+                      {archivedTasks.slice(0, 3).map((task) => (
+                        <div key={task.id} className="">
+                          <TaskItem
+                            task={task}
+                            extraActions={
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => updateTask(task.id, { isArchived: false })}
+                                className="text-xs"
+                              >
+                                <ArchiveRestore className="h-4 w-4" />
+                              </Button>
+                            }
+                          />
+                        </div>
+                      ))}
+
+                      {archivedTasks.length > 3 && (
+                        <Button
+                          variant="outline"
+                          onClick={() => setShowArchived(true)}
+                          className="w-full mt-3 text-sm"
+                        >
+                          View all {archivedTasks.length} archived tasks
+                        </Button>
+                      )}
+                    </>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          </motion.div>
+        )}
       </div>
 
        {/* Enhanced AI Task Division Dialog */}

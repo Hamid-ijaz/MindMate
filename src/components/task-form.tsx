@@ -52,6 +52,7 @@ const formSchema = z.object({
   timeOfDay: z.enum(timesOfDay),
   reminderAt: z.date().optional(),
   onlyNotifyAtReminder: z.boolean().optional().default(false),
+  isArchived: z.boolean().optional().default(false),
   location: z.string().optional(),
   isAllDay: z.boolean().optional().default(true), // Always true in background
   syncToGoogleCalendar: z.boolean().optional().default(false),
@@ -139,6 +140,7 @@ export function TaskForm({ task, onFinished, parentId, defaultValues: propDefaul
     isAllDay: true, // Always true
     syncToGoogleCalendar: false,
   onlyNotifyAtReminder: false,
+    isArchived: false,
     recurrence: { frequency: 'none', endDate: undefined },
     ...propDefaults,
   };
@@ -596,6 +598,25 @@ export function TaskForm({ task, onFinished, parentId, defaultValues: propDefaul
                 <div className="space-y-0">
                   <FormLabel className="text-sm font-normal cursor-pointer">Only notify at exact reminder time</FormLabel>
                   <FormDescription className="text-xs text-muted-foreground">When enabled, the task will only send a reminder at the specified time and won't generate overdue notifications.</FormDescription>
+                </div>
+              </div>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="isArchived"
+          render={({ field }) => (
+            <FormItem>
+              <div className="flex items-center gap-3">
+                <FormControl>
+                  <Switch checked={!!field.value} onCheckedChange={(val) => field.onChange(val)} />
+                </FormControl>
+                <div className="space-y-0">
+                  <FormLabel className="text-sm font-normal cursor-pointer">Archive task</FormLabel>
+                  <FormDescription className="text-xs text-muted-foreground">Archived tasks are hidden from the main view but notifications will still be sent.</FormDescription>
                 </div>
               </div>
               <FormMessage />

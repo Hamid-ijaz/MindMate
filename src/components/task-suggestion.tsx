@@ -25,7 +25,7 @@ import { SubtaskList } from "./subtask-list";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./ui/tooltip";
 import { format } from "date-fns";
 import { useNotifications } from "@/contexts/notification-context";
-import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious, type CarouselApi } from "@/components/ui/carousel";
+import { Carousel, CarouselContent, CarouselItem, CarouselPrevious, type CarouselApi } from "@/components/ui/carousel";
 import Link from "next/link";
 import { useCompletionAudio } from '@/hooks/use-completion-audio';
 import { ItemActionsDropdown } from '@/components/item-actions-dropdown';
@@ -50,7 +50,7 @@ export function TaskSuggestion() {
 
   // Set default priority to highest available when tasks change - considering recently rejected tasks
   useEffect(() => {
-    const uncompletedTasks = tasks.filter(t => !t.completedAt && !t.isMuted && !t.parentId);
+    const uncompletedTasks = tasks.filter(t => !t.completedAt && !t.isMuted && !t.parentId && !t.isArchived);
     const now = Date.now();
     const rejectionTimeout = REJECTION_HOURS * 60 * 60 * 1000;
     
@@ -93,6 +93,35 @@ export function TaskSuggestion() {
   const [isPending, startTransition] = useTransition();
 
   // Keyboard navigation support - moved before early returns to comply with Rules of Hooks
+  // Helper to advance to next slide or shift to next lower priority when at the end
+  const handleNext = () => {
+    if (!api) return;
+    // If there are more slides in current priority, go next
+    if (currentSlide < possibleTasks.length - 1) {
+      api.scrollNext();
+      return;
+    }
+
+    // Otherwise find the next lower priority that has tasks
+    const priorityOrder: Priority[] = ['Critical', 'High', 'Medium', 'Low'];
+    const currentIndex = priorityOrder.indexOf(currentPriority);
+    for (let i = currentIndex + 1; i < priorityOrder.length; i++) {
+      const nextPriority = priorityOrder[i];
+      if (getAvailableTaskCount(nextPriority) > 0) {
+        setCurrentPriority(nextPriority);
+        // reset slide index; let possibleTasks update then scroll to first
+        setCurrentSlide(0);
+        // small timeout to allow re-render of carousel items
+        setTimeout(() => {
+          try { api.scrollTo(0); } catch (e) { /* ignore if api not ready */ }
+        }, 60);
+        return;
+      }
+    }
+
+    // If no lower priority has tasks, do nothing (stay on last slide)
+  };
+
   useEffect(() => {
     const handleKeyPress = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
@@ -100,7 +129,7 @@ export function TaskSuggestion() {
       }
       
       // Calculate current values inline to avoid dependency issues
-      const uncompletedTasks = tasks.filter(t => !t.completedAt && !t.isMuted && !t.parentId);
+      const uncompletedTasks = tasks.filter(t => !t.completedAt && !t.isMuted && !t.parentId && !t.isArchived);
       const now = Date.now();
       const rejectionTimeout = REJECTION_HOURS * 60 * 60 * 1000;
       const filtered = uncompletedTasks.filter(task => {
@@ -135,7 +164,7 @@ export function TaskSuggestion() {
         case 'arrowright':
         case 'd':
           e.preventDefault();
-          api?.scrollNext();
+          handleNext();
           break;
         case 'e':
           e.preventDefault();
@@ -178,7 +207,7 @@ export function TaskSuggestion() {
 
   const possibleTasks = useMemo(() => {
     if (!currentPriority) return [];
-    const uncompletedTasks = tasks.filter(t => !t.completedAt && !t.isMuted && !t.parentId);
+    const uncompletedTasks = tasks.filter(t => !t.completedAt && !t.isMuted && !t.parentId && !t.isArchived);
     const now = Date.now();
     const rejectionTimeout = REJECTION_HOURS * 60 * 60 * 1000;
 
@@ -206,7 +235,7 @@ export function TaskSuggestion() {
 
   // Helper function to get available task count for each priority (consistent with possibleTasks filtering)
   const getAvailableTaskCount = useMemo(() => {
-    const uncompletedTasks = tasks.filter(t => !t.completedAt && !t.isMuted && !t.parentId);
+    const uncompletedTasks = tasks.filter(t => !t.completedAt && !t.isMuted && !t.parentId && !t.isArchived);
     const now = Date.now();
     const rejectionTimeout = REJECTION_HOURS * 60 * 60 * 1000;
     
@@ -226,7 +255,7 @@ export function TaskSuggestion() {
 
 
   const otherVisibleTasks = useMemo(() => {
-      const allUncompleted = tasks.filter(t => !t.completedAt && !t.isMuted && !t.parentId);
+      const allUncompleted = tasks.filter(t => !t.completedAt && !t.isMuted && !t.parentId && !t.isArchived);
       const possibleIds = new Set(possibleTasks.map(t => t.id));
       return allUncompleted.filter(t => !possibleIds.has(t.id));
   }, [tasks, possibleTasks])
@@ -366,7 +395,7 @@ export function TaskSuggestion() {
     );
   }
   
-  const allUncompletedTasks = tasks.filter(t => !t.completedAt && !t.isMuted && !t.parentId);
+  const allUncompletedTasks = tasks.filter(t => !t.completedAt && !t.isMuted && !t.parentId && !t.isArchived);
 
   if (allUncompletedTasks.length === 0) {
     return (
@@ -554,7 +583,8 @@ export function TaskSuggestion() {
           setApi={setApi} 
           className="w-full" 
           opts={{ 
-            loop: possibleTasks.length > 1,
+            // never loop so we can control priority shifting
+            loop: false,
             align: "start",
             skipSnaps: false,
             dragFree: false,
@@ -801,14 +831,22 @@ export function TaskSuggestion() {
                 "hover:scale-110 active:scale-95 touch-manipulation",
                 "opacity-70 group-hover:opacity-100"
               )} />
-              <CarouselNext className={cn(
-                "absolute right-1 sm:right-2 top-1/2 -translate-y-1/2 z-10",
-                "h-8 w-8 sm:h-10 sm:w-10 border-2 border-primary/20 bg-background/95 backdrop-blur-sm",
-                "hover:bg-primary hover:text-primary-foreground hover:border-primary",
-                "shadow-lg hover:shadow-xl transition-all duration-200",
-                "hover:scale-110 active:scale-95 touch-manipulation",
-                "opacity-70 group-hover:opacity-100"
-              )} />
+              {/* Custom Next button: handle shifting priority when at end */}
+              <button
+                onClick={() => handleNext()}
+                aria-label="Next"
+                className={cn(
+                  "absolute right-1 sm:right-2 top-1/2 -translate-y-1/2 z-10",
+                  "h-8 w-8 sm:h-10 sm:w-10 border-2 border-primary/20 bg-background/95 backdrop-blur-sm",
+                  "hover:bg-primary hover:text-primary-foreground hover:border-primary",
+                  "shadow-lg hover:shadow-xl transition-all duration-200",
+                  "hover:scale-110 active:scale-95 touch-manipulation",
+                  "opacity-70 group-hover:opacity-100",
+                  "rounded-full flex items-center justify-center"
+                )}
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
             </>
           )}
         </Carousel>
