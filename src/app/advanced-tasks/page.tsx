@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { 
   Search, 
   Filter, 
-  Template, 
+  FileText, // Using FileText instead of Template
   CheckSquare, 
   Zap,
   BarChart3,
@@ -50,7 +50,7 @@ export default function AdvancedTasksPage() {
                 <Card>
                   <CardHeader>
                     <CardTitle className="flex items-center space-x-2">
-                      <Template className="h-5 w-5" />
+                      <FileText className="h-5 w-5" />
                       <span>Project Templates</span>
                     </CardTitle>
                     <CardDescription>

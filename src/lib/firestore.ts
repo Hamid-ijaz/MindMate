@@ -23,7 +23,7 @@ import { db } from './firebase';
 import type { 
   Task, User, Accomplishment, Note, SharedItem, ShareHistoryEntry, SharePermission, ShareCollaborator, ShareAnalytics, 
   GoogleCalendarSettings, ChatMessage, ChatSession, ChatContext, NotificationDocument, NotificationData, NotificationStats,
-  Team, TeamMember, TeamRole, TeamPermissions, Workspace, WorkspaceSettings, TeamTask, TaskDependency, TaskTemplate,
+  Team, TeamMember, TeamRole, TeamPermissions, Workspace, WorkspaceSettings, WorkspaceStats, TeamTask, TaskDependency, TaskTemplate,
   BatchOperation, BatchResult, AutomationRule, TeamAnalytics, SearchQuery, SearchResult, ProjectTemplate,
   TeamChatMessage, Resource, ResourceBooking
 } from './types';
@@ -1844,10 +1844,13 @@ export const teamTaskService = {
     );
     
     const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...deserializeTaskFromFirestore(doc),
-    })) as TeamTask[];
+    return querySnapshot.docs.map(doc => {
+      const taskData = deserializeTaskFromFirestore(doc);
+      return {
+        ...taskData,
+        id: doc.id, // Ensure the document ID is used
+      } as TeamTask;
+    });
   },
 
   // Get tasks assigned to user
@@ -1869,10 +1872,13 @@ export const teamTaskService = {
     }
     
     const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...deserializeTaskFromFirestore(doc),
-    })) as TeamTask[];
+    return querySnapshot.docs.map(doc => {
+      const taskData = deserializeTaskFromFirestore(doc);
+      return {
+        ...taskData,
+        id: doc.id, // Ensure the document ID is used
+      } as TeamTask;
+    });
   },
 
   // Assign task to team member
@@ -1949,10 +1955,13 @@ export const teamTaskService = {
     );
     
     return onSnapshot(q, (querySnapshot) => {
-      const tasks = querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...deserializeTaskFromFirestore(doc),
-      })) as TeamTask[];
+      const tasks = querySnapshot.docs.map(doc => {
+        const taskData = deserializeTaskFromFirestore(doc);
+        return {
+          ...taskData,
+          id: doc.id, // Ensure the document ID is used
+        } as TeamTask;
+      });
       callback(tasks);
     });
   },

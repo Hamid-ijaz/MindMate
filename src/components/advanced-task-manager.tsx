@@ -14,7 +14,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
   Search, 
   Filter, 
-  Template, 
+  FileText, // Using FileText instead of Template which doesn't exist
   CheckSquare, 
   MoreHorizontal, 
   Download,
@@ -261,7 +261,7 @@ export default function AdvancedTaskManager({ workspaceId }: AdvancedTaskManager
               <Dialog open={isTemplateOpen} onOpenChange={setIsTemplateOpen}>
                 <DialogTrigger asChild>
                   <Button variant="outline" size="sm">
-                    <Template className="h-4 w-4 mr-1" />
+                    <FileText className="h-4 w-4 mr-1" />
                     Templates
                   </Button>
                 </DialogTrigger>

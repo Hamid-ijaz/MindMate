@@ -26,6 +26,7 @@ export async function POST(request: NextRequest) {
       parameters: parameters || {},
       executedBy,
       workspaceId,
+      totalItems: taskIds.length,
     });
 
     // Execute the batch operation based on type
