@@ -20,7 +20,7 @@ import {
   Notebook, Calendar, Target, BarChart3, Menu, X,
   User, LogOut, Bell, Keyboard, ChevronDown, Plus,
   Zap, Search, Command as CommandIcon, Palette, BookOpen, Timer,
-  TrendingUp, Activity, CheckCircle2, Clock, Globe, CheckSquare, StickyNote
+  TrendingUp, Activity, CheckCircle2, Clock, Globe, CheckSquare, StickyNote, Users
 } from 'lucide-react';
 import { ThemePicker } from './theme-picker';
 import { ThemePickerDialog } from './theme-picker-dialog';
@@ -205,6 +205,22 @@ export function Header() {
       description: 'Capture ideas and information'
     },
     
+    // Team collaboration items
+    { 
+      label: 'Teams', 
+      href: '/teams', 
+      icon: Users, 
+      category: 'collaboration',
+      description: 'Manage teams and workspaces'
+    },
+    { 
+      label: 'Advanced Tasks', 
+      href: '/advanced-tasks', 
+      icon: CheckSquare, 
+      category: 'collaboration',
+      description: 'Templates, batch operations, and advanced search'
+    },
+    
     // Secondary workspace items with Calendar and Goals moved here
     { 
       label: 'Calendar', 
@@ -263,6 +279,7 @@ export function Header() {
   ];
 
   const primaryItems = navigationItems.filter(item => item.category === 'primary');
+  const collaborationItems = navigationItems.filter(item => item.category === 'collaboration');
   const secondaryItems = navigationItems.filter(item => item.category === 'secondary');
   const toolsItems = navigationItems.filter(item => item.category === 'tools');
   const adminItems = navigationItems.filter(item => item.category === 'admin');
@@ -498,6 +515,15 @@ export function Header() {
                     <NavLink key={item.href} item={item} />
                   ))}
                 </div>
+
+                {/* Collaboration Items */}
+                {collaborationItems.length > 0 && (
+                  <div className="flex items-center gap-1">
+                    {collaborationItems.map((item) => (
+                      <NavLink key={item.href} item={item} />
+                    ))}
+                  </div>
+                )}
 
                 <div className="h-6 w-px bg-border mx-2" />
 
@@ -741,6 +767,20 @@ export function Header() {
                           ))}
                         </div>
                       </div>
+
+                      {/* Collaboration Navigation */}
+                      {collaborationItems.length > 0 && (
+                        <div>
+                          <h3 className="text-sm font-semibold text-muted-foreground mb-3 px-2">
+                            Team Collaboration
+                          </h3>
+                          <div className="space-y-1">
+                            {collaborationItems.map((item) => (
+                              <NavLink key={item.href} item={item} mobile showDescription />
+                            ))}
+                          </div>
+                        </div>
+                      )}
 
                       {/* Secondary Navigation */}
                       <div>

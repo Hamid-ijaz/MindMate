@@ -1689,3 +1689,581 @@ function generateDefaultPermissions(role: TeamRole): TeamPermissions {
       };
   }
 }
+
+// Workspace operations
+export const workspaceService = {
+  // Create workspace
+  async createWorkspace(workspaceData: Omit<Workspace, 'id' | 'createdAt' | 'updatedAt' | 'stats'>): Promise<string> {
+    const workspacesRef = collection(db, COLLECTIONS.WORKSPACES);
+    const workspaceRef = doc(workspacesRef);
+    
+    const workspace: Omit<Workspace, 'id'> = {
+      ...workspaceData,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      stats: {
+        totalTasks: 0,
+        completedTasks: 0,
+        activeTasks: 0,
+        overdueTasks: 0,
+        totalMembers: workspaceData.memberIds.length,
+      },
+    };
+    
+    await setDoc(workspaceRef, workspace);
+    return workspaceRef.id;
+  },
+
+  // Get workspace
+  async getWorkspace(workspaceId: string): Promise<Workspace | null> {
+    const workspaceRef = doc(db, COLLECTIONS.WORKSPACES, workspaceId);
+    const workspaceSnap = await getDoc(workspaceRef);
+    
+    if (workspaceSnap.exists()) {
+      return { id: workspaceSnap.id, ...workspaceSnap.data() } as Workspace;
+    }
+    return null;
+  },
+
+  // Get workspaces for team
+  async getTeamWorkspaces(teamId: string): Promise<Workspace[]> {
+    const workspacesRef = collection(db, COLLECTIONS.WORKSPACES);
+    const q = query(
+      workspacesRef,
+      where('teamId', '==', teamId),
+      where('isActive', '==', true),
+      orderBy('updatedAt', 'desc')
+    );
+    
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Workspace));
+  },
+
+  // Get workspaces for user
+  async getUserWorkspaces(userEmail: string): Promise<Workspace[]> {
+    const workspacesRef = collection(db, COLLECTIONS.WORKSPACES);
+    const q = query(
+      workspacesRef,
+      where('memberIds', 'array-contains', userEmail),
+      where('isActive', '==', true),
+      orderBy('updatedAt', 'desc')
+    );
+    
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Workspace));
+  },
+
+  // Update workspace
+  async updateWorkspace(workspaceId: string, updates: Partial<Omit<Workspace, 'id' | 'createdAt'>>): Promise<void> {
+    const workspaceRef = doc(db, COLLECTIONS.WORKSPACES, workspaceId);
+    await updateDoc(workspaceRef, {
+      ...updates,
+      updatedAt: Date.now(),
+    });
+  },
+
+  // Add member to workspace
+  async addWorkspaceMember(workspaceId: string, userEmail: string): Promise<void> {
+    const workspaceRef = doc(db, COLLECTIONS.WORKSPACES, workspaceId);
+    const workspace = await this.getWorkspace(workspaceId);
+    
+    if (workspace && !workspace.memberIds.includes(userEmail)) {
+      const updatedMemberIds = [...workspace.memberIds, userEmail];
+      await updateDoc(workspaceRef, {
+        memberIds: updatedMemberIds,
+        'stats.totalMembers': updatedMemberIds.length,
+        updatedAt: Date.now(),
+      });
+    }
+  },
+
+  // Remove member from workspace
+  async removeWorkspaceMember(workspaceId: string, userEmail: string): Promise<void> {
+    const workspaceRef = doc(db, COLLECTIONS.WORKSPACES, workspaceId);
+    const workspace = await this.getWorkspace(workspaceId);
+    
+    if (workspace) {
+      const updatedMemberIds = workspace.memberIds.filter(id => id !== userEmail);
+      await updateDoc(workspaceRef, {
+        memberIds: updatedMemberIds,
+        'stats.totalMembers': updatedMemberIds.length,
+        updatedAt: Date.now(),
+      });
+    }
+  },
+
+  // Update workspace stats
+  async updateWorkspaceStats(workspaceId: string, stats: Partial<WorkspaceStats>): Promise<void> {
+    const workspaceRef = doc(db, COLLECTIONS.WORKSPACES, workspaceId);
+    
+    const updateData: any = {};
+    Object.entries(stats).forEach(([key, value]) => {
+      updateData[`stats.${key}`] = value;
+    });
+    
+    await updateDoc(workspaceRef, {
+      ...updateData,
+      'stats.lastActivityAt': Date.now(),
+      updatedAt: Date.now(),
+    });
+  },
+};
+
+// Team task operations (extends regular task operations)
+export const teamTaskService = {
+  // Create team task
+  async createTeamTask(teamTaskData: Omit<TeamTask, 'id' | 'createdAt'>): Promise<string> {
+    const teamTasksRef = collection(db, COLLECTIONS.TEAM_TASKS);
+    const taskRef = doc(teamTasksRef);
+    
+    const teamTask: Omit<TeamTask, 'id'> = {
+      ...teamTaskData,
+      createdAt: Date.now(),
+    };
+    
+    await setDoc(taskRef, serializeTaskForFirestore(teamTask));
+    
+    // Update workspace stats if workspace is specified
+    if (teamTask.workspaceId) {
+      await workspaceService.updateWorkspaceStats(teamTask.workspaceId, {
+        totalTasks: increment(1) as any,
+        activeTasks: increment(1) as any,
+      });
+    }
+    
+    return taskRef.id;
+  },
+
+  // Get team tasks for workspace
+  async getWorkspaceTasks(workspaceId: string): Promise<TeamTask[]> {
+    const teamTasksRef = collection(db, COLLECTIONS.TEAM_TASKS);
+    const q = query(
+      teamTasksRef,
+      where('workspaceId', '==', workspaceId),
+      orderBy('createdAt', 'desc')
+    );
+    
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...deserializeTaskFromFirestore(doc),
+    })) as TeamTask[];
+  },
+
+  // Get tasks assigned to user
+  async getAssignedTasks(userEmail: string, workspaceId?: string): Promise<TeamTask[]> {
+    const teamTasksRef = collection(db, COLLECTIONS.TEAM_TASKS);
+    let q = query(
+      teamTasksRef,
+      where('assigneeId', '==', userEmail),
+      orderBy('createdAt', 'desc')
+    );
+    
+    if (workspaceId) {
+      q = query(
+        teamTasksRef,
+        where('workspaceId', '==', workspaceId),
+        where('assigneeId', '==', userEmail),
+        orderBy('createdAt', 'desc')
+      );
+    }
+    
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...deserializeTaskFromFirestore(doc),
+    })) as TeamTask[];
+  },
+
+  // Assign task to team member
+  async assignTask(taskId: string, assigneeId: string, assignedBy: string, notes?: string): Promise<void> {
+    const taskRef = doc(db, COLLECTIONS.TEAM_TASKS, taskId);
+    
+    // Get assignee info
+    const assigneeInfo = await userService.getUser(assigneeId);
+    const assigneeName = assigneeInfo ? `${assigneeInfo.firstName} ${assigneeInfo.lastName}` : assigneeId.split('@')[0];
+    
+    await updateDoc(taskRef, {
+      assigneeId,
+      assigneeName,
+      assignedBy,
+      assignedAt: Date.now(),
+      assignmentStatus: 'pending',
+      assignmentNotes: notes || null,
+    });
+  },
+
+  // Accept/decline task assignment
+  async updateAssignmentStatus(taskId: string, status: 'accepted' | 'declined'): Promise<void> {
+    const taskRef = doc(db, COLLECTIONS.TEAM_TASKS, taskId);
+    const updateData: any = {
+      assignmentStatus: status,
+    };
+    
+    if (status === 'accepted') {
+      updateData.acceptedAt = Date.now();
+    }
+    
+    await updateDoc(taskRef, updateData);
+  },
+
+  // Add collaborator to task
+  async addCollaborator(taskId: string, userEmail: string): Promise<void> {
+    const taskRef = doc(db, COLLECTIONS.TEAM_TASKS, taskId);
+    const task = await getDoc(taskRef);
+    
+    if (task.exists()) {
+      const taskData = task.data() as TeamTask;
+      const currentCollaborators = taskData.collaborators || [];
+      
+      if (!currentCollaborators.includes(userEmail)) {
+        await updateDoc(taskRef, {
+          collaborators: [...currentCollaborators, userEmail],
+        });
+      }
+    }
+  },
+
+  // Remove collaborator from task
+  async removeCollaborator(taskId: string, userEmail: string): Promise<void> {
+    const taskRef = doc(db, COLLECTIONS.TEAM_TASKS, taskId);
+    const task = await getDoc(taskRef);
+    
+    if (task.exists()) {
+      const taskData = task.data() as TeamTask;
+      const currentCollaborators = taskData.collaborators || [];
+      
+      await updateDoc(taskRef, {
+        collaborators: currentCollaborators.filter(email => email !== userEmail),
+      });
+    }
+  },
+
+  // Subscribe to team tasks
+  subscribeToTeamTasks(workspaceId: string, callback: (tasks: TeamTask[]) => void): () => void {
+    const teamTasksRef = collection(db, COLLECTIONS.TEAM_TASKS);
+    const q = query(
+      teamTasksRef,
+      where('workspaceId', '==', workspaceId),
+      orderBy('createdAt', 'desc')
+    );
+    
+    return onSnapshot(q, (querySnapshot) => {
+      const tasks = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...deserializeTaskFromFirestore(doc),
+      })) as TeamTask[];
+      callback(tasks);
+    });
+  },
+};
+
+// Task dependency operations
+export const taskDependencyService = {
+  // Add task dependency
+  async addDependency(dependency: Omit<TaskDependency, 'id' | 'createdAt'>): Promise<string> {
+    const dependenciesRef = collection(db, COLLECTIONS.TASK_DEPENDENCIES);
+    const dependencyRef = doc(dependenciesRef);
+    
+    const dependencyData: Omit<TaskDependency, 'id'> = {
+      ...dependency,
+      createdAt: Date.now(),
+    };
+    
+    await setDoc(dependencyRef, dependencyData);
+    return dependencyRef.id;
+  },
+
+  // Get task dependencies
+  async getTaskDependencies(taskId: string): Promise<TaskDependency[]> {
+    const dependenciesRef = collection(db, COLLECTIONS.TASK_DEPENDENCIES);
+    const q = query(
+      dependenciesRef,
+      where('successorTaskId', '==', taskId)
+    );
+    
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as TaskDependency));
+  },
+
+  // Get dependent tasks
+  async getDependentTasks(taskId: string): Promise<TaskDependency[]> {
+    const dependenciesRef = collection(db, COLLECTIONS.TASK_DEPENDENCIES);
+    const q = query(
+      dependenciesRef,
+      where('predecessorTaskId', '==', taskId)
+    );
+    
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as TaskDependency));
+  },
+
+  // Remove dependency
+  async removeDependency(dependencyId: string): Promise<void> {
+    const dependencyRef = doc(db, COLLECTIONS.TASK_DEPENDENCIES, dependencyId);
+    await deleteDoc(dependencyRef);
+  },
+
+  // Get workspace dependencies (for visualization)
+  async getWorkspaceDependencies(workspaceId: string): Promise<TaskDependency[]> {
+    const dependenciesRef = collection(db, COLLECTIONS.TASK_DEPENDENCIES);
+    const q = query(
+      dependenciesRef,
+      where('workspaceId', '==', workspaceId)
+    );
+    
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as TaskDependency));
+  },
+
+  // Check for circular dependencies
+  async hasCircularDependency(predecessorId: string, successorId: string): Promise<boolean> {
+    // Simple check - in a real implementation, you'd do a more thorough graph traversal
+    const dependencies = await this.getTaskDependencies(predecessorId);
+    return dependencies.some(dep => dep.predecessorTaskId === successorId);
+  },
+};
+
+// Template operations
+export const templateService = {
+  // Create task template
+  async createTaskTemplate(template: Omit<TaskTemplate, 'id' | 'createdAt' | 'updatedAt' | 'usageCount' | 'version'>): Promise<string> {
+    const templatesRef = collection(db, COLLECTIONS.TASK_TEMPLATES);
+    const templateRef = doc(templatesRef);
+    
+    const templateData: Omit<TaskTemplate, 'id'> = {
+      ...template,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      usageCount: 0,
+      version: 1,
+    };
+    
+    await setDoc(templateRef, templateData);
+    return templateRef.id;
+  },
+
+  // Get task templates
+  async getTaskTemplates(workspaceId?: string, isPublic?: boolean): Promise<TaskTemplate[]> {
+    const templatesRef = collection(db, COLLECTIONS.TASK_TEMPLATES);
+    let q = query(templatesRef, orderBy('usageCount', 'desc'));
+    
+    if (workspaceId) {
+      q = query(
+        templatesRef,
+        where('workspaceId', '==', workspaceId),
+        orderBy('usageCount', 'desc')
+      );
+    } else if (isPublic !== undefined) {
+      q = query(
+        templatesRef,
+        where('isPublic', '==', isPublic),
+        orderBy('usageCount', 'desc')
+      );
+    }
+    
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as TaskTemplate));
+  },
+
+  // Get template by ID
+  async getTaskTemplate(templateId: string): Promise<TaskTemplate | null> {
+    const templateRef = doc(db, COLLECTIONS.TASK_TEMPLATES, templateId);
+    const templateSnap = await getDoc(templateRef);
+    
+    if (templateSnap.exists()) {
+      return { id: templateSnap.id, ...templateSnap.data() } as TaskTemplate;
+    }
+    return null;
+  },
+
+  // Update template usage count
+  async incrementUsageCount(templateId: string): Promise<void> {
+    const templateRef = doc(db, COLLECTIONS.TASK_TEMPLATES, templateId);
+    await updateDoc(templateRef, {
+      usageCount: increment(1),
+      updatedAt: Date.now(),
+    });
+  },
+
+  // Apply template to create tasks
+  async applyTemplate(templateId: string, workspaceId: string, createdBy: string, customizations?: any): Promise<string[]> {
+    const template = await this.getTaskTemplate(templateId);
+    if (!template) throw new Error('Template not found');
+    
+    const batch = writeBatch(db);
+    const teamTasksRef = collection(db, COLLECTIONS.TEAM_TASKS);
+    const createdTaskIds: string[] = [];
+    
+    // Create tasks from template
+    template.templateData.tasks.forEach((taskItem) => {
+      const taskRef = doc(teamTasksRef);
+      const teamTask: Omit<TeamTask, 'id'> = {
+        userEmail: createdBy,
+        title: taskItem.title,
+        description: taskItem.description,
+        category: taskItem.category,
+        priority: taskItem.priority,
+        duration: taskItem.estimatedDuration,
+        timeOfDay: 'Morning', // Default
+        createdAt: Date.now(),
+        rejectionCount: 0,
+        isMuted: false,
+        workspaceId,
+        templateId,
+        isFromTemplate: true,
+        ...customizations,
+      };
+      
+      batch.set(taskRef, serializeTaskForFirestore(teamTask));
+      createdTaskIds.push(taskRef.id);
+    });
+    
+    await batch.commit();
+    
+    // Increment usage count
+    await this.incrementUsageCount(templateId);
+    
+    return createdTaskIds;
+  },
+
+  // Create project template
+  async createProjectTemplate(template: Omit<ProjectTemplate, 'id' | 'createdAt' | 'usageCount'>): Promise<string> {
+    const templatesRef = collection(db, COLLECTIONS.PROJECT_TEMPLATES);
+    const templateRef = doc(templatesRef);
+    
+    const templateData: Omit<ProjectTemplate, 'id'> = {
+      ...template,
+      createdAt: Date.now(),
+      usageCount: 0,
+    };
+    
+    await setDoc(templateRef, templateData);
+    return templateRef.id;
+  },
+
+  // Get project templates
+  async getProjectTemplates(isPublic?: boolean): Promise<ProjectTemplate[]> {
+    const templatesRef = collection(db, COLLECTIONS.PROJECT_TEMPLATES);
+    let q = query(templatesRef, orderBy('usageCount', 'desc'));
+    
+    if (isPublic !== undefined) {
+      q = query(
+        templatesRef,
+        where('isPublic', '==', isPublic),
+        orderBy('usageCount', 'desc')
+      );
+    }
+    
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ProjectTemplate));
+  },
+};
+
+// Batch operations service
+export const batchOperationService = {
+  // Create batch operation
+  async createBatchOperation(operation: Omit<BatchOperation, 'id' | 'executedAt' | 'completedAt' | 'status' | 'progress' | 'results' | 'processedItems' | 'failedItems'>): Promise<string> {
+    const operationsRef = collection(db, COLLECTIONS.BATCH_OPERATIONS);
+    const operationRef = doc(operationsRef);
+    
+    const batchOp: Omit<BatchOperation, 'id'> = {
+      ...operation,
+      executedAt: Date.now(),
+      status: 'pending',
+      progress: 0,
+      results: [],
+      totalItems: operation.taskIds.length,
+      processedItems: 0,
+      failedItems: 0,
+    };
+    
+    await setDoc(operationRef, batchOp);
+    return operationRef.id;
+  },
+
+  // Update batch operation progress
+  async updateBatchProgress(operationId: string, progress: number, status: BatchOperation['status'], results?: BatchResult[]): Promise<void> {
+    const operationRef = doc(db, COLLECTIONS.BATCH_OPERATIONS, operationId);
+    const updateData: any = {
+      progress,
+      status,
+    };
+    
+    if (results) {
+      updateData.results = results;
+      updateData.processedItems = results.length;
+      updateData.failedItems = results.filter(r => !r.success).length;
+    }
+    
+    if (status === 'completed' || status === 'failed') {
+      updateData.completedAt = Date.now();
+    }
+    
+    await updateDoc(operationRef, updateData);
+  },
+
+  // Get batch operation
+  async getBatchOperation(operationId: string): Promise<BatchOperation | null> {
+    const operationRef = doc(db, COLLECTIONS.BATCH_OPERATIONS, operationId);
+    const operationSnap = await getDoc(operationRef);
+    
+    if (operationSnap.exists()) {
+      return { id: operationSnap.id, ...operationSnap.data() } as BatchOperation;
+    }
+    return null;
+  },
+
+  // Get user's batch operations
+  async getUserBatchOperations(userEmail: string): Promise<BatchOperation[]> {
+    const operationsRef = collection(db, COLLECTIONS.BATCH_OPERATIONS);
+    const q = query(
+      operationsRef,
+      where('executedBy', '==', userEmail),
+      orderBy('executedAt', 'desc'),
+      limit(50)
+    );
+    
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as BatchOperation));
+  },
+
+  // Execute batch update
+  async executeBatchUpdate(operationId: string, taskIds: string[], updates: Record<string, any>): Promise<BatchResult[]> {
+    const results: BatchResult[] = [];
+    const batch = writeBatch(db);
+    
+    taskIds.forEach((taskId) => {
+      try {
+        const taskRef = doc(db, COLLECTIONS.TEAM_TASKS, taskId);
+        batch.update(taskRef, {
+          ...updates,
+          updatedAt: Date.now(),
+        });
+        
+        results.push({
+          taskId,
+          success: true,
+          changes: updates,
+          executedAt: Date.now(),
+        });
+      } catch (error) {
+        results.push({
+          taskId,
+          success: false,
+          error: error instanceof Error ? error.message : 'Unknown error',
+          executedAt: Date.now(),
+        });
+      }
+    });
+    
+    try {
+      await batch.commit();
+      await this.updateBatchProgress(operationId, 100, 'completed', results);
+    } catch (error) {
+      await this.updateBatchProgress(operationId, 100, 'failed', results);
+    }
+    
+    return results;
+  },
+};
