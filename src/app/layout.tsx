@@ -11,8 +11,10 @@ import { KeyboardNavigation } from '@/components/keyboard-navigation';
 import { UnifiedNotificationProvider } from '@/contexts/unified-notification-context';
 import { NotificationProvider } from '@/contexts/notification-context';
 import { NoteProvider } from '@/contexts/note-context';
+import { OfflineProvider } from '@/contexts/offline-context';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { ClientWrapper } from '@/components/client-wrapper';
+import { OfflineStatusBar, OfflineFloatingIndicator } from '@/components/offline-status';
 import { Metadata } from 'next';
 
 // Metadata for SEO and browser tab
@@ -145,24 +147,28 @@ export default function RootLayout({
         <ErrorBoundary>
           <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
             <AuthProvider>
-              <NotificationProvider>
-                <UnifiedNotificationProvider>
-                  <TaskProvider>
-                    <NoteProvider>
-                      <AppInitializer>
-                        <div className="relative flex min-h-screen flex-col">
-                          <Header />
-                          <main className="flex-1 pb-16 md:pb-0">{children}</main>
-                          <MobileNav />
-                        </div>
-                        <Toaster />
-                        <ManageTasksSheet />
-                        <KeyboardNavigation />
-                      </AppInitializer>
-                    </NoteProvider>
-                  </TaskProvider>
-                </UnifiedNotificationProvider>
-              </NotificationProvider>
+              <OfflineProvider>
+                <NotificationProvider>
+                  <UnifiedNotificationProvider>
+                    <TaskProvider>
+                      <NoteProvider>
+                        <AppInitializer>
+                          <div className="relative flex min-h-screen flex-col">
+                            <OfflineStatusBar />
+                            <Header />
+                            <main className="flex-1 pb-16 md:pb-0">{children}</main>
+                            <MobileNav />
+                            <OfflineFloatingIndicator />
+                          </div>
+                          <Toaster />
+                          <ManageTasksSheet />
+                          <KeyboardNavigation />
+                        </AppInitializer>
+                      </NoteProvider>
+                    </TaskProvider>
+                  </UnifiedNotificationProvider>
+                </NotificationProvider>
+              </OfflineProvider>
             </AuthProvider>
           </ThemeProvider>
         </ErrorBoundary>

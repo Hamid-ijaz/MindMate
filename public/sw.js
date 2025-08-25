@@ -17,29 +17,63 @@ const STATIC_FILES = [
   '/audio/mixkit-bell-notification-933.wav'
 ];
 
+// Additional routes to cache for offline navigation
+const CACHE_ROUTES = [
+  '/',
+  '/offline',
+  '/dashboard',
+  '/tasks',
+  '/notes',
+  '/calendar',
+  '/settings',
+  '/analytics',
+  '/chat'
+];
+
 // Install event - cache static files
 self.addEventListener('install', (event) => {
   console.log('Service Worker: Installing...');
   
   event.waitUntil(
-    caches.open(STATIC_CACHE)
-      .then((cache) => {
-        console.log('Service Worker: Caching static files');
-        return cache.addAll(STATIC_FILES).catch((error) => {
-          console.error('Service Worker: Failed to cache some files', error);
-          // Cache files individually to avoid failure of entire batch
+    Promise.all([
+      // Cache static files
+      caches.open(STATIC_CACHE)
+        .then((cache) => {
+          console.log('Service Worker: Caching static files');
+          return cache.addAll(STATIC_FILES).catch((error) => {
+            console.error('Service Worker: Failed to cache some files', error);
+            // Cache files individually to avoid failure of entire batch
+            return Promise.allSettled(
+              STATIC_FILES.map(file => cache.add(file))
+            );
+          });
+        }),
+      // Pre-cache important routes
+      caches.open(DYNAMIC_CACHE)
+        .then((cache) => {
+          console.log('Service Worker: Pre-caching routes');
           return Promise.allSettled(
-            STATIC_FILES.map(file => cache.add(file))
+            CACHE_ROUTES.map(route => {
+              return fetch(route)
+                .then(response => {
+                  if (response.ok) {
+                    return cache.put(route, response);
+                  }
+                })
+                .catch(err => console.log('Failed to pre-cache route:', route, err));
+            })
           );
-        });
-      })
-      .then(() => {
-        console.log('Service Worker: Static files cached');
-        return self.skipWaiting();
-      })
-      .catch((error) => {
-        console.error('Service Worker: Failed to cache static files', error);
-      })
+        }),
+      // Initialize IndexedDB
+      swDB.init().catch(err => console.log('Failed to init SW IndexedDB:', err))
+    ])
+    .then(() => {
+      console.log('Service Worker: Installation complete');
+      return self.skipWaiting();
+    })
+    .catch((error) => {
+      console.error('Service Worker: Installation failed', error);
+    })
   );
 });
 
@@ -243,24 +277,70 @@ self.addEventListener('fetch', (event) => {
           
           return response;
         })
-        .catch(() => {
-          // Return cached API response if available and not expired
-          return caches.match(request).then((cachedResponse) => {
+        .catch(async () => {
+          // Handle offline API requests
+          if (request.method === 'GET') {
+            // Return cached API response if available and not expired
+            const cachedResponse = await caches.match(request);
             if (cachedResponse) {
               const ttl = cachedResponse.headers.get('sw-cache-ttl');
               if (ttl && Date.now() < parseInt(ttl)) {
                 return cachedResponse;
               }
             }
-            // Return a basic offline response for API requests
-            return new Response(JSON.stringify({ 
-              error: 'Offline', 
-              message: 'You are currently offline. Please check your internet connection.',
-              timestamp: Date.now()
-            }), {
-              status: 503,
-              headers: { 'Content-Type': 'application/json' }
-            });
+          } else if (request.method === 'POST' || request.method === 'PUT' || request.method === 'DELETE') {
+            // Handle offline write operations
+            try {
+              const body = await request.clone().json();
+              const userEmail = body.userEmail || body.user?.email || 'unknown';
+              
+              // Determine action type based on URL and method
+              let actionType = 'UNKNOWN';
+              if (url.pathname.includes('/tasks')) {
+                if (request.method === 'POST') actionType = 'CREATE_TASK';
+                else if (request.method === 'PUT') actionType = 'UPDATE_TASK';
+                else if (request.method === 'DELETE') actionType = 'DELETE_TASK';
+              } else if (url.pathname.includes('/notes')) {
+                if (request.method === 'POST') actionType = 'CREATE_NOTE';
+                else if (request.method === 'PUT') actionType = 'UPDATE_NOTE';
+                else if (request.method === 'DELETE') actionType = 'DELETE_NOTE';
+              }
+              
+              // Store for later sync
+              if (actionType !== 'UNKNOWN') {
+                const actionId = await storeOfflineAction(actionType, body, userEmail);
+                if (actionId) {
+                  // Register background sync
+                  if ('serviceWorker' in self && self.registration.sync) {
+                    await self.registration.sync.register('sync-offline-actions');
+                  }
+                  
+                  // Return success response for offline operation
+                  return new Response(JSON.stringify({
+                    success: true,
+                    offline: true,
+                    actionId,
+                    message: 'Action queued for sync when online'
+                  }), {
+                    status: 202, // Accepted
+                    headers: { 'Content-Type': 'application/json' }
+                  });
+                }
+              }
+            } catch (error) {
+              console.error('Service Worker: Failed to handle offline request:', error);
+            }
+          }
+          
+          // Return a basic offline response for API requests
+          return new Response(JSON.stringify({ 
+            error: 'Offline', 
+            message: 'You are currently offline. Please check your internet connection.',
+            timestamp: Date.now(),
+            offline: true
+          }), {
+            status: 503,
+            headers: { 'Content-Type': 'application/json' }
           });
         })
     );
@@ -337,7 +417,9 @@ self.addEventListener('fetch', (event) => {
 self.addEventListener('sync', (event) => {
   console.log('Service Worker: Background sync triggered', event.tag);
   
-  if (event.tag === 'sync-tasks') {
+  if (event.tag === 'sync-offline-actions') {
+    event.waitUntil(syncOfflineActions());
+  } else if (event.tag === 'sync-tasks') {
     event.waitUntil(syncTasks());
   } else if (event.tag === 'background-sync-notifications') {
     event.waitUntil(
@@ -395,17 +477,106 @@ async function syncTasks() {
   }
 }
 
+// IndexedDB integration for offline storage
+class ServiceWorkerDB {
+  constructor() {
+    this.dbName = 'MindMateOfflineDB';
+    this.version = 1;
+    this.db = null;
+  }
+
+  async init() {
+    return new Promise((resolve, reject) => {
+      const request = indexedDB.open(this.dbName, this.version);
+      
+      request.onerror = () => reject(new Error('Failed to open IndexedDB in Service Worker'));
+      request.onsuccess = (event) => {
+        this.db = event.target.result;
+        resolve();
+      };
+      
+      request.onupgradeneeded = (event) => {
+        const db = event.target.result;
+        
+        // Create stores if they don't exist
+        if (!db.objectStoreNames.contains('offline_actions')) {
+          const actionsStore = db.createObjectStore('offline_actions', { keyPath: 'id' });
+          actionsStore.createIndex('userEmail', 'userEmail', { unique: false });
+          actionsStore.createIndex('timestamp', 'timestamp', { unique: false });
+        }
+        
+        if (!db.objectStoreNames.contains('tasks')) {
+          const tasksStore = db.createObjectStore('tasks', { keyPath: 'id' });
+          tasksStore.createIndex('userEmail', 'userEmail', { unique: false });
+        }
+        
+        if (!db.objectStoreNames.contains('notes')) {
+          const notesStore = db.createObjectStore('notes', { keyPath: 'id' });
+          notesStore.createIndex('userEmail', 'userEmail', { unique: false });
+        }
+      };
+    });
+  }
+
+  async ensureDB() {
+    if (!this.db) {
+      await this.init();
+    }
+    return this.db;
+  }
+
+  async getAll(storeName, indexName, indexValue) {
+    const db = await this.ensureDB();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction([storeName], 'readonly');
+      const store = transaction.objectStore(storeName);
+      
+      let request;
+      if (indexName && indexValue !== undefined) {
+        const index = store.index(indexName);
+        request = index.getAll(indexValue);
+      } else {
+        request = store.getAll();
+      }
+      
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(new Error('Failed to get data from IndexedDB'));
+    });
+  }
+
+  async delete(storeName, id) {
+    const db = await this.ensureDB();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction([storeName], 'readwrite');
+      const store = transaction.objectStore(storeName);
+      const request = store.delete(id);
+      
+      request.onsuccess = () => resolve();
+      request.onerror = () => reject(new Error('Failed to delete from IndexedDB'));
+    });
+  }
+
+  async put(storeName, data) {
+    const db = await this.ensureDB();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction([storeName], 'readwrite');
+      const store = transaction.objectStore(storeName);
+      const request = store.put(data);
+      
+      request.onsuccess = () => resolve();
+      request.onerror = () => reject(new Error('Failed to put data in IndexedDB'));
+    });
+  }
+}
+
+// Create DB instance
+const swDB = new ServiceWorkerDB();
+
 // Helper functions for offline storage
 async function getOfflineTasks() {
   try {
-    // Check if IndexedDB is available
-    if (!('indexedDB' in self)) {
-      return [];
-    }
-
-    // This would integrate with your IndexedDB implementation
-    // For now, return empty array
-    return [];
+    const actions = await swDB.getAll('offline_actions');
+    return actions.filter(action => action.type === 'CREATE_TASK').map(action => action.data);
   } catch (error) {
     console.error('Error getting offline tasks:', error);
     return [];
@@ -414,9 +585,137 @@ async function getOfflineTasks() {
 
 async function removeOfflineTask(taskId) {
   try {
-    // This would integrate with your IndexedDB implementation
-    console.log('Removing offline task:', taskId);
+    const actions = await swDB.getAll('offline_actions');
+    const taskAction = actions.find(action => action.data?.id === taskId);
+    if (taskAction) {
+      await swDB.delete('offline_actions', taskAction.id);
+      console.log('Service Worker: Removed offline task action', taskId);
+    }
   } catch (error) {
     console.error('Error removing offline task:', error);
+  }
+}
+
+// Store offline action for later sync
+async function storeOfflineAction(type, data, userEmail) {
+  try {
+    const action = {
+      id: `sw_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      type,
+      data,
+      userEmail,
+      timestamp: Date.now(),
+      retryCount: 0
+    };
+    
+    await swDB.put('offline_actions', action);
+    console.log('Service Worker: Stored offline action', type, action.id);
+    return action.id;
+  } catch (error) {
+    console.error('Error storing offline action:', error);
+    return null;
+  }
+}
+
+// Enhanced sync function with better error handling
+async function syncOfflineActions() {
+  try {
+    const actions = await swDB.getAll('offline_actions');
+    console.log('Service Worker: Found', actions.length, 'offline actions to sync');
+    
+    let syncedCount = 0;
+    let failedCount = 0;
+    
+    for (const action of actions) {
+      try {
+        let response;
+        
+        switch (action.type) {
+          case 'CREATE_TASK':
+            response = await fetch('/api/tasks', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(action.data),
+            });
+            break;
+            
+          case 'UPDATE_TASK':
+            response = await fetch(`/api/tasks/${action.data.id}`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(action.data),
+            });
+            break;
+            
+          case 'DELETE_TASK':
+            response = await fetch(`/api/tasks/${action.data.id}`, {
+              method: 'DELETE',
+            });
+            break;
+            
+          case 'CREATE_NOTE':
+            response = await fetch('/api/notes', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(action.data),
+            });
+            break;
+            
+          case 'UPDATE_NOTE':
+            response = await fetch(`/api/notes/${action.data.id}`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(action.data),
+            });
+            break;
+            
+          case 'DELETE_NOTE':
+            response = await fetch(`/api/notes/${action.data.id}`, {
+              method: 'DELETE',
+            });
+            break;
+            
+          default:
+            console.warn('Service Worker: Unknown action type:', action.type);
+            continue;
+        }
+        
+        if (response && response.ok) {
+          await swDB.delete('offline_actions', action.id);
+          syncedCount++;
+          console.log('Service Worker: Synced action', action.type, action.id);
+        } else {
+          // Increment retry count
+          action.retryCount = (action.retryCount || 0) + 1;
+          action.lastAttempt = Date.now();
+          
+          if (action.retryCount >= 3) {
+            // Remove after 3 failed attempts
+            await swDB.delete('offline_actions', action.id);
+            console.warn('Service Worker: Removed action after 3 failed attempts', action.id);
+          } else {
+            await swDB.put('offline_actions', action);
+          }
+          failedCount++;
+        }
+      } catch (error) {
+        console.error('Service Worker: Failed to sync action:', action.id, error);
+        failedCount++;
+      }
+    }
+    
+    console.log(`Service Worker: Sync complete. ${syncedCount} synced, ${failedCount} failed`);
+    
+    // Notify clients about sync results
+    const clients = await self.clients.matchAll();
+    clients.forEach(client => {
+      client.postMessage({
+        type: 'SYNC_COMPLETE',
+        data: { syncedCount, failedCount }
+      });
+    });
+    
+  } catch (error) {
+    console.error('Service Worker: Sync failed:', error);
   }
 }
