@@ -7,6 +7,8 @@ import { useAuth } from './auth-context';
 import { useToast } from '@/hooks/use-toast';
 import { useNotifications } from './notification-context';
 import { usePushNotificationHelper } from '@/hooks/use-push-notification-helper';
+import { useOffline } from './offline-context';
+import { indexedDBService } from '@/lib/indexeddb';
 import { addDays, addMonths, addWeeks } from 'date-fns';
 
 // Default values for when a user has no settings yet.
@@ -43,13 +45,14 @@ const TaskContext = createContext<TaskContextType | undefined>(undefined);
 
 export const TaskProvider = ({ children }: { children: ReactNode }) => {
   const { user, loading: authLoading } = useAuth();
+  const { isOnline, isServerReachable, addOfflineAction } = useOffline();
+  const { toast } = useToast();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [notes, setNotes] = useState<Note[]>([]);
   const [accomplishments, setAccomplishments] = useState<Accomplishment[]>([]);
   const [taskCategories, setTaskCategories] = useState<TaskCategory[]>(DEFAULT_CATEGORIES);
   const [taskDurations, setTaskDurations] = useState<TaskDuration[]>(DEFAULT_DURATIONS);
   const [isLoading, setIsLoading] = useState(true);
-  const { toast } = useToast();
   
   // Use notification context safely - it will provide defaults during SSR
   const { sendNotification } = useNotifications();
@@ -64,10 +67,13 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
 
   // Load user data when user changes
   useEffect(() => {
+    console.log('🎯 TaskContext useEffect triggered - authLoading:', authLoading, 'user:', user?.email);
     if (!authLoading) {
       if (user?.email) {
+        console.log('✅ User authenticated, loading data...');
         loadUserData();
       } else {
+        console.log('🚪 No user, clearing data...');
         // Clear data when user logs out
         setTasks([]);
         setAccomplishments([]);
@@ -76,39 +82,87 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
         setIsLoading(false);
       }
     }
-  }, [user, authLoading]);
+  }, [user, authLoading, isOnline, isServerReachable]);
 
   const loadUserData = async () => {
     if (!user?.email) return;
     
+    console.log('🔄 loadUserData called for user:', user.email);
     setIsLoading(true);
+    const isFullyOnline = isOnline && isServerReachable;
+    console.log('🌐 Connection status - Online:', isOnline, 'Server reachable:', isServerReachable, 'Fully online:', isFullyOnline);
+    
     try {
-      // Load user settings
-      const settings = await userSettingsService.getUserSettings(user.email);
-      if (settings) {
-        setTaskCategories(settings.taskCategories.length > 0 ? settings.taskCategories : DEFAULT_CATEGORIES);
-        setTaskDurations(settings.taskDurations.length > 0 ? settings.taskDurations : DEFAULT_DURATIONS);
+      // Ensure IndexedDB is properly initialized before proceeding
+      await indexedDBService.init();
+      console.log('✅ IndexedDB initialized successfully');
+      
+      if (isFullyOnline) {
+        try {
+          console.log('📡 Attempting to load from server...');
+          // Try to load from server first when online
+          const [settings, userTasks, userAccomplishments] = await Promise.all([
+            userSettingsService.getUserSettings(user.email),
+            taskService.getTasks(user.email),
+            accomplishmentService.getAccomplishments(user.email)
+          ]);
+
+          console.log('📊 Server data loaded - Tasks:', userTasks.length, 'Accomplishments:', userAccomplishments.length);
+
+          // Update settings
+          if (settings) {
+            setTaskCategories(settings.taskCategories.length > 0 ? settings.taskCategories : DEFAULT_CATEGORIES);
+            setTaskDurations(settings.taskDurations.length > 0 ? settings.taskDurations : DEFAULT_DURATIONS);
+          }
+
+          // Update tasks and cache them
+          setTasks(userTasks);
+          await indexedDBService.syncTasks(user.email, userTasks);
+          console.log('💾 Tasks synced to IndexedDB');
+          
+          // Update accomplishments
+          setAccomplishments(userAccomplishments);
+          
+          return; // Success, we're done
+        } catch (serverError) {
+          console.warn('⚠️ Failed to load from server, falling back to offline cache:', serverError);
+        }
       }
 
-      // Load tasks
-      const userTasks = await taskService.getTasks(user.email);
-      setTasks(userTasks);
-      // Load notes
-      // if (taskService.getNotes) {
-      //   const userNotes = await taskService.getNotes(user.email);
-      //   setNotes(userNotes);
-      // }
-      // Load accomplishments  
-      const userAccomplishments = await accomplishmentService.getAccomplishments(user.email);
-      setAccomplishments(userAccomplishments);
+      // Fallback to offline cache (either offline or server failed)
+      console.log('📱 Loading from offline cache...');
+      const [cachedTasks, cachedSettings] = await Promise.all([
+        indexedDBService.getTasks(user.email),
+        userSettingsService.getUserSettings(user.email).catch(() => null)
+      ]);
+
+      console.log('💾 Cached data loaded - Tasks:', cachedTasks.length);
+
+      // Load cached tasks
+      setTasks(cachedTasks);
+      
+      // Load settings (offline doesn't have cached settings, so use defaults if server fails)
+      if (cachedSettings) {
+        setTaskCategories(cachedSettings.taskCategories.length > 0 ? cachedSettings.taskCategories : DEFAULT_CATEGORIES);
+        setTaskDurations(cachedSettings.taskDurations.length > 0 ? cachedSettings.taskDurations : DEFAULT_DURATIONS);
+      }
+
+      if (!isFullyOnline && cachedTasks.length > 0) {
+        toast({
+          title: "Offline Mode",
+          description: "Showing cached data (offline mode)",
+        });
+      }
+      
     } catch (error) {
-      console.error('Error loading user data:', error);
+      console.error('❌ Error loading user data:', error);
       toast({
         title: "Error",
         description: "Failed to load your data. Please try refreshing the page.",
         variant: "destructive",
       });
     } finally {
+      console.log('🏁 loadUserData completed');
       setIsLoading(false);
     }
   };
@@ -138,6 +192,21 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
   const addTask = useCallback(async (taskData: Omit<Task, 'id' | 'createdAt' | 'rejectionCount' | 'isMuted' | 'completedAt' | 'lastRejectedAt' | 'notifiedAt'> & { parentId?: string }) => {
     if (!user?.email) return;
 
+    const isFullyOnline = isOnline && isServerReachable;
+    
+    try {
+      // Ensure IndexedDB is properly initialized before proceeding
+      await indexedDBService.init();
+    } catch (error) {
+      console.error('Failed to initialize IndexedDB:', error);
+      toast({
+        title: "Storage Error",
+        description: "Failed to initialize local storage. Please refresh the page.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
     const bulletRegex = /(^|\n)\s*[-*+]\s+(.*)/g;
     const description = taskData.description || '';
     const hasBullets = bulletRegex.test(description);
@@ -178,83 +247,307 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
         rejectionCount: 0,
         isMuted: false,
     };
+
+    // Generate local IDs for immediate UI update
+    const now = Date.now();
+    const parentId = `task_${now}_${Math.random().toString(36).substr(2, 9)}`;
+    const parentTask: Task = {
+      ...parentTaskData,
+      id: parentId,
+      createdAt: now,
+      syncStatus: isFullyOnline ? 'synced' : 'pending',
+      isLocal: !isFullyOnline
+    } as Task;
+
+    // Optimistically update UI immediately
+    setTasks(prev => [parentTask, ...prev]);
     
     try {
-      // Use the batch addTask service
-      const { parentId, childIds } = await taskService.addTaskWithSubtasks(user.email, parentTaskData, subtasksToCreate);
-
-      // Optimistically update UI
-      const now = Date.now();
-      const parentTask = { ...parentTaskData, id: parentId, createdAt: now };
-      setTasks(prev => [...prev, parentTask as Task]);
-
-      // Schedule push notification reminder if reminder time is set
-      if (parentTask.reminderAt) {
-        await pushNotifications.scheduleTaskReminder(parentTask as Task);
-      }
-
-      if (subtasksToCreate.length > 0) {
-        const newSubtasks = subtasksToCreate.map((sub, index) => ({
-          ...sub,
-          id: childIds[index],
-          parentId,
-          rejectionCount: 0,
-          isMuted: false,
-          createdAt: now + index + 1, // Ensure unique timestamps
-        }));
-        setTasks(prev => [...prev, ...newSubtasks as Task[]]);
-        
-        // Schedule reminders for subtasks too if they have reminder times
-        for (const subtask of newSubtasks) {
-          if (subtask.reminderAt) {
-            await pushNotifications.scheduleTaskReminder(subtask as Task);
+      // Always save to IndexedDB first for immediate persistence
+      await indexedDBService.createTask(user.email, parentTask);
+      
+      if (isFullyOnline) {
+        try {
+          // Use the batch addTask service
+          const { parentId: serverId, childIds } = await taskService.addTaskWithSubtasks(user.email, parentTaskData, subtasksToCreate);
+          
+          // Update the task with server ID
+          const serverTask = { ...parentTask, id: serverId, syncStatus: 'synced', isLocal: false };
+          await indexedDBService.updateTask(user.email, parentId, serverTask);
+          setTasks(prev => prev.map(t => t.id === parentId ? serverTask : t));
+          
+          // Schedule push notification reminder if reminder time is set
+          if (serverTask.reminderAt) {
+            await pushNotifications.scheduleTaskReminder(serverTask);
           }
+          
+          // Handle subtasks
+          if (subtasksToCreate.length > 0) {
+            const newSubtasks = subtasksToCreate.map((sub, index) => ({
+              ...sub,
+              id: childIds[index],
+              parentId: serverId,
+              rejectionCount: 0,
+              isMuted: false,
+              createdAt: now + index + 1,
+              syncStatus: 'synced',
+              isLocal: false
+            }));
+            
+            setTasks(prev => [...prev, ...newSubtasks as Task[]]);
+            
+            // Save subtasks to IndexedDB
+            for (const subtask of newSubtasks) {
+              await indexedDBService.createTask(user.email, subtask as Task);
+              if (subtask.reminderAt) {
+                await pushNotifications.scheduleTaskReminder(subtask as Task);
+              }
+            }
+            
+            toast({
+              title: "Task and Subtasks Added!",
+              description: `${subtasksToCreate.length} subtasks were created from your description.`
+            });
+          } else {
+            toast({
+              title: "Task Added!",
+              description: "Your task has been created successfully."
+            });
+          }
+        } catch (syncError) {
+          console.warn('Failed to sync to server, keeping local copy:', syncError);
+          // Queue for offline sync
+          await addOfflineAction({
+            type: 'CREATE_TASK',
+            data: parentTask,
+            timestamp: Date.now()
+          });
+          
+          toast({
+            title: "Task Created Offline",
+            description: "Task created offline, will sync when connected",
+            variant: "default",
+          });
         }
+      } else {
+        // Queue for offline sync
+        await addOfflineAction({
+          type: 'CREATE_TASK',
+          data: parentTask,
+          timestamp: Date.now()
+        });
         
         toast({
-          title: "Task and Subtasks Added!",
-          description: `${subtasksToCreate.length} subtasks were created from your description.`
+          title: "Task Created",
+          description: "Task created offline",
         });
+        
+        // Schedule local notification if reminder time is set
+        if (parentTask.reminderAt) {
+          await pushNotifications.scheduleTaskReminder(parentTask);
+        }
       }
 
     } catch (error) {
-      console.error('Error adding task with subtasks:', error);
+      console.error('Error adding task:', error);
+      // Remove from UI if there was an error
+      setTasks(prev => prev.filter(t => t.id !== parentId));
+      
       toast({
         title: "Error",
         description: "Failed to add task. Please try again.",
         variant: "destructive",
       });
     }
-  }, [user?.email, toast]);
+  }, [user?.email, toast, isOnline, isServerReachable, addOfflineAction, pushNotifications]);
 
   const updateTask = useCallback(async (id: string, updates: Partial<Omit<Task, 'id' | 'createdAt'>>) => {
+    if (!user?.email) return;
+
+    const isFullyOnline = isOnline && isServerReachable;
+    
     try {
-      await taskService.updateTask(id, updates);
-      setTasks(prev => prev.map(t => (t.id === id ? { ...t, ...updates } as Task : t)));
+      // Ensure IndexedDB is properly initialized before proceeding
+      await indexedDBService.init();
+    } catch (error) {
+      console.error('Failed to initialize IndexedDB:', error);
+      toast({
+        title: "Storage Error",
+        description: "Failed to initialize local storage. Please refresh the page.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    // Create the updated task data
+    const updatedData = {
+      ...updates,
+      updatedAt: new Date(),
+      syncStatus: isFullyOnline ? 'synced' : 'pending'
+    };
+
+    // Optimistically update UI immediately
+    setTasks(prev => prev.map(t => (t.id === id ? { ...t, ...updatedData } as Task : t)));
+
+    try {
+      // Always update IndexedDB first for immediate persistence
+      await indexedDBService.updateTask(user.email, id, updatedData);
+      
+      if (isFullyOnline) {
+        try {
+          // Try to sync to server
+          await taskService.updateTask(id, updates);
+          
+          // Update sync status on success
+          const syncedData = { ...updatedData, syncStatus: 'synced', isLocal: false };
+          await indexedDBService.updateTask(user.email, id, syncedData);
+          setTasks(prev => prev.map(t => (t.id === id ? { ...t, ...syncedData } as Task : t)));
+          
+        } catch (syncError) {
+          console.warn('Failed to sync update to server:', syncError);
+          // Queue for offline sync
+          await addOfflineAction({
+            type: 'UPDATE_TASK',
+            data: { id, ...updatedData },
+            timestamp: Date.now()
+          });
+          
+          // Update sync status to pending
+          const pendingData = { ...updatedData, syncStatus: 'pending' };
+          await indexedDBService.updateTask(user.email, id, pendingData);
+          setTasks(prev => prev.map(t => (t.id === id ? { ...t, ...pendingData } as Task : t)));
+        }
+      } else {
+        // Queue for offline sync
+        await addOfflineAction({
+          type: 'UPDATE_TASK',
+          data: { id, ...updatedData },
+          timestamp: Date.now()
+        });
+        
+        toast({
+          title: "Task Updated",
+          description: "Task updated offline, will sync when connected",
+        });
+      }
+      
     } catch (error) {
       console.error('Error updating task:', error);
+      // Revert UI change on error
+      setTasks(prev => prev.map(t => {
+        if (t.id === id) {
+          const { ...originalTask } = t;
+          delete (originalTask as any).updatedAt;
+          delete (originalTask as any).syncStatus;
+          return originalTask;
+        }
+        return t;
+      }));
+      
       toast({
         title: "Error",
         description: "Failed to update task. Please try again.",
         variant: "destructive",
       });
     }
-  }, [toast]);
+  }, [user?.email, toast, isOnline, isServerReachable, addOfflineAction]);
 
   const deleteTask = useCallback(async (id: string) => {
+    if (!user?.email) return;
+
+    const isFullyOnline = isOnline && isServerReachable;
+    
     try {
-      await taskService.deleteTask(id);
-      await taskService.deleteTasksWithParentId(id);
-      setTasks(prev => prev.filter(t => t.id !== id && t.parentId !== id));
+      // Ensure IndexedDB is properly initialized before proceeding
+      await indexedDBService.init();
+    } catch (error) {
+      console.error('Failed to initialize IndexedDB:', error);
+      toast({
+        title: "Storage Error",
+        description: "Failed to initialize local storage. Please refresh the page.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    // Store the original tasks for potential rollback
+    const taskToDelete = tasks.find(t => t.id === id);
+    const childTasks = tasks.filter(t => t.parentId === id);
+    
+    // Optimistically update UI immediately
+    setTasks(prev => prev.filter(t => t.id !== id && t.parentId !== id));
+
+    try {
+      // Always remove from IndexedDB first
+      await indexedDBService.deleteTask(user.email, id);
+      
+      // Delete child tasks from IndexedDB
+      for (const child of childTasks) {
+        await indexedDBService.deleteTask(user.email, child.id);
+      }
+      
+      if (isFullyOnline) {
+        try {
+          // Try to sync deletion to server
+          await taskService.deleteTask(id);
+          await taskService.deleteTasksWithParentId(id);
+          
+        } catch (syncError) {
+          console.warn('Failed to sync deletion to server:', syncError);
+          // Queue for offline sync
+          await addOfflineAction({
+            type: 'DELETE_TASK',
+            data: { id },
+            timestamp: Date.now()
+          });
+          
+          // Queue child deletions too
+          for (const child of childTasks) {
+            await addOfflineAction({
+              type: 'DELETE_TASK',
+              data: { id: child.id },
+              timestamp: Date.now()
+            });
+          }
+        }
+      } else {
+        // Queue for offline sync
+        await addOfflineAction({
+          type: 'DELETE_TASK',
+          data: { id },
+          timestamp: Date.now()
+        });
+        
+        // Queue child deletions too
+        for (const child of childTasks) {
+          await addOfflineAction({
+            type: 'DELETE_TASK',
+            data: { id: child.id },
+            timestamp: Date.now()
+          });
+        }
+        
+        toast({
+          title: "Task Deleted",
+          description: "Task deleted offline, will sync when connected",
+        });
+      }
+      
     } catch (error) {
       console.error('Error deleting task:', error);
+      
+      // Rollback UI changes on error
+      if (taskToDelete) {
+        setTasks(prev => [...prev, taskToDelete, ...childTasks]);
+      }
+      
       toast({
         title: "Error",
         description: "Failed to delete task. Please try again.",
         variant: "destructive",
       });
     }
-  }, [toast]);
+  }, [user?.email, tasks, toast, isOnline, isServerReachable, addOfflineAction]);
   
   const acceptTask = useCallback(async (id: string, options?: { showNotification?: boolean; onComplete?: () => void }) => {
     const task = tasks.find(t => t.id === id);

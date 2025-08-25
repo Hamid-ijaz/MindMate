@@ -38,6 +38,11 @@ class IndexedDBService {
   };
 
   async init(): Promise<void> {
+    // If already initialized, return immediately
+    if (this.db) {
+      return Promise.resolve();
+    }
+
     return new Promise((resolve, reject) => {
       if (!('indexedDB' in window)) {
         reject(new Error('IndexedDB not supported'));
@@ -212,7 +217,31 @@ class IndexedDBService {
     await this.put(this.stores.tasks, offlineTask);
   }
 
-  async deleteTask(taskId: string): Promise<void> {
+  // Alias for saveTask to match the context usage
+  async createTask(userEmail: string, task: any): Promise<void> {
+    return this.saveTask(userEmail, task, false);
+  }
+
+  // Update an existing task
+  async updateTask(userEmail: string, taskId: string, updates: any): Promise<void> {
+    // Get the existing task
+    const existingTaskData = await this.get(this.stores.tasks, taskId);
+    if (existingTaskData) {
+      const updatedTask = { ...existingTaskData.data, ...updates };
+      return this.saveTask(userEmail, updatedTask, existingTaskData.synced || false);
+    } else {
+      // If task doesn't exist, create it with the updates
+      const newTask = { id: taskId, ...updates };
+      return this.saveTask(userEmail, newTask, false);
+    }
+  }
+
+  // Sync tasks from server - save multiple tasks
+  async syncTasks(userEmail: string, tasks: any[]): Promise<void> {
+    return this.saveTasks(userEmail, tasks);
+  }
+
+  async deleteTask(userEmail: string, taskId: string): Promise<void> {
     await this.delete(this.stores.tasks, taskId);
   }
 
@@ -233,6 +262,11 @@ class IndexedDBService {
     }
   }
 
+  // Sync notes from server - alias for saveNotes
+  async syncNotes(userEmail: string, notes: any[]): Promise<void> {
+    return this.saveNotes(userEmail, notes);
+  }
+
   async getNotes(userEmail: string): Promise<any[]> {
     const offlineNotes = await this.getAll(this.stores.notes, 'userEmail', userEmail);
     return offlineNotes.map(item => item.data);
@@ -251,7 +285,26 @@ class IndexedDBService {
     await this.put(this.stores.notes, offlineNote);
   }
 
-  async deleteNote(noteId: string): Promise<void> {
+  // Alias for saveNote to match the context usage
+  async createNote(userEmail: string, note: any): Promise<void> {
+    return this.saveNote(userEmail, note, false);
+  }
+
+  // Update an existing note
+  async updateNote(userEmail: string, noteId: string, updates: any): Promise<void> {
+    // Get the existing note
+    const existingNoteData = await this.get(this.stores.notes, noteId);
+    if (existingNoteData) {
+      const updatedNote = { ...existingNoteData.data, ...updates };
+      return this.saveNote(userEmail, updatedNote, existingNoteData.synced || false);
+    } else {
+      // If note doesn't exist, create it with the updates
+      const newNote = { id: noteId, ...updates };
+      return this.saveNote(userEmail, newNote, false);
+    }
+  }
+
+  async deleteNote(userEmail: string, noteId: string): Promise<void> {
     await this.delete(this.stores.notes, noteId);
   }
 
@@ -441,10 +494,8 @@ class IndexedDBService {
 // Create singleton instance
 export const indexedDBService = new IndexedDBService();
 
-// Initialize on import
-if (typeof window !== 'undefined') {
-  indexedDBService.init().catch(console.error);
-}
+// Note: We no longer auto-initialize on import to avoid issues with user authentication
+// IndexedDB will be initialized on-demand when contexts need it after user login
 
 // Helper functions for specific use cases
 export const offlineStorage = {
