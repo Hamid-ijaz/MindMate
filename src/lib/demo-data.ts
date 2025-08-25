@@ -309,11 +309,23 @@ export const demoWorkspaceService = {
 };
 
 export const demoTeamTaskService = {
-  // Placeholder implementations - can be expanded as needed
-  getTeamTasks: () => Promise.resolve([]),
-  getAssignedTasks: () => Promise.resolve([]),
-  assignTask: () => Promise.resolve(),
-  updateAssignmentStatus: () => Promise.resolve(),
+  // Get workspace tasks - returns tasks that belong to a specific workspace
+  getWorkspaceTasks: (workspaceId: string) => Promise.resolve([]),
+  
+  // Get assigned tasks for a user in a workspace
+  getAssignedTasks: (userEmail: string, workspaceId?: string) => Promise.resolve([]),
+  
+  // Assign a task to a user
+  assignTask: (taskId: string, assigneeId: string, notes?: string) => Promise.resolve(),
+  
+  // Update assignment status
+  updateAssignmentStatus: (taskId: string, status: 'accepted' | 'declined') => Promise.resolve(),
+  
+  // Subscribe to team tasks (no-op in demo mode)
+  subscribeToTeamTasks: (workspaceId: string, callback: (tasks: any[]) => void) => {
+    // Return unsubscribe function
+    return () => {};
+  },
 };
 
 export { DEMO_MODE };
