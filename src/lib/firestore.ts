@@ -20,7 +20,13 @@ import {
   increment
 } from 'firebase/firestore';
 import { db } from './firebase';
-import type { Task, User, Accomplishment, Note, SharedItem, ShareHistoryEntry, SharePermission, ShareCollaborator, ShareAnalytics, GoogleCalendarSettings, ChatMessage, ChatSession, ChatContext, NotificationDocument, NotificationData, NotificationStats } from './types';
+import type { 
+  Task, User, Accomplishment, Note, SharedItem, ShareHistoryEntry, SharePermission, ShareCollaborator, ShareAnalytics, 
+  GoogleCalendarSettings, ChatMessage, ChatSession, ChatContext, NotificationDocument, NotificationData, NotificationStats,
+  Team, TeamMember, TeamRole, TeamPermissions, Workspace, WorkspaceSettings, TeamTask, TaskDependency, TaskTemplate,
+  BatchOperation, BatchResult, AutomationRule, TeamAnalytics, SearchQuery, SearchResult, ProjectTemplate,
+  TeamChatMessage, Resource, ResourceBooking
+} from './types';
 
 // Collection names
 export const COLLECTIONS = {
@@ -33,6 +39,21 @@ export const COLLECTIONS = {
   CHAT_SESSIONS: 'chatSessions',
   CHAT_MESSAGES: 'chatMessages',
   NOTIFICATIONS: 'notifications',
+  // New team collaboration collections
+  TEAMS: 'teams',
+  TEAM_MEMBERS: 'teamMembers',
+  WORKSPACES: 'workspaces',
+  TEAM_TASKS: 'teamTasks',
+  TASK_DEPENDENCIES: 'taskDependencies',
+  TASK_TEMPLATES: 'taskTemplates',
+  PROJECT_TEMPLATES: 'projectTemplates',
+  BATCH_OPERATIONS: 'batchOperations',
+  AUTOMATION_RULES: 'automationRules',
+  TEAM_ANALYTICS: 'teamAnalytics',
+  SEARCH_QUERIES: 'searchQueries',
+  TEAM_CHAT_MESSAGES: 'teamChatMessages',
+  RESOURCES: 'resources',
+  RESOURCE_BOOKINGS: 'resourceBookings'
 } as const;
 
 // User operations
@@ -1425,3 +1446,246 @@ export const notificationService = {
     }
   },
 };
+
+// ============================================================================
+// TEAM COLLABORATION SERVICES
+// ============================================================================
+
+// Team operations
+export const teamService = {
+  // Create a new team
+  async createTeam(teamData: Omit<Team, 'id' | 'createdAt' | 'updatedAt' | 'memberCount'>): Promise<string> {
+    const teamsRef = collection(db, COLLECTIONS.TEAMS);
+    const teamRef = doc(teamsRef);
+    
+    const team: Omit<Team, 'id'> = {
+      ...teamData,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      memberCount: 1, // Owner is the first member
+      isActive: true,
+    };
+    
+    await setDoc(teamRef, team);
+    
+    // Add owner as first team member
+    await teamMemberService.addTeamMember(teamRef.id, teamData.ownerId, 'owner', teamData.ownerId);
+    
+    return teamRef.id;
+  },
+
+  // Get team by ID
+  async getTeam(teamId: string): Promise<Team | null> {
+    const teamRef = doc(db, COLLECTIONS.TEAMS, teamId);
+    const teamSnap = await getDoc(teamRef);
+    
+    if (teamSnap.exists()) {
+      return { id: teamSnap.id, ...teamSnap.data() } as Team;
+    }
+    return null;
+  },
+
+  // Get teams for a user
+  async getUserTeams(userEmail: string): Promise<Team[]> {
+    const teamMembersRef = collection(db, COLLECTIONS.TEAM_MEMBERS);
+    const memberQuery = query(teamMembersRef, where('userId', '==', userEmail), where('status', '==', 'active'));
+    const memberSnapshot = await getDocs(memberQuery);
+    
+    if (memberSnapshot.empty) return [];
+    
+    const teamIds = memberSnapshot.docs.map(doc => doc.data().teamId);
+    const teamsRef = collection(db, COLLECTIONS.TEAMS);
+    
+    // Firestore 'in' queries are limited to 10 values, so we need to batch the requests
+    const teamBatches = [];
+    for (let i = 0; i < teamIds.length; i += 10) {
+      const batchIds = teamIds.slice(i, i + 10);
+      const batchQuery = query(teamsRef, where('__name__', 'in', batchIds), where('isActive', '==', true));
+      teamBatches.push(getDocs(batchQuery));
+    }
+    
+    const batchResults = await Promise.all(teamBatches);
+    const teams: Team[] = [];
+    
+    batchResults.forEach(querySnapshot => {
+      querySnapshot.docs.forEach(doc => {
+        teams.push({ id: doc.id, ...doc.data() } as Team);
+      });
+    });
+    
+    return teams;
+  },
+
+  // Update team
+  async updateTeam(teamId: string, updates: Partial<Omit<Team, 'id' | 'createdAt'>>): Promise<void> {
+    const teamRef = doc(db, COLLECTIONS.TEAMS, teamId);
+    await updateDoc(teamRef, {
+      ...updates,
+      updatedAt: Date.now(),
+    });
+  },
+
+  // Delete team (archive)
+  async deleteTeam(teamId: string): Promise<void> {
+    const teamRef = doc(db, COLLECTIONS.TEAMS, teamId);
+    await updateDoc(teamRef, {
+      isActive: false,
+      updatedAt: Date.now(),
+    });
+  },
+
+  // Update member count
+  async updateMemberCount(teamId: string, delta: number): Promise<void> {
+    const teamRef = doc(db, COLLECTIONS.TEAMS, teamId);
+    await updateDoc(teamRef, {
+      memberCount: increment(delta),
+      updatedAt: Date.now(),
+    });
+  },
+};
+
+// Team member operations
+export const teamMemberService = {
+  // Add team member
+  async addTeamMember(teamId: string, userId: string, role: TeamRole, invitedBy: string): Promise<string> {
+    const membersRef = collection(db, COLLECTIONS.TEAM_MEMBERS);
+    const memberRef = doc(membersRef);
+    
+    // Get user info
+    const userInfo = await userService.getUser(userId);
+    const userName = userInfo ? `${userInfo.firstName} ${userInfo.lastName}` : userId.split('@')[0];
+    
+    // Generate default permissions based on role
+    const permissions = generateDefaultPermissions(role);
+    
+    const member: Omit<TeamMember, 'id'> = {
+      teamId,
+      userId,
+      userName,
+      role,
+      joinedAt: Date.now(),
+      invitedBy,
+      status: 'active',
+      permissions,
+    };
+    
+    await setDoc(memberRef, member);
+    
+    // Update team member count
+    await teamService.updateMemberCount(teamId, 1);
+    
+    return memberRef.id;
+  },
+
+  // Get team members
+  async getTeamMembers(teamId: string): Promise<TeamMember[]> {
+    const membersRef = collection(db, COLLECTIONS.TEAM_MEMBERS);
+    const q = query(
+      membersRef,
+      where('teamId', '==', teamId),
+      where('status', '==', 'active'),
+      orderBy('joinedAt', 'desc')
+    );
+    
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as TeamMember));
+  },
+
+  // Update team member
+  async updateTeamMember(memberId: string, updates: Partial<Omit<TeamMember, 'id' | 'teamId' | 'userId' | 'joinedAt'>>): Promise<void> {
+    const memberRef = doc(db, COLLECTIONS.TEAM_MEMBERS, memberId);
+    await updateDoc(memberRef, {
+      ...updates,
+      lastActiveAt: Date.now(),
+    });
+  },
+
+  // Remove team member
+  async removeTeamMember(memberId: string, teamId: string): Promise<void> {
+    const memberRef = doc(db, COLLECTIONS.TEAM_MEMBERS, memberId);
+    await updateDoc(memberRef, {
+      status: 'inactive',
+    });
+    
+    // Update team member count
+    await teamService.updateMemberCount(teamId, -1);
+  },
+
+  // Get member permissions
+  async getMemberPermissions(teamId: string, userId: string): Promise<TeamPermissions | null> {
+    const membersRef = collection(db, COLLECTIONS.TEAM_MEMBERS);
+    const q = query(
+      membersRef,
+      where('teamId', '==', teamId),
+      where('userId', '==', userId),
+      where('status', '==', 'active')
+    );
+    
+    const querySnapshot = await getDocs(q);
+    if (querySnapshot.empty) return null;
+    
+    const member = querySnapshot.docs[0].data() as TeamMember;
+    return member.permissions;
+  },
+};
+
+// Helper function to generate default permissions based on role
+function generateDefaultPermissions(role: TeamRole): TeamPermissions {
+  switch (role) {
+    case 'owner':
+      return {
+        canCreateTasks: true,
+        canAssignTasks: true,
+        canEditAllTasks: true,
+        canDeleteTasks: true,
+        canManageMembers: true,
+        canManageSettings: true,
+        canViewAnalytics: true,
+        canManageTemplates: true,
+      };
+    case 'admin':
+      return {
+        canCreateTasks: true,
+        canAssignTasks: true,
+        canEditAllTasks: true,
+        canDeleteTasks: true,
+        canManageMembers: true,
+        canManageSettings: false,
+        canViewAnalytics: true,
+        canManageTemplates: true,
+      };
+    case 'member':
+      return {
+        canCreateTasks: true,
+        canAssignTasks: false,
+        canEditAllTasks: false,
+        canDeleteTasks: false,
+        canManageMembers: false,
+        canManageSettings: false,
+        canViewAnalytics: false,
+        canManageTemplates: false,
+      };
+    case 'viewer':
+      return {
+        canCreateTasks: false,
+        canAssignTasks: false,
+        canEditAllTasks: false,
+        canDeleteTasks: false,
+        canManageMembers: false,
+        canManageSettings: false,
+        canViewAnalytics: false,
+        canManageTemplates: false,
+      };
+    default:
+      return {
+        canCreateTasks: false,
+        canAssignTasks: false,
+        canEditAllTasks: false,
+        canDeleteTasks: false,
+        canManageMembers: false,
+        canManageSettings: false,
+        canViewAnalytics: false,
+        canManageTemplates: false,
+      };
+  }
+}
