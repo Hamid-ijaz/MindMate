@@ -8,6 +8,13 @@ import {
   workspaceService, 
   teamTaskService 
 } from '@/lib/firestore';
+import { 
+  demoTeamService,
+  demoTeamMemberService,
+  demoWorkspaceService,
+  demoTeamTaskService,
+  DEMO_MODE
+} from '@/lib/demo-data';
 import type { 
   Team, 
   TeamMember, 
@@ -61,6 +68,19 @@ const TeamContext = createContext<TeamContextType | undefined>(undefined);
 export function TeamProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   
+  // Choose services based on demo mode
+  const services = DEMO_MODE ? {
+    teamService: demoTeamService,
+    teamMemberService: demoTeamMemberService,
+    workspaceService: demoWorkspaceService,
+    teamTaskService: demoTeamTaskService,
+  } : {
+    teamService,
+    teamMemberService,
+    workspaceService,
+    teamTaskService,
+  };
+  
   // State
   const [teams, setTeams] = useState<Team[]>([]);
   const [currentTeam, setCurrentTeam] = useState<Team | null>(null);
@@ -87,7 +107,7 @@ export function TeamProvider({ children }: { children: React.ReactNode }) {
       try {
         setIsLoadingTeams(true);
         setError(null);
-        const userTeams = await teamService.getUserTeams(user.email);
+        const userTeams = await services.teamService.getUserTeams(user.email);
         setTeams(userTeams);
         
         // Set first team as current if none selected
@@ -115,7 +135,7 @@ export function TeamProvider({ children }: { children: React.ReactNode }) {
     const loadTeamMembers = async () => {
       try {
         setIsLoadingMembers(true);
-        const members = await teamMemberService.getTeamMembers(currentTeam.id);
+        const members = await services.teamMemberService.getTeamMembers(currentTeam.id);
         setTeamMembers(members);
       } catch (err) {
         console.error('Error loading team members:', err);
@@ -138,7 +158,7 @@ export function TeamProvider({ children }: { children: React.ReactNode }) {
     const loadWorkspaces = async () => {
       try {
         setIsLoadingWorkspaces(true);
-        const teamWorkspaces = await workspaceService.getTeamWorkspaces(currentTeam.id);
+        const teamWorkspaces = await services.workspaceService.getTeamWorkspaces(currentTeam.id);
         setWorkspaces(teamWorkspaces);
         
         // Set first workspace as current if none selected
@@ -169,11 +189,11 @@ export function TeamProvider({ children }: { children: React.ReactNode }) {
         setIsLoadingTasks(true);
         
         // Load all workspace tasks
-        const workspaceTasks = await teamTaskService.getWorkspaceTasks(currentWorkspace.id);
+        const workspaceTasks = await services.teamTaskService.getWorkspaceTasks(currentWorkspace.id);
         setTeamTasks(workspaceTasks);
         
         // Load assigned tasks for current user
-        const userAssignedTasks = await teamTaskService.getAssignedTasks(user.email, currentWorkspace.id);
+        const userAssignedTasks = await services.teamTaskService.getAssignedTasks(user.email, currentWorkspace.id);
         setAssignedTasks(userAssignedTasks);
       } catch (err) {
         console.error('Error loading tasks:', err);
@@ -187,7 +207,8 @@ export function TeamProvider({ children }: { children: React.ReactNode }) {
 
     // Set up real-time subscription for team tasks
     let unsubscribe: (() => void) | undefined;
-    if (currentWorkspace?.id) {
+    if (currentWorkspace?.id && !DEMO_MODE) {
+      // Only use real-time subscriptions in non-demo mode
       unsubscribe = teamTaskService.subscribeToTeamTasks(
         currentWorkspace.id,
         (tasks) => {
@@ -214,14 +235,14 @@ export function TeamProvider({ children }: { children: React.ReactNode }) {
     if (!user?.email) throw new Error('User not authenticated');
     
     try {
-      const teamId = await teamService.createTeam({
+      const teamId = await services.teamService.createTeam({
         ...teamData,
         ownerId: user.email,
         ownerName: `${user.firstName} ${user.lastName}`,
       });
       
       // Reload teams
-      const userTeams = await teamService.getUserTeams(user.email);
+      const userTeams = await services.teamService.getUserTeams(user.email);
       setTeams(userTeams);
       
       return teamId;
@@ -234,7 +255,7 @@ export function TeamProvider({ children }: { children: React.ReactNode }) {
 
   const updateTeam = async (teamId: string, updates: Partial<Team>): Promise<void> => {
     try {
-      await teamService.updateTeam(teamId, updates);
+      await services.teamService.updateTeam(teamId, updates);
       
       // Update local state
       setTeams(prev => prev.map(team => 
@@ -254,7 +275,7 @@ export function TeamProvider({ children }: { children: React.ReactNode }) {
 
   const deleteTeam = async (teamId: string): Promise<void> => {
     try {
-      await teamService.deleteTeam(teamId);
+      await services.teamService.deleteTeam(teamId);
       
       // Remove from local state
       setTeams(prev => prev.filter(team => team.id !== teamId));
@@ -276,11 +297,11 @@ export function TeamProvider({ children }: { children: React.ReactNode }) {
     if (!user?.email) throw new Error('User not authenticated');
     
     try {
-      const memberId = await teamMemberService.addTeamMember(teamId, userEmail, role, user.email);
+      const memberId = await services.teamMemberService.addTeamMember(teamId, userEmail, role, user.email);
       
       // Reload team members
       if (currentTeam?.id === teamId) {
-        const members = await teamMemberService.getTeamMembers(teamId);
+        const members = await services.teamMemberService.getTeamMembers(teamId);
         setTeamMembers(members);
       }
       
@@ -295,7 +316,7 @@ export function TeamProvider({ children }: { children: React.ReactNode }) {
   const updateTeamMemberRole = async (memberId: string, role: TeamRole): Promise<void> => {
     try {
       const permissions = generateDefaultPermissions(role);
-      await teamMemberService.updateTeamMember(memberId, { role, permissions });
+      await services.teamMemberService.updateTeamMemberRole(memberId, role);
       
       // Update local state
       setTeamMembers(prev => prev.map(member => 
@@ -312,7 +333,7 @@ export function TeamProvider({ children }: { children: React.ReactNode }) {
     if (!currentTeam) return;
     
     try {
-      await teamMemberService.removeTeamMember(memberId, currentTeam.id);
+      await services.teamMemberService.removeTeamMember(memberId);
       
       // Remove from local state
       setTeamMembers(prev => prev.filter(member => member.id !== memberId));
@@ -335,14 +356,14 @@ export function TeamProvider({ children }: { children: React.ReactNode }) {
     if (!user?.email || !currentTeam) throw new Error('User not authenticated or no team selected');
     
     try {
-      const workspaceId = await workspaceService.createWorkspace({
+      const workspaceId = await services.workspaceService.createWorkspace({
         ...workspaceData,
         teamId: currentTeam.id,
         createdBy: user.email,
       });
       
       // Reload workspaces
-      const teamWorkspaces = await workspaceService.getTeamWorkspaces(currentTeam.id);
+      const teamWorkspaces = await services.workspaceService.getTeamWorkspaces(currentTeam.id);
       setWorkspaces(teamWorkspaces);
       
       return workspaceId;
@@ -355,7 +376,7 @@ export function TeamProvider({ children }: { children: React.ReactNode }) {
 
   const updateWorkspace = async (workspaceId: string, updates: Partial<Workspace>): Promise<void> => {
     try {
-      await workspaceService.updateWorkspace(workspaceId, updates);
+      await services.workspaceService.updateWorkspace(workspaceId, updates);
       
       // Update local state
       setWorkspaces(prev => prev.map(workspace => 
@@ -378,7 +399,7 @@ export function TeamProvider({ children }: { children: React.ReactNode }) {
     if (!user?.email) throw new Error('User not authenticated');
     
     try {
-      await teamTaskService.assignTask(taskId, assigneeId, user.email, notes);
+      await services.teamTaskService.assignTask(taskId, assigneeId, notes);
       
       // Tasks will be updated via real-time subscription
     } catch (err) {
@@ -390,7 +411,7 @@ export function TeamProvider({ children }: { children: React.ReactNode }) {
 
   const updateAssignmentStatus = async (taskId: string, status: 'accepted' | 'declined'): Promise<void> => {
     try {
-      await teamTaskService.updateAssignmentStatus(taskId, status);
+      await services.teamTaskService.updateAssignmentStatus(taskId, status);
       
       // Tasks will be updated via real-time subscription
     } catch (err) {

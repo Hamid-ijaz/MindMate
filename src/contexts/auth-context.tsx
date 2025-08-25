@@ -26,8 +26,24 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const isDemo = process.env.NEXT_PUBLIC_DEMO_MODE === 'true';
+
   useEffect(() => {
     const initializeAuth = async () => {
+      if (isDemo) {
+        // Demo mode - create a test user automatically
+        const demoUser: User = {
+          firstName: 'Demo',
+          lastName: 'User',
+          email: 'demo@example.com',
+        };
+        setUser(demoUser);
+        // Set the auth cookie for middleware
+        Cookies.set(AUTH_COOKIE_KEY, demoUser.email, { expires: 7, path: '/' });
+        setLoading(false);
+        return;
+      }
+
       const userEmail = Cookies.get(AUTH_COOKIE_KEY);
       if (userEmail) {
         try {
@@ -47,9 +63,20 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     };
 
     initializeAuth();
-  }, []);
+  }, [isDemo]);
 
   const login = async (email: string, password: string): Promise<boolean> => {
+    if (isDemo) {
+      // Demo mode - always succeed
+      const demoUser: User = {
+        firstName: 'Demo',
+        lastName: 'User',
+        email: 'demo@example.com',
+      };
+      setUser(demoUser);
+      return true;
+    }
+
     try {
       const foundUser = await userService.getUser(email);
       if (foundUser && foundUser.password === password) {
@@ -65,6 +92,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const signup = async (userData: SignupData): Promise<boolean> => {
+    if (isDemo) {
+      // Demo mode - always succeed
+      const demoUser: User = {
+        firstName: userData.firstName,
+        lastName: userData.lastName,
+        email: userData.email,
+        phone: userData.phone,
+        dob: userData.dob,
+      };
+      setUser(demoUser);
+      return true;
+    }
+
     try {
       const userExists = await userService.userExists(userData.email);
       if (userExists) {
