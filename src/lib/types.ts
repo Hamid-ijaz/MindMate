@@ -633,3 +633,567 @@ export interface ChatContext {
     overdueTasksCount: number;
   };
 }
+
+// ============================================================================
+// TEAM COLLABORATION & WORKSPACE TYPES
+// ============================================================================
+
+export type TeamRole = 'owner' | 'admin' | 'member' | 'viewer';
+
+export interface Team {
+  id: string;
+  name: string;
+  description?: string;
+  ownerId: string; // User email
+  ownerName?: string;
+  createdAt: number;
+  updatedAt: number;
+  memberCount: number;
+  isActive: boolean;
+  settings: TeamSettings;
+}
+
+export interface TeamSettings {
+  allowMemberInvites: boolean;
+  defaultMemberRole: TeamRole;
+  requireApprovalForTasks: boolean;
+  autoAssignTasks: boolean;
+  notificationSettings: {
+    memberJoined: boolean;
+    taskAssigned: boolean;
+    projectUpdates: boolean;
+  };
+}
+
+export interface TeamMember {
+  id: string;
+  teamId: string;
+  userId: string; // User email
+  userName?: string;
+  userAvatar?: string;
+  role: TeamRole;
+  joinedAt: number;
+  lastActiveAt?: number;
+  invitedBy: string; // Email of who invited them
+  status: 'pending' | 'active' | 'inactive';
+  permissions: TeamPermissions;
+}
+
+export interface TeamPermissions {
+  canCreateTasks: boolean;
+  canAssignTasks: boolean;
+  canEditAllTasks: boolean;
+  canDeleteTasks: boolean;
+  canManageMembers: boolean;
+  canManageSettings: boolean;
+  canViewAnalytics: boolean;
+  canManageTemplates: boolean;
+}
+
+export interface Workspace {
+  id: string;
+  teamId: string;
+  name: string;
+  description?: string;
+  createdAt: number;
+  updatedAt: number;
+  createdBy: string; // User email
+  isActive: boolean;
+  memberIds: string[]; // User emails with access
+  settings: WorkspaceSettings;
+  stats: WorkspaceStats;
+}
+
+export interface WorkspaceSettings {
+  defaultTaskCategory: TaskCategory;
+  workingHours: { start: string; end: string; timezone: string };
+  holidays: number[]; // timestamps
+  taskAutoAssignment: boolean;
+  notificationPreferences: NotificationSettings;
+  calendarIntegration: boolean;
+  timeTracking: boolean;
+  requireTaskApproval: boolean;
+}
+
+export interface WorkspaceStats {
+  totalTasks: number;
+  completedTasks: number;
+  activeTasks: number;
+  overdueTasks: number;
+  totalMembers: number;
+  lastActivityAt?: number;
+}
+
+export interface NotificationSettings {
+  enabled: boolean;
+  taskAssignments: boolean;
+  taskUpdates: boolean;
+  deadlineReminders: boolean;
+  teamUpdates: boolean;
+  dailyDigest: boolean;
+}
+
+// ============================================================================
+// ENHANCED TASK MANAGEMENT TYPES
+// ============================================================================
+
+export interface TeamTask extends Task {
+  workspaceId?: string;
+  teamId?: string;
+  assigneeId?: string; // User email
+  assigneeName?: string;
+  assignedBy?: string; // User email
+  assignedAt?: number;
+  acceptedAt?: number;
+  assignmentStatus?: 'pending' | 'accepted' | 'declined' | 'reassigned';
+  assignmentNotes?: string;
+  collaborators?: string[]; // User emails
+  watchers?: string[]; // User emails who want to be notified
+  dependsOn?: string[]; // Task IDs this task depends on
+  blockedBy?: string[]; // Task IDs blocking this task
+  templateId?: string; // ID of template used to create this task
+  isFromTemplate?: boolean;
+  automationRuleId?: string; // ID of automation rule that created this task
+}
+
+export interface TaskDependency {
+  id: string;
+  workspaceId: string;
+  predecessorTaskId: string;
+  successorTaskId: string;
+  dependencyType: 'FS' | 'SS' | 'FF' | 'SF'; // Finish-to-Start, Start-to-Start, etc.
+  lag: number; // days delay after predecessor
+  createdAt: number;
+  createdBy: string; // User email
+}
+
+export interface TaskTemplate {
+  id: string;
+  name: string;
+  description: string;
+  category: 'individual' | 'team' | 'project';
+  workspaceId?: string; // Workspace-specific templates
+  isPublic: boolean;
+  createdBy: string; // User email
+  createdAt: number;
+  updatedAt: number;
+  usageCount: number;
+  tags: string[];
+  templateData: TaskTemplateData;
+  version: number;
+}
+
+export interface TaskTemplateData {
+  tasks: TaskTemplateItem[];
+  estimatedDuration: number; // days
+  teamRoles?: string[]; // Required roles
+  milestones?: Milestone[];
+  dependencies?: TemplateDependency[];
+}
+
+export interface TaskTemplateItem {
+  id: string;
+  title: string;
+  description: string;
+  category: TaskCategory;
+  priority: Priority;
+  estimatedDuration: number;
+  assigneeRole?: string; // 'developer', 'designer', 'manager', etc.
+  subtasks?: TaskTemplateItem[];
+  dependsOn?: string[]; // References to other template items
+}
+
+export interface TemplateDependency {
+  predecessorId: string;
+  successorId: string;
+  type: 'FS' | 'SS' | 'FF' | 'SF';
+  lag: number;
+}
+
+export interface Milestone {
+  id: string;
+  title: string;
+  description?: string;
+  targetDate: number;
+  completedAt?: number;
+  taskIds: string[];
+  progress: number; // 0-100
+}
+
+export interface ProjectTemplate {
+  id: string;
+  name: string;
+  description: string;
+  category: 'software' | 'marketing' | 'events' | 'content' | 'product' | 'hr' | 'custom';
+  isPublic: boolean;
+  createdBy: string;
+  createdAt: number;
+  usageCount: number;
+  tasks: TaskTemplate[];
+  estimatedDuration: number; // days
+  teamRoles: TeamRole[];
+  milestones: Milestone[];
+  workspaceSettings?: Partial<WorkspaceSettings>;
+}
+
+// ============================================================================
+// ADVANCED SEARCH & FILTERING TYPES
+// ============================================================================
+
+export interface SearchQuery {
+  id?: string;
+  name?: string; // for saved searches
+  query: string;
+  filters: SearchFilter[];
+  sortBy: SortOption[];
+  userId: string; // User email
+  workspaceId?: string;
+  isPublic: boolean;
+  createdAt: number;
+  lastUsedAt?: number;
+  usageCount: number;
+}
+
+export interface SearchFilter {
+  field: string; // 'title', 'category', 'priority', 'assignee', 'status', etc.
+  operator: 'equals' | 'not_equals' | 'contains' | 'not_contains' | 'startsWith' | 'endsWith' | 'between' | 'in' | 'not_in' | 'greater_than' | 'less_than' | 'is_empty' | 'is_not_empty';
+  value: any;
+  logic?: 'AND' | 'OR';
+}
+
+export interface SortOption {
+  field: string;
+  direction: 'asc' | 'desc';
+}
+
+export interface SearchResult {
+  tasks: TeamTask[];
+  totalCount: number;
+  facets: SearchFacet[]; // aggregated filter options
+  suggestions: string[]; // search suggestions
+  executionTime: number;
+  hasMore: boolean;
+}
+
+export interface SearchFacet {
+  field: string;
+  values: Array<{
+    value: string;
+    count: number;
+    selected: boolean;
+  }>;
+}
+
+// ============================================================================
+// BATCH OPERATIONS TYPES
+// ============================================================================
+
+export interface BatchOperation {
+  id: string;
+  workspaceId?: string;
+  operationType: 'update' | 'delete' | 'assign' | 'move' | 'complete' | 'archive' | 'duplicate';
+  taskIds: string[];
+  parameters: Record<string, any>;
+  executedBy: string; // User email
+  executedAt: number;
+  completedAt?: number;
+  status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
+  progress: number; // 0-100
+  results: BatchResult[];
+  totalItems: number;
+  processedItems: number;
+  failedItems: number;
+}
+
+export interface BatchResult {
+  taskId: string;
+  success: boolean;
+  error?: string;
+  changes?: Record<string, any>;
+  executedAt: number;
+}
+
+// ============================================================================
+// AUTOMATION TYPES
+// ============================================================================
+
+export interface AutomationRule {
+  id: string;
+  workspaceId: string;
+  name: string;
+  description: string;
+  isActive: boolean;
+  trigger: AutomationTrigger;
+  conditions: AutomationCondition[];
+  actions: AutomationAction[];
+  createdBy: string; // User email
+  createdAt: number;
+  updatedAt: number;
+  executionCount: number;
+  lastExecuted?: number;
+  lastExecutionStatus?: 'success' | 'failed' | 'partial';
+  statistics: AutomationStatistics;
+}
+
+export interface AutomationTrigger {
+  type: 'task_created' | 'task_updated' | 'task_completed' | 'task_assigned' | 'due_date_approaching' | 'schedule' | 'webhook' | 'manual';
+  parameters?: Record<string, any>;
+  schedule?: {
+    frequency: 'once' | 'daily' | 'weekly' | 'monthly';
+    time?: string; // "09:00"
+    daysOfWeek?: number[]; // [1,2,3,4,5]
+    dayOfMonth?: number; // 1-31
+  };
+}
+
+export interface AutomationCondition {
+  field: string;
+  operator: 'equals' | 'not_equals' | 'contains' | 'greater_than' | 'less_than' | 'in' | 'not_in' | 'is_empty' | 'is_not_empty';
+  value: any;
+  logic?: 'AND' | 'OR';
+}
+
+export interface AutomationAction {
+  type: 'update_task' | 'create_task' | 'assign_task' | 'send_notification' | 'add_comment' | 'add_tag' | 'remove_tag' | 'move_to_workspace' | 'webhook' | 'email';
+  parameters: Record<string, any>;
+  delay?: number; // seconds to wait before executing
+  condition?: AutomationCondition; // optional condition for this specific action
+}
+
+export interface AutomationStatistics {
+  totalExecutions: number;
+  successfulExecutions: number;
+  failedExecutions: number;
+  averageExecutionTime: number;
+  lastSuccessAt?: number;
+  lastFailureAt?: number;
+  lastFailureReason?: string;
+}
+
+// ============================================================================
+// TEAM ANALYTICS TYPES
+// ============================================================================
+
+export interface TeamAnalytics {
+  workspaceId: string;
+  teamId: string;
+  period: 'day' | 'week' | 'month' | 'quarter' | 'year';
+  startDate: number;
+  endDate: number;
+  generatedAt: number;
+  teamMetrics: TeamMetrics;
+  memberMetrics: MemberMetrics[];
+  projectMetrics: ProjectMetrics[];
+  trendData: TrendPoint[];
+  insights: AIInsight[];
+  recommendations: string[];
+}
+
+export interface TeamMetrics {
+  totalTasks: number;
+  completedTasks: number;
+  inProgressTasks: number;
+  overdueTasks: number;
+  completionRate: number;
+  averageCompletionTime: number;
+  collaborationScore: number; // 0-100
+  productivityScore: number; // 0-100
+  workloadDistribution: WorkloadDistribution;
+  categoryDistribution: Record<string, number>;
+  priorityDistribution: Record<string, number>;
+}
+
+export interface MemberMetrics {
+  userId: string; // User email
+  userName?: string;
+  userAvatar?: string;
+  role: TeamRole;
+  tasksAssigned: number;
+  tasksCompleted: number;
+  completionRate: number;
+  averageTaskDuration: number;
+  overdueCount: number;
+  collaborationCount: number; // tasks worked on with others
+  productivityScore: number; // 0-100
+  workloadScore: number; // relative to team average
+  specializations: string[]; // categories they excel at
+  trendsOverTime: TrendPoint[];
+}
+
+export interface ProjectMetrics {
+  projectId: string;
+  projectName: string;
+  tasksCount: number;
+  completedTasks: number;
+  completionRate: number;
+  estimatedDuration: number;
+  actualDuration?: number;
+  budgetVariance?: number; // if budget tracking is enabled
+  riskScore: number; // 0-100
+  milestoneProgress: Array<{
+    milestone: string;
+    progress: number;
+    onTrack: boolean;
+  }>;
+}
+
+export interface WorkloadDistribution {
+  balanced: number; // percentage of team with balanced workload
+  underutilized: number; // percentage underutilized
+  overloaded: number; // percentage overloaded
+  averageTasksPerMember: number;
+  workloadVariance: number;
+}
+
+export interface TrendPoint {
+  date: number; // timestamp
+  value: number;
+  change?: number; // change from previous period
+  changePercentage?: number;
+}
+
+export interface AIInsight {
+  id: string;
+  type: 'productivity' | 'collaboration' | 'risk' | 'opportunity' | 'pattern';
+  title: string;
+  description: string;
+  confidence: number; // 0-1
+  impact: 'low' | 'medium' | 'high';
+  actionable: boolean;
+  suggestedAction?: string;
+  relatedMetrics?: string[];
+  generatedAt: number;
+}
+
+// ============================================================================
+// COMMUNICATION & INTEGRATION TYPES
+// ============================================================================
+
+export interface TeamChatMessage {
+  id: string;
+  workspaceId: string;
+  threadId: string; // taskId for task threads, channelId for workspace channels
+  threadType: 'task' | 'workspace' | 'direct';
+  senderId: string; // User email
+  senderName?: string;
+  senderAvatar?: string;
+  content: string;
+  timestamp: number;
+  editedAt?: number;
+  attachments?: Attachment[];
+  mentions?: string[]; // User emails
+  reactions?: Reaction[];
+  isSystem?: boolean; // system-generated messages
+  relatedTaskId?: string;
+}
+
+export interface Attachment {
+  id: string;
+  name: string;
+  type: 'image' | 'file' | 'link' | 'task';
+  url: string;
+  size?: number;
+  thumbnailUrl?: string;
+}
+
+export interface Reaction {
+  emoji: string;
+  userIds: string[]; // User emails
+  count: number;
+}
+
+export interface Integration {
+  id: string;
+  workspaceId: string;
+  type: 'slack' | 'teams' | 'discord' | 'webhook' | 'zapier';
+  name: string;
+  isActive: boolean;
+  credentials: EncryptedCredentials;
+  settings: IntegrationSettings;
+  createdBy: string; // User email
+  createdAt: number;
+  lastSyncAt?: number;
+  syncStatus: 'idle' | 'syncing' | 'success' | 'error';
+  statistics: IntegrationStatistics;
+}
+
+export interface EncryptedCredentials {
+  encryptedData: string;
+  keyId: string;
+  createdAt: number;
+}
+
+export interface IntegrationSettings {
+  syncDirection: 'inbound' | 'outbound' | 'bidirectional';
+  syncFrequency: 'realtime' | 'hourly' | 'daily' | 'manual';
+  eventTypes: string[]; // which events to sync
+  channelMapping: Record<string, string>; // local channel -> external channel
+  userMapping: Record<string, string>; // local user -> external user
+  filterRules: IntegrationFilter[];
+}
+
+export interface IntegrationFilter {
+  field: string;
+  operator: string;
+  value: any;
+  action: 'include' | 'exclude' | 'transform';
+}
+
+export interface IntegrationStatistics {
+  totalSyncs: number;
+  successfulSyncs: number;
+  failedSyncs: number;
+  lastSyncDuration: number;
+  itemsSynced: number;
+  errorsEncountered: number;
+}
+
+// ============================================================================
+// RESOURCE MANAGEMENT TYPES
+// ============================================================================
+
+export interface Resource {
+  id: string;
+  workspaceId: string;
+  name: string;
+  type: 'room' | 'equipment' | 'person' | 'virtual';
+  description?: string;
+  capacity?: number;
+  location?: string;
+  isActive: boolean;
+  availableHours?: {
+    start: string; // "09:00"
+    end: string;   // "17:00"
+    days: number[]; // [1,2,3,4,5]
+  };
+  bookings: ResourceBooking[];
+  settings: ResourceSettings;
+}
+
+export interface ResourceBooking {
+  id: string;
+  resourceId: string;
+  taskId?: string;
+  userId: string; // User email
+  title: string;
+  startTime: number;
+  endTime: number;
+  status: 'pending' | 'confirmed' | 'cancelled' | 'completed';
+  notes?: string;
+  attendees?: string[]; // User emails
+  createdAt: number;
+}
+
+export interface ResourceSettings {
+  requireApproval: boolean;
+  maxBookingDuration: number; // hours
+  advanceBookingDays: number; // how many days in advance
+  allowRecurringBookings: boolean;
+  autoRelease: boolean; // auto-release if not checked in
+  notificationSettings: {
+    bookingConfirmed: boolean;
+    bookingCancelled: boolean;
+    bookingReminder: boolean;
+    reminderMinutes: number;
+  };
+}
