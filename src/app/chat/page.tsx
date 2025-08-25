@@ -257,10 +257,7 @@ export default function EnhancedChatPage() {
       
       setAddedTasks(prev => new Set(prev).add(suggestedTask.title));
       
-      toast({
-        title: "Task Added!",
-        description: `"${suggestedTask.title}" has been added to your list.`,
-      });
+      // Note: Toast for task creation is handled by the task context
     } catch (error) {
       console.error('Error adding task:', error);
       toast({

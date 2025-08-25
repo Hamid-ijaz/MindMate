@@ -84,10 +84,7 @@ export function QuickActions({ className }: QuickActionsProps) {
         userEmail: user.email,
       });
 
-      toast({
-        title: "Quick task added!",
-        description: `"${template.title}" has been added to your tasks.`,
-      });
+      // Note: Toast for task creation is handled by the task context
     } catch (error) {
       toast({
         title: "Failed to add task",
@@ -109,10 +106,7 @@ export function QuickActions({ className }: QuickActionsProps) {
         userEmail: user.email,
       });
 
-      toast({
-        title: "Custom task added!",
-        description: `"${customTask.title}" has been added to your tasks.`,
-      });
+      // Note: Toast for task creation is handled by the task context
 
       setCustomTask({
         title: '',

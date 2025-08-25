@@ -40,7 +40,7 @@ export const NoteProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [user, authLoading, isOnline, isServerReachable]);
 
-  const loadNotes = async () => {
+  const loadNotes = useCallback(async () => {
     if (!user?.email) return;
     console.log('🔄 loadNotes called for user:', user.email);
     setIsLoading(true);
@@ -58,6 +58,9 @@ export const NoteProvider = ({ children }: { children: ReactNode }) => {
           // Try to load from server first when online
           const userNotes = await noteService.getNotes(user.email);
           console.log('📊 Server notes loaded:', userNotes.length);
+          if (userNotes.length > 0) {
+            console.log('📋 Note titles:', userNotes.map(note => ({ id: note.id, title: note.title, createdAt: new Date(note.createdAt).toISOString() })));
+          }
           setNotes(userNotes);
           // Cache notes in IndexedDB
           await indexedDBService.syncNotes(user.email, userNotes);
@@ -74,12 +77,13 @@ export const NoteProvider = ({ children }: { children: ReactNode }) => {
       console.log('💾 Cached notes loaded:', cachedNotes.length);
       setNotes(cachedNotes);
 
-      if (!isFullyOnline && cachedNotes.length > 0) {
-        toast({
-          title: "Offline Mode",
-          description: "Showing cached notes (offline mode)",
-        });
-      }
+      // Remove the duplicate offline mode toast since it's handled by offline-context
+      // if (!isFullyOnline && cachedNotes.length > 0) {
+      //   toast({
+      //     title: "Offline Mode",
+      //     description: "Showing cached notes (offline mode)",
+      //   });
+      // }
       
     } catch (error) {
       console.error('❌ Error loading notes:', error);
@@ -92,7 +96,22 @@ export const NoteProvider = ({ children }: { children: ReactNode }) => {
       console.log('🏁 loadNotes completed');
       setIsLoading(false);
     }
-  };
+  }, [user?.email, isOnline, isServerReachable]); // Add dependencies for useCallback
+
+  // Listen for sync completion to refresh data
+  useEffect(() => {
+    const handleSyncCompleted = (event: CustomEvent) => {
+      console.log('📡 Sync completed event received, refreshing note data...');
+      if (user?.email) {
+        loadNotes();
+      }
+    };
+
+    window.addEventListener('offline-sync-completed', handleSyncCompleted as EventListener);
+    return () => {
+      window.removeEventListener('offline-sync-completed', handleSyncCompleted as EventListener);
+    };
+  }, [user?.email, loadNotes]);
 
   const addNote = async (noteData: Omit<Note, 'id' | 'createdAt' | 'updatedAt' | 'userEmail'>) => {
     if (!user?.email) return;

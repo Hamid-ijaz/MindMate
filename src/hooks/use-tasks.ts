@@ -72,9 +72,10 @@ export function useTasks() {
       const localTasks = await indexedDBService.getTasks(user.email);
       setTasks(localTasks);
 
-      if (!isFullyOnline && localTasks.length > 0) {
-        toast.info('Showing cached tasks (offline mode)');
-      }
+      // Remove duplicate offline mode toast since it's handled by offline-context
+      // if (!isFullyOnline && localTasks.length > 0) {
+      //   toast.info('Showing cached tasks (offline mode)');
+      // }
     } catch (err) {
       setError('Failed to load tasks');
       console.error('Error loading tasks:', err);
@@ -108,7 +109,10 @@ export function useTasks() {
           const response = await fetch('/api/tasks', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(newTask)
+            body: JSON.stringify({
+              ...newTask,
+              userEmail: user.email // Ensure correct user email
+            })
           });
 
           if (!response.ok) {
@@ -124,24 +128,34 @@ export function useTasks() {
           });
           
           setTasks(prev => prev.map(t => t.id === newTask.id ? serverTask : t));
+          // Single success toast for online creation
+          toast.success('Task created successfully');
         } catch (syncError) {
           // Queue for offline sync
           await addOfflineAction({
             type: 'CREATE_TASK',
-            data: newTask,
+            data: {
+              ...newTask,
+              userEmail: user.email // Ensure correct user email for sync
+            },
             timestamp: Date.now()
           });
           
+          // Single offline toast when online sync fails
           toast.warning('Task created offline, will sync when connected');
         }
       } else {
         // Queue for offline sync
         await addOfflineAction({
           type: 'CREATE_TASK',
-          data: newTask,
+          data: {
+            ...newTask,
+            userEmail: user.email // Ensure correct user email for sync
+          },
           timestamp: Date.now()
         });
         
+        // Single offline toast when completely offline
         toast.success('Task created offline');
       }
 

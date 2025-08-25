@@ -262,30 +262,42 @@ export function TaskForm({ task, onFinished, parentId, defaultValues: propDefaul
           
           if (syncResult.success) {
             toast({
-              title: task ? "Task Updated" : "Task Created",
-              description: `Task ${syncResult.success ? 'synced with Google Calendar' : 'saved locally'}`,
+              title: "Google Calendar Sync",
+              description: `Task synced with Google Calendar`,
             });
           } else {
             toast({
-              title: task ? "Task Updated" : "Task Created", 
-              description: `Task saved, but Google Calendar sync failed: ${syncResult.error}`,
+              title: "Google Calendar Sync Failed", 
+              description: `${task ? 'Task updated' : 'Task created'}, but sync failed: ${syncResult.error}`,
               variant: "default", // Still show success since task was saved
             });
           }
         } catch (syncError) {
           console.error('Google Calendar sync error:', syncError);
-          toast({
-            title: task ? "Task Updated" : "Task Created",
-            description: "Task saved, but Google Calendar sync failed",
-            variant: "default",
-          });
+          if (task) {
+            // Only show sync failure toast for task updates
+            toast({
+              title: "Google Calendar Sync Failed",
+              description: "Task updated, but Google Calendar sync failed",
+              variant: "destructive",
+            });
+          } else {
+            // For task creation, only show sync failure (creation success is handled by context)
+            toast({
+              title: "Google Calendar Sync Failed",
+              description: "Google Calendar sync failed",
+              variant: "destructive",
+            });
+          }
         }
-      } else {
+      } else if (task) {
+        // Only show toast for task updates (task creation toast is handled by context)
         toast({
-          title: task ? "Task Updated" : "Task Created",
-          description: "Your task has been saved successfully.",
+          title: "Task Updated",
+          description: "Your task has been updated successfully.",
         });
       }
+      // Note: Toast for task creation is handled by the task context
       
       onFinished?.();
       if (!task) {

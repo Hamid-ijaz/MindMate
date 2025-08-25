@@ -143,17 +143,29 @@ export const taskService = {
   },
 
   async addTask(userEmail: string, task: Omit<Task, 'id' | 'userEmail'>): Promise<string> {
-    const tasksRef = collection(db, COLLECTIONS.TASKS);
-    // Build taskData, omitting undefined fields
-    const taskData: any = {
-      ...task,
-      userEmail,
-      createdAt: Timestamp.now(), // Use server timestamp
-    };
-    
-    const docRef = doc(tasksRef);
-    await setDoc(docRef, serializeTaskForFirestore(taskData));
-    return docRef.id;
+    try {
+      console.log('🔍 Firebase addTask called with:', { userEmail, task });
+      const tasksRef = collection(db, COLLECTIONS.TASKS);
+      // Build taskData, omitting undefined fields
+      const taskData: any = {
+        ...task,
+        userEmail,
+        createdAt: Timestamp.now(), // Use server timestamp
+      };
+      
+      console.log('🔍 Task data to be saved:', taskData);
+      const serializedData = serializeTaskForFirestore(taskData);
+      console.log('🔍 Serialized task data:', serializedData);
+      
+      const docRef = doc(tasksRef);
+      console.log('🔍 Saving task to Firebase with ID:', docRef.id);
+      await setDoc(docRef, serializedData);
+      console.log('✅ Task saved to Firebase successfully with ID:', docRef.id);
+      return docRef.id;
+    } catch (error) {
+      console.error('❌ Firebase addTask error:', error);
+      throw error;
+    }
   },
 
   async addTaskWithSubtasks(
@@ -283,10 +295,12 @@ export const taskService = {
 // Note operations
 export const noteService = {
     async getNotes(userEmail: string): Promise<Note[]> {
+        console.log('🔥 Firestore getNotes called for user:', userEmail);
         const notesRef = collection(db, COLLECTIONS.NOTES);
         const q = query(notesRef, where('userEmail', '==', userEmail), orderBy('updatedAt', 'desc'));
         const querySnapshot = await getDocs(q);
-        return querySnapshot.docs.map(doc => {
+        console.log('🔥 Firestore query returned', querySnapshot.docs.length, 'notes');
+        const notes = querySnapshot.docs.map(doc => {
             const data = doc.data();
             return {
                 ...data,
@@ -295,6 +309,10 @@ export const noteService = {
                 updatedAt: typeof data.updatedAt?.toMillis === 'function' ? data.updatedAt.toMillis() : data.updatedAt || Date.now(),
             } as Note;
         });
+        if (notes.length > 0) {
+            console.log('🔥 Note details:', notes.map(note => ({ id: note.id, title: note.title, userEmail: note.userEmail })));
+        }
+        return notes;
     },
 
     async getNote(noteId: string): Promise<Note | null> {
@@ -319,10 +337,14 @@ export const noteService = {
     },
 
     async addNote(note: Omit<Note, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> {
+        console.log('🔥 Firestore addNote called with:', { userEmail: note.userEmail, title: note.title, hasUserEmail: !!note.userEmail });
         const notesRef = collection(db, COLLECTIONS.NOTES);
         const now = Timestamp.now();
         const docRef = doc(notesRef);
-        await setDoc(docRef, { ...note, createdAt: now, updatedAt: now });
+        const noteToSave = { ...note, createdAt: now, updatedAt: now };
+        console.log('🔥 Saving note to Firestore:', { id: docRef.id, userEmail: noteToSave.userEmail, title: noteToSave.title });
+        await setDoc(docRef, noteToSave);
+        console.log('✅ Note saved to Firestore with ID:', docRef.id);
         return docRef.id;
     },
 

@@ -88,7 +88,7 @@ export function CreateNote() {
             setFontSize(DEFAULT_FONT_SIZE);
             setAudioBlob(null);
             setAudioUrl('');
-            toast({ title: "Note created successfully!" });
+            // Note: Toast notification is handled by the note context
         } catch (error) {
             toast({ title: "Error", description: "Could not save the note.", variant: "destructive" });
         } finally {

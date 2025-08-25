@@ -223,10 +223,7 @@ export function VoiceTaskDialog({ isOpen, onClose, initialStream }: VoiceTaskDia
       
       await addTask(taskData as any);
       
-      toast({
-        title: "Task Added",
-        description: "Your voice task has been added successfully.",
-      });
+      // Note: Toast for task creation is handled by the task context
       
       onClose();
       resetDialog();

@@ -62,9 +62,10 @@ export function useNotes() {
       const localNotes = await indexedDBService.getNotes(user.email);
       setNotes(localNotes);
 
-      if (!isFullyOnline && localNotes.length > 0) {
-        toast.info('Showing cached notes (offline mode)');
-      }
+      // Remove duplicate offline mode toast since it's handled by offline-context
+      // if (!isFullyOnline && localNotes.length > 0) {
+      //   toast.info('Showing cached notes (offline mode)');
+      // }
     } catch (err) {
       setError('Failed to load notes');
       console.error('Error loading notes:', err);
@@ -98,7 +99,10 @@ export function useNotes() {
           const response = await fetch('/api/notes', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(newNote)
+            body: JSON.stringify({
+              ...newNote,
+              userId: user.email // Ensure correct user email
+            })
           });
 
           if (!response.ok) {
@@ -114,24 +118,34 @@ export function useNotes() {
           });
           
           setNotes(prev => prev.map(n => n.id === newNote.id ? serverNote : n));
+          // Single success toast for online creation
+          toast.success('Note created successfully');
         } catch (syncError) {
           // Queue for offline sync
           await addOfflineAction({
             type: 'CREATE_NOTE',
-            data: newNote,
+            data: {
+              ...newNote,
+              userId: user.email // Ensure correct user email for sync
+            },
             timestamp: Date.now()
           });
           
+          // Single offline toast when online sync fails
           toast.warning('Note created offline, will sync when connected');
         }
       } else {
         // Queue for offline sync
         await addOfflineAction({
           type: 'CREATE_NOTE',
-          data: newNote,
+          data: {
+            ...newNote,
+            userId: user.email // Ensure correct user email for sync
+          },
           timestamp: Date.now()
         });
         
+        // Single offline toast when completely offline
         toast.success('Note created offline');
       }
 

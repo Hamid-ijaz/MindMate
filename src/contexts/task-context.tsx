@@ -84,7 +84,7 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [user, authLoading, isOnline, isServerReachable]);
 
-  const loadUserData = async () => {
+  const loadUserData = useCallback(async () => {
     if (!user?.email) return;
     
     console.log('🔄 loadUserData called for user:', user.email);
@@ -147,12 +147,13 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
         setTaskDurations(cachedSettings.taskDurations.length > 0 ? cachedSettings.taskDurations : DEFAULT_DURATIONS);
       }
 
-      if (!isFullyOnline && cachedTasks.length > 0) {
-        toast({
-          title: "Offline Mode",
-          description: "Showing cached data (offline mode)",
-        });
-      }
+      // Remove the duplicate offline mode toast since it's handled by offline-context
+      // if (!isFullyOnline && cachedTasks.length > 0) {
+      //   toast({
+      //     title: "Offline Mode",
+      //     description: "Showing cached data (offline mode)",
+      //   });
+      // }
       
     } catch (error) {
       console.error('❌ Error loading user data:', error);
@@ -165,7 +166,22 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
       console.log('🏁 loadUserData completed');
       setIsLoading(false);
     }
-  };
+  }, [user?.email, isOnline, isServerReachable]); // Add dependencies for useCallback
+
+  // Listen for sync completion to refresh data
+  useEffect(() => {
+    const handleSyncCompleted = (event: CustomEvent) => {
+      console.log('📡 Sync completed event received, refreshing task data...');
+      if (user?.email) {
+        loadUserData();
+      }
+    };
+
+    window.addEventListener('offline-sync-completed', handleSyncCompleted as EventListener);
+    return () => {
+      window.removeEventListener('offline-sync-completed', handleSyncCompleted as EventListener);
+    };
+  }, [user?.email, loadUserData]);
 
   const handleSetTaskCategories = useCallback(async (categories: TaskCategory[]) => {
     setTaskCategories(categories);

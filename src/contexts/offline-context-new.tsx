@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode, useRef } from 'react';
 import { useAuth } from '@/contexts/auth-context';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
@@ -24,15 +24,20 @@ interface OfflineProviderProps {
 }
 
 export const OfflineProvider = ({ children }: OfflineProviderProps) => {
-  // Remove the debug log that's causing noise
+  console.log('🔧 OfflineProvider initializing...');
+  
   const [isOnline, setIsOnline] = useState(true);
   const [isServerReachable, setIsServerReachable] = useState(true);
   const [lastOfflineTime, setLastOfflineTime] = useState<number | null>(null);
   const [offlineActions, setOfflineActions] = useState<any[]>([]);
   const [hasShownOfflineToast, setHasShownOfflineToast] = useState(false);
-  const [currentToastId, setCurrentToastId] = useState<string | null>(null);
+  
   const { toast, dismiss } = useToast();
-  const { user } = useAuth(); // Get user from auth context
+  const { user } = useAuth();
+  
+  // Use refs to store toast IDs to avoid dependency issues
+  const currentOfflineToastId = useRef<string | null>(null);
+  const syncTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Check network connectivity
   const checkNetworkStatus = useCallback(() => {
@@ -54,7 +59,7 @@ export const OfflineProvider = ({ children }: OfflineProviderProps) => {
       const response = await fetch('/api/health', {
         method: 'HEAD',
         cache: 'no-cache',
-        signal: AbortSignal.timeout(5000) // 5 second timeout
+        signal: AbortSignal.timeout(5000)
       });
       const reachable = response.ok;
       setIsServerReachable(reachable);
@@ -65,16 +70,12 @@ export const OfflineProvider = ({ children }: OfflineProviderProps) => {
     }
   }, []);
 
-  // Show offline notification
+  // Show offline notification (only one at a time)
   const showOfflineNotification = useCallback(() => {
-    if (hasShownOfflineToast) return;
-    
-    // Dismiss any existing toast first
-    if (currentToastId) {
-      dismiss(currentToastId);
-    }
+    if (hasShownOfflineToast || currentOfflineToastId.current) return;
     
     setHasShownOfflineToast(true);
+    
     const toastResult = toast({
       title: "You're offline",
       description: "Don't worry! Your data will sync when you're back online.",
@@ -87,9 +88,10 @@ export const OfflineProvider = ({ children }: OfflineProviderProps) => {
             variant="outline"
             onClick={async () => {
               const online = await retryConnection();
-              if (online && currentToastId) {
-                dismiss(currentToastId);
-                setCurrentToastId(null);
+              if (online && currentOfflineToastId.current) {
+                dismiss(currentOfflineToastId.current);
+                currentOfflineToastId.current = null;
+                setHasShownOfflineToast(false);
               }
             }}
           >
@@ -102,22 +104,22 @@ export const OfflineProvider = ({ children }: OfflineProviderProps) => {
     
     // Store the toast ID for later dismissal
     if (toastResult && typeof toastResult === 'object' && 'id' in toastResult) {
-      setCurrentToastId(toastResult.id as string);
+      currentOfflineToastId.current = toastResult.id as string;
     }
-  }, [hasShownOfflineToast, currentToastId, toast, dismiss]);
+  }, [hasShownOfflineToast, toast, dismiss]);
 
   // Show online notification
   const showOnlineNotification = useCallback(() => {
     if (!hasShownOfflineToast) return;
     
     // Dismiss the offline toast first
-    if (currentToastId) {
-      dismiss(currentToastId);
-      setCurrentToastId(null);
+    if (currentOfflineToastId.current) {
+      dismiss(currentOfflineToastId.current);
+      currentOfflineToastId.current = null;
     }
     
     setHasShownOfflineToast(false);
-    setLastOfflineTime(null); // Reset offline time when back online
+    setLastOfflineTime(null);
     
     toast({
       title: "Back online!",
@@ -131,8 +133,14 @@ export const OfflineProvider = ({ children }: OfflineProviderProps) => {
       ),
     });
     
-    // Note: Auto-sync is handled by the useEffect that monitors offline actions
-  }, [hasShownOfflineToast, currentToastId, toast, dismiss]);
+    // Trigger sync after a delay
+    if (syncTimeoutRef.current) {
+      clearTimeout(syncTimeoutRef.current);
+    }
+    syncTimeoutRef.current = setTimeout(() => {
+      syncOfflineData();
+    }, 1000);
+  }, [hasShownOfflineToast, toast, dismiss]);
 
   // Add offline action
   const addOfflineAction = useCallback((action: any) => {
@@ -184,71 +192,42 @@ export const OfflineProvider = ({ children }: OfflineProviderProps) => {
     
     const serverReachable = await checkServerReachability();
     
-    if (networkOnline && serverReachable && lastOfflineTime) {
+    if (networkOnline && serverReachable && hasShownOfflineToast) {
       showOnlineNotification();
       return true;
     }
     
     return false;
-  }, [checkNetworkStatus, checkServerReachability, lastOfflineTime, showOnlineNotification]);
-
-  // Debug function to check offline actions
-  const debugOfflineActions = useCallback(() => {
-    console.log('🔍 DEBUG: Current offline actions state:', offlineActions.length, offlineActions);
-    try {
-      const stored = localStorage.getItem('mindmate_offline_actions') || '[]';
-      const parsedActions = JSON.parse(stored);
-      console.log('🔍 DEBUG: localStorage offline actions:', parsedActions.length, parsedActions);
-    } catch (error) {
-      console.error('🔍 DEBUG: Error reading localStorage:', error);
-    }
-  }, [offlineActions]);
+  }, [checkNetworkStatus, checkServerReachability, hasShownOfflineToast, showOnlineNotification]);
 
   // Sync offline data
   const syncOfflineData = useCallback(async (): Promise<void> => {
     console.log('🔄 syncOfflineData called - isOnline:', isOnline, 'isServerReachable:', isServerReachable, 'offlineActions:', offlineActions.length);
     
-    // Debug current state (inline to avoid dependency issues)
-    console.log('🔍 Current offline actions state:', offlineActions.length, offlineActions);
-    try {
-      const stored = localStorage.getItem('mindmate_offline_actions') || '[]';
-      const parsedActions = JSON.parse(stored);
-      console.log('🔍 localStorage offline actions:', parsedActions.length, parsedActions);
-    } catch (error) {
-      console.error('🔍 Error reading localStorage:', error);
-    }
-    
-    // Re-check localStorage in case state is stale
-    let actionsToSync = offlineActions;
-    try {
-      const stored = localStorage.getItem('mindmate_offline_actions');
-      if (stored) {
-        const localStorageActions = JSON.parse(stored);
-        console.log('🔄 localStorage has', localStorageActions.length, 'actions vs state has', offlineActions.length);
-        if (localStorageActions.length > offlineActions.length) {
-          console.log('📋 Using localStorage actions as they have more items');
-          actionsToSync = localStorageActions;
-          // Update state to match localStorage
-          setOfflineActions(localStorageActions);
-        }
-      }
-    } catch (error) {
-      console.error('❌ Error checking localStorage during sync:', error);
-    }
-    
-    if (!isOnline) {
-      console.log('❌ Sync cancelled: Not online');
-      return;
-    }
-    
-    if (!isServerReachable) {
-      console.log('❌ Sync cancelled: Server not reachable');
+    if (!isOnline || !isServerReachable) {
+      console.log('❌ Sync cancelled: Not online or server not reachable');
       return;
     }
     
     if (!user?.email) {
       console.log('❌ Sync cancelled: No authenticated user or email');
       return;
+    }
+
+    // Get current actions to sync (check localStorage for latest)
+    let actionsToSync = offlineActions;
+    try {
+      const stored = localStorage.getItem('mindmate_offline_actions');
+      if (stored) {
+        const localStorageActions = JSON.parse(stored);
+        if (localStorageActions.length > offlineActions.length) {
+          console.log('📋 Using localStorage actions as they have more items');
+          actionsToSync = localStorageActions;
+          setOfflineActions(localStorageActions);
+        }
+      }
+    } catch (error) {
+      console.error('❌ Error checking localStorage during sync:', error);
     }
     
     if (actionsToSync.length === 0) {
@@ -257,9 +236,8 @@ export const OfflineProvider = ({ children }: OfflineProviderProps) => {
     }
     
     console.log('🔄 Starting sync process...', actionsToSync.length, 'actions');
-    console.log('📋 Actions to sync:', actionsToSync.map(a => ({ type: a.type, id: a.id, dataId: a.data?.id })));
     
-    // Import services dynamically to avoid import issues
+    // Import services dynamically
     const { taskService, noteService } = await import('@/lib/firestore');
     
     let syncedCount = 0;
@@ -271,44 +249,11 @@ export const OfflineProvider = ({ children }: OfflineProviderProps) => {
         
         switch (action.type) {
           case 'CREATE_TASK':
-            // Remove local ID and sync status for server
             const { id: taskId, syncStatus, isLocal, userEmail: actionUserEmail, ...taskData } = action.data;
-            // Use current user email from auth context, not from action data
-            const currentUserEmail = user?.email;
-            console.log('🔍 Task data being synced:', { userEmail: currentUserEmail, actionHadEmail: actionUserEmail, taskData });
-            
-            try {
-              const newTaskId = await taskService.addTask(currentUserEmail, taskData);
-              console.log('✅ Task synced with new ID:', newTaskId);
-              
-              // Remove the old temporary task from local storage and replace with the server task
-              if (currentUserEmail) {
-                const { indexedDBService } = await import('@/lib/indexeddb');
-                // Remove the old task with temporary ID
-                await indexedDBService.deleteTask(currentUserEmail, taskId);
-                // Get the new task from server and store locally
-                const serverTask = await taskService.getTask(newTaskId);
-                if (serverTask) {
-                  await indexedDBService.createTask(currentUserEmail, {
-                    ...serverTask,
-                    syncStatus: 'synced',
-                    isLocal: false
-                  });
-                  console.log('🔄 Replaced local task with server task');
-                }
-              }
-              
-              // Verify the task was actually saved by trying to fetch it
-              const verifyTask = await taskService.getTask(newTaskId);
-              if (verifyTask) {
-                console.log('✅ Task verification successful:', verifyTask.id);
-              } else {
-                console.error('❌ Task verification failed - task not found after creation');
-              }
-            } catch (taskError) {
-              console.error('❌ Task sync failed:', taskError);
-              throw taskError; // Re-throw to be caught by outer catch
-            }
+            const currentUserEmail = user.email;
+            console.log('🔍 Syncing task with userEmail:', currentUserEmail);
+            const newTaskId = await taskService.addTask(currentUserEmail, taskData);
+            console.log('✅ Task synced with new ID:', newTaskId);
             break;
             
           case 'UPDATE_TASK':
@@ -323,28 +268,18 @@ export const OfflineProvider = ({ children }: OfflineProviderProps) => {
             break;
             
           case 'CREATE_NOTE':
-            // Remove local ID and sync status for server
             const { id: noteId, syncStatus: noteSyncStatus, isLocal: noteIsLocal, createdAt: noteCreatedAt, updatedAt: noteUpdatedAt, userEmail: noteActionUserEmail, ...noteData } = action.data;
-            // Use current user email from auth context for notes too
-            const currentNoteUserEmail = user?.email;
-            console.log('🔍 Note data being synced:', { userEmail: currentNoteUserEmail, actionHadEmail: noteActionUserEmail, noteData });
-            // Include userEmail in noteData for server sync
-            const newNoteId = await noteService.addNote({ ...noteData, userEmail: currentNoteUserEmail });
-            console.log('✅ Note synced with new ID:', newNoteId);
+            const currentNoteUserEmail = user.email;
+            console.log('🔍 Syncing note with userEmail:', currentNoteUserEmail);
             
-            // Verify the note was actually saved
-            try {
-              // Wait a moment for Firestore to propagate before verification
-              await new Promise(resolve => setTimeout(resolve, 1000));
-              const verifyNote = await noteService.getNote(newNoteId);
-              if (verifyNote) {
-                console.log('✅ Note verification successful:', verifyNote.id, verifyNote.title);
-              } else {
-                console.error('❌ Note verification failed - note not found after creation');
-              }
-            } catch (verifyError) {
-              console.error('❌ Note verification error:', verifyError);
-            }
+            // Ensure the note has the correct userId field
+            const noteDataWithUserId = {
+              ...noteData,
+              userId: currentNoteUserEmail
+            };
+            
+            const newNoteId = await noteService.addNote(noteDataWithUserId);
+            console.log('✅ Note synced with new ID:', newNoteId);
             break;
             
           case 'UPDATE_NOTE':
@@ -356,7 +291,6 @@ export const OfflineProvider = ({ children }: OfflineProviderProps) => {
           case 'DELETE_NOTE':
             await noteService.deleteNote(action.data.id);
             console.log('✅ Note deleted:', action.data.id);
-            break;
             break;
             
           default:
@@ -374,23 +308,18 @@ export const OfflineProvider = ({ children }: OfflineProviderProps) => {
     
     console.log('🏁 Sync completed - Success:', syncedCount, 'Failed:', failedCount);
     
-    // Refresh local data after successful sync with delay to ensure Firestore propagation
-    if (syncedCount > 0) {
-      console.log('🔄 Triggering data refresh after sync...');
-      // Add delay to ensure Firestore has time to propagate changes
-      setTimeout(() => {
-        window.dispatchEvent(new CustomEvent('offline-sync-completed', { 
-          detail: { syncedCount, failedCount } 
-        }));
-      }, 2000); // 2 second delay for Firestore propagation
-    }
-    
+    // Show sync results
     if (syncedCount > 0) {
       toast({
         title: "Data synced!",
         description: `Successfully synced ${syncedCount} offline ${syncedCount === 1 ? 'action' : 'actions'}.`,
         duration: 3000,
       });
+      
+      // Trigger data refresh
+      window.dispatchEvent(new CustomEvent('offline-sync-completed', { 
+        detail: { syncedCount, failedCount } 
+      }));
     }
     
     if (failedCount > 0) {
@@ -401,38 +330,21 @@ export const OfflineProvider = ({ children }: OfflineProviderProps) => {
         variant: "destructive",
       });
     }
-  }, [isOnline, isServerReachable, offlineActions, removeOfflineAction, toast]); // Removed debugOfflineActions from dependencies
+  }, [isOnline, isServerReachable, user?.email, offlineActions, removeOfflineAction, toast]);
 
-  // Load offline actions from localStorage on mount (only once)
+  // Load offline actions from localStorage on mount
   useEffect(() => {
     try {
       const stored = localStorage.getItem('mindmate_offline_actions');
-      console.log('📦 Loading offline actions from localStorage:', stored);
       if (stored) {
         const actions = JSON.parse(stored);
         console.log('📝 Loaded offline actions:', actions.length, 'actions');
-        console.log('📋 Action details:', actions.map(a => ({ type: a.type, id: a.id, dataId: a.data?.id, timestamp: a.timestamp })));
         setOfflineActions(actions);
-      } else {
-        console.log('ℹ️ No offline actions found in localStorage');
       }
     } catch (error) {
       console.error('❌ Failed to load offline actions:', error);
     }
-  }, []); // Empty dependencies - only run once on mount
-
-  // Separate effect to trigger sync when conditions are met
-  useEffect(() => {
-    // Only trigger if we have actions, are online, and server is reachable
-    if (offlineActions.length > 0 && isOnline && isServerReachable && user?.email) {
-      console.log('🔄 Auto-triggering sync for offline actions...');
-      const timeout = setTimeout(() => {
-        syncOfflineData();
-      }, 2000);
-      
-      return () => clearTimeout(timeout);
-    }
-  }, [offlineActions.length, isOnline, isServerReachable, user?.email, syncOfflineData]);
+  }, []);
 
   // Monitor network status
   useEffect(() => {
@@ -442,10 +354,10 @@ export const OfflineProvider = ({ children }: OfflineProviderProps) => {
       console.log('🌐 Network status: Online');
       const wasOffline = !isOnline;
       setIsOnline(true);
+      
       checkServerReachability().then(reachable => {
         if (reachable && wasOffline && hasShownOfflineToast) {
           showOnlineNotification();
-          // Note: Auto-sync is handled by the useEffect that monitors offline actions
         }
       });
     };
@@ -455,10 +367,11 @@ export const OfflineProvider = ({ children }: OfflineProviderProps) => {
       const wasOnline = isOnline;
       setIsOnline(false);
       setIsServerReachable(false);
+      
       if (!lastOfflineTime) {
         setLastOfflineTime(Date.now());
       }
-      // Only show notification if we were previously online to avoid duplicate toasts
+      
       if (wasOnline && !hasShownOfflineToast) {
         showOfflineNotification();
       }
@@ -471,7 +384,28 @@ export const OfflineProvider = ({ children }: OfflineProviderProps) => {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
     };
-  }, [checkNetworkStatus, checkServerReachability, isOnline, hasShownOfflineToast, showOfflineNotification, showOnlineNotification]); // Removed lastOfflineTime and syncOfflineData to avoid circular dependencies
+  }, [isOnline, hasShownOfflineToast, lastOfflineTime, checkNetworkStatus, checkServerReachability, showOnlineNotification, showOfflineNotification]);
+
+  // Auto-sync when conditions are met
+  useEffect(() => {
+    if (offlineActions.length > 0 && isOnline && isServerReachable && user?.email) {
+      console.log('🔄 Auto-triggering sync for offline actions...');
+      
+      if (syncTimeoutRef.current) {
+        clearTimeout(syncTimeoutRef.current);
+      }
+      
+      syncTimeoutRef.current = setTimeout(() => {
+        syncOfflineData();
+      }, 2000);
+      
+      return () => {
+        if (syncTimeoutRef.current) {
+          clearTimeout(syncTimeoutRef.current);
+        }
+      };
+    }
+  }, [offlineActions.length, isOnline, isServerReachable, user?.email, syncOfflineData]);
 
   // Periodic server reachability check
   useEffect(() => {
@@ -481,7 +415,7 @@ export const OfflineProvider = ({ children }: OfflineProviderProps) => {
       const wasReachable = isServerReachable;
       const nowReachable = await checkServerReachability();
       
-      // If server becomes unreachable while network is online (and we're not already showing offline toast)
+      // Only show server status toasts if we're not already showing offline toast
       if (!nowReachable && wasReachable && !hasShownOfflineToast) {
         toast({
           title: "Server unreachable",
@@ -496,7 +430,6 @@ export const OfflineProvider = ({ children }: OfflineProviderProps) => {
         });
       }
       
-      // If server becomes reachable again
       if (nowReachable && !wasReachable) {
         toast({
           title: "Server connected",
@@ -509,45 +442,30 @@ export const OfflineProvider = ({ children }: OfflineProviderProps) => {
           ),
         });
         
-        // Note: Auto-sync is handled by the useEffect that monitors offline actions
+        // Auto-sync when server becomes reachable
+        if (syncTimeoutRef.current) {
+          clearTimeout(syncTimeoutRef.current);
+        }
+        syncTimeoutRef.current = setTimeout(() => {
+          syncOfflineData();
+        }, 1000);
       }
     }, 30000); // Check every 30 seconds
 
     return () => clearInterval(interval);
-  }, [isOnline, isServerReachable, hasShownOfflineToast, checkServerReachability, toast]); // Removed syncOfflineData to avoid circular dependencies
+  }, [isOnline, isServerReachable, hasShownOfflineToast, checkServerReachability, toast, syncOfflineData]);
 
-  // Add to window for debugging
+  // Cleanup on unmount
   useEffect(() => {
-    (window as any).debugOfflineSync = {
-      actions: offlineActions,
-      sync: () => {
-        console.log('🔄 Manual sync triggered via console');
-        return syncOfflineData();
-      },
-      debug: () => {
-        console.log('🔍 Current offline actions state:', offlineActions.length, offlineActions);
-        try {
-          const stored = localStorage.getItem('mindmate_offline_actions') || '[]';
-          const parsedActions = JSON.parse(stored);
-          console.log('🔍 localStorage offline actions:', parsedActions.length, parsedActions);
-        } catch (error) {
-          console.error('🔍 Error reading localStorage:', error);
-        }
-      },
-      state: { isOnline, isServerReachable },
-      forceSync: () => {
-        console.log('🔄 Force sync triggered - bypassing checks');
-        return syncOfflineData();
-      }
-    };
-
-    // Cleanup function to dismiss active toasts when component unmounts
     return () => {
-      if (currentToastId) {
-        dismiss(currentToastId);
+      if (currentOfflineToastId.current) {
+        dismiss(currentOfflineToastId.current);
+      }
+      if (syncTimeoutRef.current) {
+        clearTimeout(syncTimeoutRef.current);
       }
     };
-  }, [offlineActions, isOnline, isServerReachable, currentToastId, dismiss]); // Removed syncOfflineData from dependencies
+  }, [dismiss]);
 
   const contextValue: OfflineContextType = {
     isOnline,
@@ -593,14 +511,12 @@ export const useOfflineCapable = () => {
       try {
         return await operation();
       } catch (error) {
-        // If operation fails online, queue for offline sync
         if (fallbackAction) {
           addOfflineAction(fallbackAction);
         }
         throw error;
       }
     } else {
-      // Store action for later sync
       if (fallbackAction) {
         addOfflineAction(fallbackAction);
         return { offline: true, queued: true };
