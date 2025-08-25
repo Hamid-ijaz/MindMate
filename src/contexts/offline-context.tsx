@@ -120,6 +120,8 @@ export const OfflineProvider = ({ children }: OfflineProviderProps) => {
       timestamp: Date.now(),
     };
     
+    console.log('➕ Adding offline action:', actionWithId.type, actionWithId);
+    
     setOfflineActions(prev => [...prev, actionWithId]);
     
     // Store in localStorage for persistence
@@ -128,8 +130,9 @@ export const OfflineProvider = ({ children }: OfflineProviderProps) => {
       const actions = JSON.parse(stored);
       actions.push(actionWithId);
       localStorage.setItem('mindmate_offline_actions', JSON.stringify(actions));
+      console.log('💾 Offline action stored in localStorage. Total actions:', actions.length);
     } catch (error) {
-      console.error('Failed to store offline action:', error);
+      console.error('❌ Failed to store offline action:', error);
     }
     
     return actionWithId.id;
@@ -137,6 +140,7 @@ export const OfflineProvider = ({ children }: OfflineProviderProps) => {
 
   // Remove offline action
   const removeOfflineAction = useCallback((actionId: string) => {
+    console.log('🗑️ Removing offline action:', actionId);
     setOfflineActions(prev => prev.filter(action => action.id !== actionId));
     
     // Remove from localStorage
@@ -145,8 +149,9 @@ export const OfflineProvider = ({ children }: OfflineProviderProps) => {
       const actions = JSON.parse(stored);
       const filteredActions = actions.filter((action: any) => action.id !== actionId);
       localStorage.setItem('mindmate_offline_actions', JSON.stringify(filteredActions));
+      console.log('💾 Offline action removed from localStorage. Remaining actions:', filteredActions.length);
     } catch (error) {
-      console.error('Failed to remove offline action:', error);
+      console.error('❌ Failed to remove offline action:', error);
     }
   }, []);
 
@@ -171,67 +176,68 @@ export const OfflineProvider = ({ children }: OfflineProviderProps) => {
     
     console.log('🔄 Syncing offline data...', offlineActions.length, 'actions');
     
+    // Import services dynamically to avoid import issues
+    const { taskService, noteService } = await import('@/lib/firestore');
+    
     let syncedCount = 0;
     let failedCount = 0;
     
     for (const action of offlineActions) {
       try {
+        console.log('🔄 Syncing action:', action.type, action.data?.id);
+        
         switch (action.type) {
           case 'CREATE_TASK':
-            await fetch('/api/tasks', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(action.data),
-            });
+            // Remove local ID and sync status for server
+            const { id: taskId, syncStatus, isLocal, ...taskData } = action.data;
+            const newTaskId = await taskService.addTask(action.data.userEmail, taskData);
+            console.log('✅ Task synced with new ID:', newTaskId);
             break;
             
           case 'UPDATE_TASK':
-            await fetch(`/api/tasks/${action.data.id}`, {
-              method: 'PUT',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(action.data),
-            });
+            const { syncStatus: updateSyncStatus, isLocal: updateIsLocal, ...updateTaskData } = action.data;
+            await taskService.updateTask(action.data.id, updateTaskData);
+            console.log('✅ Task updated:', action.data.id);
             break;
             
           case 'DELETE_TASK':
-            await fetch(`/api/tasks/${action.data.id}`, {
-              method: 'DELETE',
-            });
+            await taskService.deleteTask(action.data.id);
+            console.log('✅ Task deleted:', action.data.id);
             break;
             
           case 'CREATE_NOTE':
-            await fetch('/api/notes', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(action.data),
-            });
+            // Remove local ID and sync status for server
+            const { id: noteId, syncStatus: noteSyncStatus, isLocal: noteIsLocal, ...noteData } = action.data;
+            const newNoteId = await noteService.addNote(noteData);
+            console.log('✅ Note synced with new ID:', newNoteId);
             break;
             
           case 'UPDATE_NOTE':
-            await fetch(`/api/notes/${action.data.id}`, {
-              method: 'PUT',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(action.data),
-            });
+            const { syncStatus: updateNoteSyncStatus, isLocal: updateNoteIsLocal, ...updateNoteData } = action.data;
+            await noteService.updateNote(action.data.id, updateNoteData);
+            console.log('✅ Note updated:', action.data.id);
             break;
             
           case 'DELETE_NOTE':
-            await fetch(`/api/notes/${action.data.id}`, {
-              method: 'DELETE',
-            });
+            await noteService.deleteNote(action.data.id);
+            console.log('✅ Note deleted:', action.data.id);
+            break;
             break;
             
           default:
-            console.warn('Unknown offline action type:', action.type);
+            console.warn('❓ Unknown offline action type:', action.type);
         }
         
         removeOfflineAction(action.id);
         syncedCount++;
+        console.log('✅ Action synced successfully');
       } catch (error) {
-        console.error('Failed to sync action:', action, error);
+        console.error('❌ Failed to sync action:', action, error);
         failedCount++;
       }
     }
+    
+    console.log('🏁 Sync completed - Success:', syncedCount, 'Failed:', failedCount);
     
     if (syncedCount > 0) {
       toast({
@@ -255,12 +261,14 @@ export const OfflineProvider = ({ children }: OfflineProviderProps) => {
   useEffect(() => {
     try {
       const stored = localStorage.getItem('mindmate_offline_actions');
+      console.log('📦 Loading offline actions from localStorage:', stored);
       if (stored) {
         const actions = JSON.parse(stored);
+        console.log('📝 Loaded offline actions:', actions.length, actions);
         setOfflineActions(actions);
       }
     } catch (error) {
-      console.error('Failed to load offline actions:', error);
+      console.error('❌ Failed to load offline actions:', error);
     }
   }, []);
 
@@ -274,6 +282,11 @@ export const OfflineProvider = ({ children }: OfflineProviderProps) => {
       checkServerReachability().then(reachable => {
         if (reachable && lastOfflineTime) {
           showOnlineNotification();
+          // Auto-sync when coming back online
+          setTimeout(() => {
+            console.log('🔄 Triggering sync after coming online...');
+            syncOfflineData();
+          }, 2000);
         }
       });
     };
@@ -295,7 +308,7 @@ export const OfflineProvider = ({ children }: OfflineProviderProps) => {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
     };
-  }, [checkNetworkStatus, checkServerReachability, lastOfflineTime, showOfflineNotification, showOnlineNotification]);
+  }, [checkNetworkStatus, checkServerReachability, lastOfflineTime, showOfflineNotification, showOnlineNotification, syncOfflineData]);
 
   // Periodic server reachability check
   useEffect(() => {

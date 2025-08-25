@@ -4,6 +4,7 @@
 import { useState, useMemo } from 'react';
 import { useNotes } from '@/contexts/note-context';
 import { useAuth } from '@/contexts/auth-context';
+import { useOffline } from '@/contexts/offline-context';
 import { CreateNote } from '@/components/notes/create-note';
 import { NoteCard } from '@/components/notes/note-card';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -15,7 +16,7 @@ import type { Note } from '@/lib/types';
 import { 
   Lightbulb, Search, StickyNote, Calendar, FileText, 
   Grid3X3, List, Filter, BarChart3, TrendingUp, 
-  Clock, Hash, Plus, Sparkles
+  Clock, Hash, Plus, Sparkles, WifiOff, Database, AlertCircle
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -61,6 +62,7 @@ function NotesSkeleton() {
 export default function NotesPage() {
     const { notes, isLoading } = useNotes();
     const { isAuthenticated } = useAuth();
+    const { isOnline, isServerReachable, offlineActions } = useOffline();
     const [editingNote, setEditingNote] = useState<Note | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
     const [viewMode, setViewMode] = useState<'grid' | 'masonry'>('masonry');
@@ -156,13 +158,60 @@ export default function NotesPage() {
                     </p>
                 </motion.div>
 
+                {/* Offline Status Banner */}
+                {(!isOnline || !isServerReachable) && (
+                    <motion.div
+                        initial={{ opacity: 0, y: -10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="mx-2 sm:mx-0"
+                    >
+                        <Card className="border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950">
+                            <CardContent className="p-3 sm:p-4">
+                                <div className="flex items-center gap-3">
+                                    {!isOnline ? (
+                                        <WifiOff className="h-5 w-5 text-amber-600 dark:text-amber-400 flex-shrink-0" />
+                                    ) : (
+                                        <Database className="h-5 w-5 text-amber-600 dark:text-amber-400 flex-shrink-0" />
+                                    )}
+                                    <div className="flex-1">
+                                        <h3 className="font-medium text-amber-900 dark:text-amber-100 text-sm">
+                                            {!isOnline ? 'Working Offline' : 'Server Offline'}
+                                        </h3>
+                                        <p className="text-xs text-amber-700 dark:text-amber-300 mt-1">
+                                            {!isOnline 
+                                                ? 'Your notes are saved locally and will sync when you\'re back online.'
+                                                : 'Working with cached data. Changes will sync when server is available.'
+                                            }
+                                            {offlineActions.filter(action => action.type.includes('note')).length > 0 && (
+                                                <span className="ml-2 font-medium">
+                                                    ({offlineActions.filter(action => action.type.includes('note')).length} pending)
+                                                </span>
+                                            )}
+                                        </p>
+                                    </div>
+                                    <Button 
+                                        size="sm" 
+                                        variant="outline" 
+                                        className="border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-800"
+                                        onClick={() => window.location.href = '/offline'}
+                                    >
+                                        View Details
+                                    </Button>
+                                </div>
+                            </CardContent>
+                        </Card>
+                    </motion.div>
+                )}
+
                 {/* Quick Stats Dashboard - Mobile First */}
                 {!isLoading && notes.length > 0 && (
                     <motion.div
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: 0.1, duration: 0.5 }}
-                        className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3 md:gap-4"
+                        className={`grid gap-2 sm:gap-3 md:gap-4 ${
+                            !isOnline || !isServerReachable ? 'grid-cols-2 md:grid-cols-5' : 'grid-cols-2 md:grid-cols-4'
+                        }`}
                     >
                         {/* Total Notes */}
                         <Card className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-950 dark:to-blue-900 border-blue-200 dark:border-blue-800">
@@ -223,6 +272,27 @@ export default function NotesPage() {
                                 </div>
                             </CardContent>
                         </Card>
+
+                        {/* Offline Status - Only show when offline */}
+                        {(!isOnline || !isServerReachable) && (
+                            <Card className="bg-gradient-to-br from-amber-50 to-amber-100 dark:from-amber-950 dark:to-amber-900 border-amber-200 dark:border-amber-800">
+                                <CardContent className="p-3 sm:p-4">
+                                    <div className="text-center">
+                                        {!isOnline ? (
+                                            <WifiOff className="w-6 h-6 sm:w-8 sm:h-8 text-amber-500 mx-auto mb-1 sm:mb-2" />
+                                        ) : (
+                                            <Database className="w-6 h-6 sm:w-8 sm:h-8 text-amber-500 mx-auto mb-1 sm:mb-2" />
+                                        )}
+                                        <p className="text-lg sm:text-2xl font-bold text-amber-900 dark:text-amber-100">
+                                            {offlineActions.filter(action => action.type.includes('note')).length}
+                                        </p>
+                                        <p className="text-xs font-medium text-amber-600 dark:text-amber-400">
+                                            {!isOnline ? 'Offline' : 'Pending Sync'}
+                                        </p>
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        )}
                     </motion.div>
                 )}
 

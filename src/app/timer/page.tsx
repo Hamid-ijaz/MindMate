@@ -121,55 +121,55 @@ export default function FocusTimerPage() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.2 }}
       >
-        <Card className="relative overflow-hidden">
+        <Card className="relative overflow-hidden bg-gradient-to-br from-orange-50 to-orange-100/50 dark:from-orange-950/20 dark:to-orange-900/10 border-orange-200 dark:border-orange-800/30">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-2xl font-bold text-orange-600">{todaysPomodoros}</p>
+                <p className="text-2xl font-bold text-orange-600 dark:text-orange-400">{todaysPomodoros}</p>
                 <p className="text-xs text-muted-foreground">Today's Sessions</p>
               </div>
-              <Target className="h-8 w-8 text-orange-600/60" />
+              <Target className="h-8 w-8 text-orange-600/60 dark:text-orange-400/60" />
             </div>
-            <div className="absolute bottom-0 left-0 w-full h-1 bg-gradient-to-r from-orange-500 to-orange-300" />
+            <div className="absolute bottom-0 left-0 w-full h-1 bg-gradient-to-r from-orange-500 to-orange-300 dark:from-orange-400 dark:to-orange-500" />
           </CardContent>
         </Card>
 
-        <Card className="relative overflow-hidden">
+        <Card className="relative overflow-hidden bg-gradient-to-br from-blue-50 to-blue-100/50 dark:from-blue-950/20 dark:to-blue-900/10 border-blue-200 dark:border-blue-800/30">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-2xl font-bold text-blue-600">{Math.round(todaysFocusTime)}m</p>
+                <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">{Math.round(todaysFocusTime)}m</p>
                 <p className="text-xs text-muted-foreground">Focus Time</p>
               </div>
-              <Brain className="h-8 w-8 text-blue-600/60" />
+              <Brain className="h-8 w-8 text-blue-600/60 dark:text-blue-400/60" />
             </div>
-            <div className="absolute bottom-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 to-blue-300" />
+            <div className="absolute bottom-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 to-blue-300 dark:from-blue-400 dark:to-blue-500" />
           </CardContent>
         </Card>
 
-        <Card className="relative overflow-hidden">
+        <Card className="relative overflow-hidden bg-gradient-to-br from-purple-50 to-purple-100/50 dark:from-purple-950/20 dark:to-purple-900/10 border-purple-200 dark:border-purple-800/30">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-2xl font-bold text-purple-600">{currentStreak}</p>
+                <p className="text-2xl font-bold text-purple-600 dark:text-purple-400">{currentStreak}</p>
                 <p className="text-xs text-muted-foreground">Day Streak</p>
               </div>
-              <Zap className="h-8 w-8 text-purple-600/60" />
+              <Zap className="h-8 w-8 text-purple-600/60 dark:text-purple-400/60" />
             </div>
-            <div className="absolute bottom-0 left-0 w-full h-1 bg-gradient-to-r from-purple-500 to-purple-300" />
+            <div className="absolute bottom-0 left-0 w-full h-1 bg-gradient-to-r from-purple-500 to-purple-300 dark:from-purple-400 dark:to-purple-500" />
           </CardContent>
         </Card>
 
-        <Card className="relative overflow-hidden">
+        <Card className="relative overflow-hidden bg-gradient-to-br from-green-50 to-green-100/50 dark:from-green-950/20 dark:to-green-900/10 border-green-200 dark:border-green-800/30">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-2xl font-bold text-green-600">{totalPomodoros}</p>
+                <p className="text-2xl font-bold text-green-600 dark:text-green-400">{totalPomodoros}</p>
                 <p className="text-xs text-muted-foreground">Total Sessions</p>
               </div>
-              <Award className="h-8 w-8 text-green-600/60" />
+              <Award className="h-8 w-8 text-green-600/60 dark:text-green-400/60" />
             </div>
-            <div className="absolute bottom-0 left-0 w-full h-1 bg-gradient-to-r from-green-500 to-green-300" />
+            <div className="absolute bottom-0 left-0 w-full h-1 bg-gradient-to-r from-green-500 to-green-300 dark:from-green-400 dark:to-green-500" />
           </CardContent>
         </Card>
       </motion.div>
@@ -211,10 +211,10 @@ export default function FocusTimerPage() {
                 
                 {/* Quick Timer Controls */}
                 {!selectedTask && (
-                  <Card className="bg-gradient-to-br from-muted/30 to-muted/10 border-dashed">
+                  <Card className="bg-gradient-to-br from-muted/30 to-muted/10 dark:from-muted/10 dark:to-muted/5 border-dashed border-muted-foreground/20 dark:border-muted-foreground/10">
                     <CardContent className="text-center py-8">
                       <Timer className="h-12 w-12 mx-auto mb-4 text-muted-foreground/50" />
-                      <h3 className="font-semibold mb-2">Ready to Focus?</h3>
+                      <h3 className="font-semibold mb-2 text-foreground">Ready to Focus?</h3>
                       <p className="text-muted-foreground mb-4 text-sm">
                         Select a task from the Tasks tab or start a general focus session
                       </p>
@@ -262,7 +262,7 @@ export default function FocusTimerPage() {
                   {selectedTask ? (
                     <div className="space-y-4">
                       <div>
-                        <h3 className="font-semibold text-lg mb-2">{selectedTask.title}</h3>
+                        <h3 className="font-semibold text-lg mb-2 text-foreground">{selectedTask.title}</h3>
                         {selectedTask.description && (
                           <p className="text-muted-foreground text-sm mb-3">{selectedTask.description}</p>
                         )}

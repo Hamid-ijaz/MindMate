@@ -70,7 +70,16 @@ export function PomodoroTimer({
 
   // Initialize audio
   useEffect(() => {
-    audioRef.current = new Audio('/audio/complete-tone.wav');
+    // Try to load the audio file, fallback to Web Audio API if not available
+    audioRef.current = new Audio();
+    audioRef.current.src = '/audio/complete-tone.wav';
+    audioRef.current.preload = 'auto';
+    
+    // Test if audio file loads, if not we'll use Web Audio API
+    audioRef.current.addEventListener('error', () => {
+      console.log('Audio file not found, will use Web Audio API fallback');
+    });
+
     return () => {
       if (audioRef.current) {
         audioRef.current.pause();
@@ -79,6 +88,47 @@ export function PomodoroTimer({
     };
   }, []);
 
+  // Web Audio API fallback
+  const playWebAudioBeep = useCallback(() => {
+    try {
+      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const oscillator = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
+      
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContext.destination);
+      
+      oscillator.frequency.value = 800;
+      oscillator.type = 'sine';
+      
+      gainNode.gain.value = settings.soundVolume / 100;
+      gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
+      
+      oscillator.start(audioContext.currentTime);
+      oscillator.stop(audioContext.currentTime + 0.5);
+    } catch (error) {
+      console.log('Audio not available');
+    }
+  }, [settings.soundVolume]);
+
+  // Play completion sound with fallback
+  const playSound = useCallback(() => {
+    if (!settings.soundEnabled) return;
+
+    // Try to play the audio file first
+    if (audioRef.current && audioRef.current.src) {
+      audioRef.current.volume = settings.soundVolume / 100;
+      audioRef.current.play().catch(() => {
+        // Fallback to Web Audio API
+        playWebAudioBeep();
+      });
+    } else {
+      // Fallback to Web Audio API
+      playWebAudioBeep();
+    }
+  }, [settings.soundEnabled, settings.soundVolume, playWebAudioBeep]);
+
+  // Web Audio API fallback
   // Update time remaining when settings change
   useEffect(() => {
     if (status === 'idle') {
@@ -90,40 +140,6 @@ export function PomodoroTimer({
       setTimeRemaining(duration * 60);
     }
   }, [settings, sessionType, status]);
-
-  // Timer logic
-  useEffect(() => {
-    if (status === 'active') {
-      intervalRef.current = setInterval(() => {
-        setTimeRemaining(prev => {
-          if (prev <= 1) {
-            // Session completed
-            handleSessionComplete();
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-    } else {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-        intervalRef.current = null;
-      }
-    }
-
-    return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-      }
-    };
-  }, [status]);
-
-  const playSound = useCallback(() => {
-    if (settings.soundEnabled && audioRef.current) {
-      audioRef.current.volume = settings.soundVolume / 100;
-      audioRef.current.play().catch(console.error);
-    }
-  }, [settings.soundEnabled, settings.soundVolume]);
 
   const handleSessionComplete = useCallback(() => {
     if (!startTimeRef.current) return;
@@ -195,6 +211,33 @@ export function PomodoroTimer({
     }
   }, [sessionType, settings, currentSession, task, onSessionComplete, onTaskUpdate, updateTask, playSound]);
 
+  // Timer logic
+  useEffect(() => {
+    if (status === 'active') {
+      intervalRef.current = setInterval(() => {
+        setTimeRemaining(prev => {
+          if (prev <= 1) {
+            // Session completed
+            handleSessionComplete();
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    } else {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+    }
+
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
+    };
+  }, [status, handleSessionComplete]);
+
   const handleStart = useCallback(() => {
     setStatus('active');
     startTimeRef.current = Date.now();
@@ -261,26 +304,26 @@ export function PomodoroTimer({
 
   const getSessionColor = () => {
     switch (sessionType) {
-      case 'work': return 'text-blue-600';
-      case 'short-break': return 'text-green-600';
-      case 'long-break': return 'text-purple-600';
+      case 'work': return 'text-blue-600 dark:text-blue-400';
+      case 'short-break': return 'text-green-600 dark:text-green-400';
+      case 'long-break': return 'text-purple-600 dark:text-purple-400';
     }
   };
 
   const getSessionBgColor = () => {
     switch (sessionType) {
-      case 'work': return 'bg-blue-50 border-blue-200';
-      case 'short-break': return 'bg-green-50 border-green-200';
-      case 'long-break': return 'bg-purple-50 border-purple-200';
+      case 'work': return 'bg-blue-50/50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800/30';
+      case 'short-break': return 'bg-green-50/50 dark:bg-green-950/20 border-green-200 dark:border-green-800/30';
+      case 'long-break': return 'bg-purple-50/50 dark:bg-purple-950/20 border-purple-200 dark:border-purple-800/30';
     }
   };
 
   const SessionIcon = getSessionIcon();
 
   return (
-    <Card className={cn("w-full max-w-md mx-auto", getSessionBgColor(), className)}>
-      <CardHeader className="text-center">
-        <CardTitle className="flex items-center justify-center gap-2">
+    <Card className={cn("w-full max-w-lg mx-auto border-2 shadow-lg", getSessionBgColor(), className)}>
+      <CardHeader className="text-center pb-4">
+        <CardTitle className="flex items-center justify-center gap-2 text-foreground">
           <SessionIcon className={cn("h-5 w-5", getSessionColor())} />
           <span className="capitalize">
             {sessionType.replace('-', ' ')} Session
@@ -289,7 +332,7 @@ export function PomodoroTimer({
         
         {task && (
           <div className="text-sm text-muted-foreground">
-            Working on: <span className="font-medium">{task.title}</span>
+            Working on: <span className="font-medium text-foreground">{task.title}</span>
           </div>
         )}
       </CardHeader>
@@ -297,85 +340,115 @@ export function PomodoroTimer({
       <CardContent className="space-y-6">
         {/* Timer Display */}
         <div className="text-center">
-          <motion.div
-            key={timeRemaining}
-            initial={{ scale: 1 }}
-            animate={{ scale: status === 'active' ? [1, 1.05, 1] : 1 }}
-            transition={{ duration: 1, repeat: status === 'active' ? Infinity : 0 }}
-            className={cn("text-6xl font-mono font-bold mb-2", getSessionColor())}
-          >
-            {formatTime(timeRemaining)}
-          </motion.div>
-          
-          <Progress 
-            value={getProgress()} 
-            className="h-2 mb-4" 
-          />
-          
-          <div className="flex items-center justify-between text-sm text-muted-foreground">
-            <span>Session {currentSession}</span>
-            <span>{Math.floor(getProgress())}% complete</span>
+          <div className={cn("p-6 md:p-8 rounded-xl border-2 transition-all duration-300", getSessionBgColor())}>
+            <motion.div
+              key={timeRemaining}
+              initial={{ scale: 1 }}
+              animate={{ scale: status === 'active' ? [1, 1.02, 1] : 1 }}
+              transition={{ duration: 1, repeat: status === 'active' ? Infinity : 0 }}
+              className={cn("text-4xl md:text-6xl font-mono font-bold mb-4 tracking-tight", getSessionColor())}
+            >
+              {formatTime(timeRemaining)}
+            </motion.div>
+            
+            <Progress 
+              value={getProgress()} 
+              className="h-3 mb-4" 
+            />
+            
+            <div className="flex items-center justify-between text-sm text-muted-foreground">
+              <span>Session {currentSession}</span>
+              <span>{Math.floor(getProgress())}% complete</span>
+            </div>
           </div>
         </div>
 
         {/* Controls */}
-        <div className="flex items-center justify-center gap-2">
+        <div className="flex items-center justify-center gap-3 flex-wrap">
           {status === 'idle' && (
-            <Button onClick={handleStart} className="flex-1 max-w-32">
-              <Play className="h-4 w-4 mr-2" />
+            <Button 
+              onClick={handleStart} 
+              size="lg" 
+              className="flex items-center gap-2 min-w-[120px]"
+            >
+              <Play className="h-4 w-4" />
               Start
             </Button>
           )}
           
           {status === 'active' && (
-            <Button onClick={handlePause} variant="outline" className="flex-1 max-w-32">
-              <Pause className="h-4 w-4 mr-2" />
+            <Button 
+              onClick={handlePause} 
+              size="lg" 
+              variant="secondary" 
+              className="flex items-center gap-2 min-w-[120px]"
+            >
+              <Pause className="h-4 w-4" />
               Pause
             </Button>
           )}
           
           {status === 'paused' && (
             <>
-              <Button onClick={handleResume} className="flex-1 max-w-24">
-                <Play className="h-4 w-4 mr-2" />
+              <Button 
+                onClick={handleResume} 
+                size="lg" 
+                className="flex items-center gap-2 min-w-[100px]"
+              >
+                <Play className="h-4 w-4" />
                 Resume
               </Button>
-              <Button onClick={handleStop} variant="outline" className="flex-1 max-w-24">
-                <Square className="h-4 w-4 mr-2" />
+              <Button 
+                onClick={handleStop} 
+                size="lg" 
+                variant="outline" 
+                className="flex items-center gap-2 min-w-[80px]"
+              >
+                <Square className="h-4 w-4" />
                 Stop
               </Button>
             </>
           )}
           
           {(status === 'active' || status === 'paused') && (
-            <Button onClick={handleSkipSession} variant="ghost" size="sm">
-              Skip
+            <Button 
+              onClick={handleSkipSession} 
+              variant="ghost" 
+              size="sm"
+              className="text-muted-foreground hover:text-foreground"
+            >
+              Skip Session
             </Button>
           )}
           
-          <Button onClick={handleReset} variant="ghost" size="sm">
+          <Button 
+            onClick={handleReset} 
+            variant="ghost" 
+            size="sm"
+            className="text-muted-foreground hover:text-foreground"
+          >
             <RotateCcw className="h-4 w-4" />
           </Button>
         </div>
 
         {/* Session Stats */}
-        <div className="grid grid-cols-3 gap-4 text-center">
+        <div className="grid grid-cols-3 gap-4 text-center pt-4 border-t border-border">
           <div>
-            <div className="text-2xl font-bold text-primary">
+            <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">
               {completedSessions.filter(s => s.type === 'work').length}
             </div>
             <div className="text-xs text-muted-foreground">Completed</div>
           </div>
           
           <div>
-            <div className="text-2xl font-bold text-green-600">
+            <div className="text-2xl font-bold text-green-600 dark:text-green-400">
               {completedSessions.filter(s => s.type !== 'work').length}
             </div>
             <div className="text-xs text-muted-foreground">Breaks</div>
           </div>
           
           <div>
-            <div className="text-2xl font-bold text-purple-600">
+            <div className="text-2xl font-bold text-purple-600 dark:text-purple-400">
               {Math.round(completedSessions.reduce((acc, s) => acc + s.duration, 0) / 60)}h
             </div>
             <div className="text-xs text-muted-foreground">Total Time</div>
@@ -383,23 +456,27 @@ export function PomodoroTimer({
         </div>
 
         {/* Quick Settings */}
-        <div className="space-y-3 pt-4 border-t">
+        <div className="space-y-3 pt-4 border-t border-border">
           <div className="flex items-center justify-between">
-            <Label htmlFor="sound-toggle" className="text-sm">Sound</Label>
+            <Label htmlFor="sound-toggle" className="text-sm text-foreground">Sound</Label>
             <div className="flex items-center gap-2">
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={() => setSettings(prev => ({ ...prev, soundEnabled: !prev.soundEnabled }))}
+                className="h-8 w-8 p-0"
               >
-                {settings.soundEnabled ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
+                {settings.soundEnabled ? 
+                  <Volume2 className="h-4 w-4 text-green-600 dark:text-green-400" /> : 
+                  <VolumeX className="h-4 w-4 text-muted-foreground" />
+                }
               </Button>
             </div>
           </div>
           
           {settings.soundEnabled && (
             <div className="space-y-2">
-              <Label className="text-sm">Volume</Label>
+              <Label className="text-sm text-foreground">Volume</Label>
               <Slider
                 value={[settings.soundVolume]}
                 onValueChange={(value) => setSettings(prev => ({ ...prev, soundVolume: value[0] }))}
@@ -412,7 +489,7 @@ export function PomodoroTimer({
           )}
           
           <div className="flex items-center justify-between">
-            <Label className="text-sm">Auto-start breaks</Label>
+            <Label className="text-sm text-foreground">Auto-start breaks</Label>
             <Switch
               checked={settings.autoStartBreaks}
               onCheckedChange={(checked) => setSettings(prev => ({ ...prev, autoStartBreaks: checked }))}
@@ -420,7 +497,7 @@ export function PomodoroTimer({
           </div>
           
           <div className="flex items-center justify-between">
-            <Label className="text-sm">Auto-start pomodoros</Label>
+            <Label className="text-sm text-foreground">Auto-start pomodoros</Label>
             <Switch
               checked={settings.autoStartPomodoros}
               onCheckedChange={(checked) => setSettings(prev => ({ ...prev, autoStartPomodoros: checked }))}
@@ -445,11 +522,13 @@ export function PomodoroTimer({
               initial={{ height: 0, opacity: 0 }}
               animate={{ height: 'auto', opacity: 1 }}
               exit={{ height: 0, opacity: 0 }}
-              className="space-y-4 pt-4 border-t"
+              className="space-y-4 pt-4 border-t border-border"
             >
+              <h4 className="font-semibold text-foreground">Advanced Settings</h4>
+              
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label className="text-sm">Work Duration</Label>
+                  <Label className="text-sm text-foreground">Work Duration</Label>
                   <Select
                     value={settings.workDuration.toString()}
                     onValueChange={(value) => setSettings(prev => ({ ...prev, workDuration: parseInt(value) }))}
@@ -469,7 +548,7 @@ export function PomodoroTimer({
                 </div>
                 
                 <div>
-                  <Label className="text-sm">Short Break</Label>
+                  <Label className="text-sm text-foreground">Short Break</Label>
                   <Select
                     value={settings.shortBreakDuration.toString()}
                     onValueChange={(value) => setSettings(prev => ({ ...prev, shortBreakDuration: parseInt(value) }))}
@@ -489,7 +568,7 @@ export function PomodoroTimer({
               
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label className="text-sm">Long Break</Label>
+                  <Label className="text-sm text-foreground">Long Break</Label>
                   <Select
                     value={settings.longBreakDuration.toString()}
                     onValueChange={(value) => setSettings(prev => ({ ...prev, longBreakDuration: parseInt(value) }))}
@@ -507,7 +586,7 @@ export function PomodoroTimer({
                 </div>
                 
                 <div>
-                  <Label className="text-sm">Sessions until Long Break</Label>
+                  <Label className="text-sm text-foreground">Sessions until Long Break</Label>
                   <Select
                     value={settings.sessionsUntilLongBreak.toString()}
                     onValueChange={(value) => setSettings(prev => ({ ...prev, sessionsUntilLongBreak: parseInt(value) }))}

@@ -3,6 +3,8 @@
 
 import { useState, useTransition, useEffect, useRef, Suspense, useMemo } from 'react';
 import { useTasks } from '@/contexts/task-context';
+import { useNotes } from '@/contexts/note-context';
+import { useOffline } from '@/contexts/offline-context';
 // ...existing code...
 import { TaskItem } from '@/components/task-item';
 import { Button } from '@/components/ui/button';
@@ -12,7 +14,7 @@ import { Wand2, Loader2, PlusCircle, Search, Filter, X, SortAsc, Target, CheckCi
 import { AlertDialog, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { rewordTask } from '@/ai/flows/reword-task-flow';
 import { useToast } from '@/hooks/use-toast';
-import type { Task, Priority, TaskCategory } from '@/lib/types';
+import type { Task, Priority, TaskCategory, Note } from '@/lib/types';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -67,6 +69,8 @@ function PendingTasksSkeleton() {
 
 function PendingTasksContent() {
   const { tasks, addTask, updateTask, isLoading } = useTasks();
+  const { notes } = useNotes();
+  const { offlineActions, isOnline, isServerReachable } = useOffline();
   const { toast } = useToast();
   const [isRewording, startRewordTransition] = useTransition();
   const [showRewordDialog, setShowRewordDialog] = useState(false);

@@ -2,6 +2,7 @@
 "use client";
 
 import { useTasks } from '@/contexts/task-context';
+import { useOffline } from '@/contexts/offline-context';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { format, isToday, isYesterday, startOfDay, subDays, differenceInDays, startOfWeek, endOfWeek, isThisWeek } from 'date-fns';
@@ -9,7 +10,8 @@ import { Button } from '@/components/ui/button';
 import { 
   RotateCcw, ChevronDown, ChevronUp, CornerDownRight, Edit, Trash2, 
   ExternalLink, TrendingUp, Clock, Target, Award, BarChart3, Calendar, 
-  Zap, Filter, Search, Trophy, CheckCircle2, Timer, MapPin, Share2
+  Zap, Filter, Search, Trophy, CheckCircle2, Timer, MapPin, Share2,
+  WifiOff, Database, AlertCircle
 } from 'lucide-react';
 import { ItemActionsDropdown } from '@/components/item-actions-dropdown';
 import { ShareDialog } from '@/components/share-dialog';
@@ -60,6 +62,7 @@ const getGroupTitle = (date: Date): string => {
 
 export default function HistoryPage() {
   const { tasks, uncompleteTask, deleteTask, startEditingTask, isLoading } = useTasks();
+  const { isOnline, isServerReachable, offlineActions } = useOffline();
   const [expandedTasks, setExpandedTasks] = useState<Record<string, boolean>>({});
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
@@ -369,6 +372,50 @@ export default function HistoryPage() {
             Celebrate your achievements and track your productivity journey
           </p>
         </motion.div>
+
+        {/* Offline Status Banner */}
+        {(!isOnline || !isServerReachable) && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+          >
+            <Card className="border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-3">
+                  {!isOnline ? (
+                    <WifiOff className="h-5 w-5 text-amber-600 dark:text-amber-400 flex-shrink-0" />
+                  ) : (
+                    <Database className="h-5 w-5 text-amber-600 dark:text-amber-400 flex-shrink-0" />
+                  )}
+                  <div className="flex-1">
+                    <h3 className="font-medium text-amber-900 dark:text-amber-100 text-sm">
+                      {!isOnline ? 'Viewing Cached History' : 'Server Offline'}
+                    </h3>
+                    <p className="text-xs text-amber-700 dark:text-amber-300 mt-1">
+                      {!isOnline 
+                        ? 'Showing your locally cached completed tasks. Some recent completions may not appear until you\'re back online.'
+                        : 'Displaying cached data. Recent changes will appear when server is available.'
+                      }
+                      {offlineActions.filter(action => action.type.includes('task')).length > 0 && (
+                        <span className="ml-2 font-medium">
+                          ({offlineActions.filter(action => action.type.includes('task')).length} pending)
+                        </span>
+                      )}
+                    </p>
+                  </div>
+                  <Button 
+                    size="sm" 
+                    variant="outline" 
+                    className="border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-800"
+                    onClick={() => window.location.href = '/offline'}
+                  >
+                    Details
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </motion.div>
+        )}
 
         {/* Search and Filter Controls */}
         {!isLoading && allCompletedTasks.length > 0 && (
