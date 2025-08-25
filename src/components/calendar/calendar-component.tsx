@@ -412,7 +412,6 @@ export function CalendarComponent({
             setSelectedTimeSlot(null);
           }}
         />
-      )}
 
       <CalendarSettings
         open={isSettingsOpen}
