@@ -28,10 +28,10 @@ import { motion, AnimatePresence } from 'framer-motion';
 import type { TeamRole } from '@/lib/types';
 
 const roleColors = {
-  owner: 'bg-purple-100 text-purple-800',
-  admin: 'bg-blue-100 text-blue-800',
-  member: 'bg-green-100 text-green-800',
-  viewer: 'bg-gray-100 text-gray-800',
+  owner: 'bg-purple-100 text-purple-800 dark:bg-purple-900/20 dark:text-purple-300',
+  admin: 'bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-300',
+  member: 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-300',
+  viewer: 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300',
 };
 
 const roleLabels = {
@@ -162,7 +162,7 @@ export default function TeamDashboard() {
   if (isLoadingTeams) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
       </div>
     );
   }
@@ -170,9 +170,9 @@ export default function TeamDashboard() {
   if (teams.length === 0) {
     return (
       <div className="text-center py-12">
-        <Users className="mx-auto h-12 w-12 text-gray-400" />
-        <h3 className="mt-2 text-sm font-medium text-gray-900">No teams yet</h3>
-        <p className="mt-1 text-sm text-gray-500">Get started by creating your first team.</p>
+        <Users className="mx-auto h-12 w-12 text-muted-foreground" />
+        <h3 className="mt-2 text-sm font-medium text-foreground">No teams yet</h3>
+        <p className="mt-1 text-sm text-muted-foreground">Get started by creating your first team.</p>
         <div className="mt-6">
           <Dialog open={isCreateTeamOpen} onOpenChange={setIsCreateTeamOpen}>
             <DialogTrigger asChild>
@@ -221,7 +221,7 @@ export default function TeamDashboard() {
   return (
     <div className="space-y-6">
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-md">
+        <div className="bg-destructive/10 border border-destructive/20 text-destructive px-4 py-3 rounded-md">
           {error}
         </div>
       )}
@@ -255,7 +255,7 @@ export default function TeamDashboard() {
           </Select>
 
           {currentTeam && (
-            <div className="text-sm text-gray-500">
+            <div className="text-sm text-muted-foreground">
               {currentTeam.description}
             </div>
           )}
@@ -365,11 +365,11 @@ export default function TeamDashboard() {
               <CardContent>
                 <div className="space-y-4">
                   {teamTasks.slice(0, 5).map((task) => (
-                    <div key={task.id} className="flex items-center space-x-4">
-                      <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                    <div key={task.id} className="flex items-center space-x-4 hover:bg-muted/30 p-2 rounded-lg transition-colors">
+                      <div className="w-2 h-2 bg-primary rounded-full"></div>
                       <div className="flex-1">
                         <p className="text-sm font-medium">{task.title}</p>
-                        <p className="text-xs text-gray-500">
+                        <p className="text-xs text-muted-foreground">
                           {task.assigneeName ? `Assigned to ${task.assigneeName}` : 'Unassigned'} • 
                           {new Date(task.createdAt).toLocaleDateString()}
                         </p>
@@ -379,6 +379,9 @@ export default function TeamDashboard() {
                       </Badge>
                     </div>
                   ))}
+                  {teamTasks.length === 0 && (
+                    <p className="text-sm text-muted-foreground text-center py-8">No recent activity</p>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -436,7 +439,7 @@ export default function TeamDashboard() {
 
             {isLoadingMembers ? (
               <div className="flex items-center justify-center h-32">
-                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-gray-900"></div>
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -457,13 +460,13 @@ export default function TeamDashboard() {
                             </Avatar>
                             <div className="flex-1">
                               <h4 className="font-medium">{member.userName || member.userId.split('@')[0]}</h4>
-                              <p className="text-sm text-gray-500">{member.userId}</p>
+                              <p className="text-sm text-muted-foreground">{member.userId}</p>
                               <Badge className={`mt-2 ${roleColors[member.role]}`}>
                                 {roleLabels[member.role]}
                               </Badge>
                             </div>
                           </div>
-                          <div className="mt-4 text-xs text-gray-500">
+                          <div className="mt-4 text-xs text-muted-foreground">
                             Joined {new Date(member.joinedAt).toLocaleDateString()}
                           </div>
                         </CardContent>
@@ -521,7 +524,7 @@ export default function TeamDashboard() {
 
             {isLoadingWorkspaces ? (
               <div className="flex items-center justify-center h-32">
-                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-gray-900"></div>
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -539,11 +542,11 @@ export default function TeamDashboard() {
                         <CardHeader>
                           <CardTitle className="text-lg">{workspace.name}</CardTitle>
                           {workspace.description && (
-                            <p className="text-sm text-gray-500">{workspace.description}</p>
+                            <p className="text-sm text-muted-foreground">{workspace.description}</p>
                           )}
                         </CardHeader>
                         <CardContent>
-                          <div className="flex justify-between items-center text-sm text-gray-500">
+                          <div className="flex justify-between items-center text-sm text-muted-foreground">
                             <span>{workspace.stats.totalMembers} members</span>
                             <span>{workspace.stats.activeTasks} active tasks</span>
                           </div>
@@ -579,22 +582,22 @@ export default function TeamDashboard() {
                     </CardHeader>
                     <CardContent className="space-y-3">
                       {assignedTasks.filter(t => !t.completedAt).slice(0, 5).map((task) => (
-                        <div key={task.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                        <div key={task.id} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg hover:bg-muted/70 transition-colors">
                           <div className="flex-1">
                             <p className="font-medium text-sm">{task.title}</p>
-                            <p className="text-xs text-gray-500 mt-1">
+                            <p className="text-xs text-muted-foreground mt-1">
                               Due: {task.timeOfDay} • {task.priority} priority
                             </p>
                           </div>
                           <Badge 
-                            className={task.assignmentStatus === 'pending' ? 'bg-yellow-100 text-yellow-800' : ''}
+                            className={task.assignmentStatus === 'pending' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-300' : ''}
                           >
                             {task.assignmentStatus || 'assigned'}
                           </Badge>
                         </div>
                       ))}
                       {assignedTasks.filter(t => !t.completedAt).length === 0 && (
-                        <p className="text-sm text-gray-500 text-center py-8">No tasks assigned to you</p>
+                        <p className="text-sm text-muted-foreground text-center py-8">No tasks assigned to you</p>
                       )}
                     </CardContent>
                   </Card>
@@ -606,10 +609,10 @@ export default function TeamDashboard() {
                     </CardHeader>
                     <CardContent className="space-y-3">
                       {teamTasks.filter(t => !t.completedAt).slice(0, 5).map((task) => (
-                        <div key={task.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                        <div key={task.id} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg hover:bg-muted/70 transition-colors">
                           <div className="flex-1">
                             <p className="font-medium text-sm">{task.title}</p>
-                            <p className="text-xs text-gray-500 mt-1">
+                            <p className="text-xs text-muted-foreground mt-1">
                               {task.assigneeName ? `Assigned to ${task.assigneeName}` : 'Unassigned'} • 
                               {task.priority} priority
                             </p>
@@ -620,7 +623,7 @@ export default function TeamDashboard() {
                         </div>
                       ))}
                       {teamTasks.filter(t => !t.completedAt).length === 0 && (
-                        <p className="text-sm text-gray-500 text-center py-8">No active tasks</p>
+                        <p className="text-sm text-muted-foreground text-center py-8">No active tasks</p>
                       )}
                     </CardContent>
                   </Card>
@@ -628,9 +631,9 @@ export default function TeamDashboard() {
               </div>
             ) : (
               <div className="text-center py-12">
-                <Briefcase className="mx-auto h-12 w-12 text-gray-400" />
-                <h3 className="mt-2 text-sm font-medium text-gray-900">Select a workspace</h3>
-                <p className="mt-1 text-sm text-gray-500">Choose a workspace to view and manage tasks.</p>
+                <Briefcase className="mx-auto h-12 w-12 text-muted-foreground" />
+                <h3 className="mt-2 text-sm font-medium text-foreground">Select a workspace</h3>
+                <p className="mt-1 text-sm text-muted-foreground">Choose a workspace to view and manage tasks.</p>
               </div>
             )}
           </TabsContent>
