@@ -207,19 +207,19 @@ export default function AdvancedTaskManager({ workspaceId }: AdvancedTaskManager
 
   const getPriorityColor = (priority: Priority) => {
     switch (priority) {
-      case 'Critical': return 'bg-red-100 text-red-800';
-      case 'High': return 'bg-orange-100 text-orange-800';
-      case 'Medium': return 'bg-yellow-100 text-yellow-800';
-      case 'Low': return 'bg-green-100 text-green-800';
-      default: return 'bg-gray-100 text-gray-800';
+      case 'Critical': return 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-300';
+      case 'High': return 'bg-orange-100 text-orange-800 dark:bg-orange-900/20 dark:text-orange-300';
+      case 'Medium': return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-300';
+      case 'Low': return 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-300';
+      default: return 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300';
     }
   };
 
   const getStatusColor = (task: TeamTask) => {
-    if (task.completedAt) return 'bg-green-100 text-green-800';
-    if (task.assignmentStatus === 'pending') return 'bg-yellow-100 text-yellow-800';
-    if (task.assigneeId) return 'bg-blue-100 text-blue-800';
-    return 'bg-gray-100 text-gray-800';
+    if (task.completedAt) return 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-300';
+    if (task.assignmentStatus === 'pending') return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-300';
+    if (task.assigneeId) return 'bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-300';
+    return 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300';
   };
 
   return (
@@ -229,7 +229,7 @@ export default function AdvancedTaskManager({ workspaceId }: AdvancedTaskManager
         <CardContent className="p-4">
           <div className="flex items-center space-x-4">
             <div className="flex-1 flex items-center space-x-2">
-              <Search className="h-4 w-4 text-gray-400" />
+              <Search className="h-4 w-4 text-muted-foreground" />
               <Input
                 placeholder="Search tasks, assignees, categories..."
                 value={searchQuery}
@@ -274,7 +274,7 @@ export default function AdvancedTaskManager({ workspaceId }: AdvancedTaskManager
                       <Card key={template.id} className="cursor-pointer hover:shadow-md transition-shadow">
                         <CardHeader className="pb-2">
                           <CardTitle className="text-sm">{template.name}</CardTitle>
-                          <p className="text-xs text-gray-500">{template.description}</p>
+                          <p className="text-xs text-muted-foreground">{template.description}</p>
                         </CardHeader>
                         <CardContent className="pt-0">
                           <div className="flex justify-between items-center">
@@ -358,7 +358,7 @@ export default function AdvancedTaskManager({ workspaceId }: AdvancedTaskManager
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -20 }}
         >
-          <Card className="border-blue-200 bg-blue-50">
+          <Card className="border-primary/20 bg-primary/5">
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-4">
@@ -404,7 +404,7 @@ export default function AdvancedTaskManager({ workspaceId }: AdvancedTaskManager
                     size="sm"
                     variant="outline"
                     onClick={() => executeBatchOperation('delete')}
-                    className="text-red-600 hover:text-red-700"
+                    className="text-destructive hover:text-destructive"
                   >
                     <Trash2 className="h-4 w-4 mr-1" />
                     Delete
@@ -456,7 +456,7 @@ export default function AdvancedTaskManager({ workspaceId }: AdvancedTaskManager
         <CardContent>
           {isLoadingTasks ? (
             <div className="flex items-center justify-center h-32">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
             </div>
           ) : (
             <div className={`space-y-3 ${viewMode === 'grid' ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 space-y-0' : ''}`}>
@@ -468,7 +468,7 @@ export default function AdvancedTaskManager({ workspaceId }: AdvancedTaskManager
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -10 }}
                     className={`p-4 border rounded-lg hover:shadow-md transition-all ${
-                      selectedTasks.has(task.id) ? 'border-blue-500 bg-blue-50' : 'border-gray-200'
+                      selectedTasks.has(task.id) ? 'border-primary/50 bg-primary/5' : 'border-border hover:border-primary/20'
                     }`}
                   >
                     <div className="flex items-center space-x-3">
@@ -491,13 +491,13 @@ export default function AdvancedTaskManager({ workspaceId }: AdvancedTaskManager
                         </div>
 
                         {task.description && (
-                          <p className="text-xs text-gray-600 mt-1 line-clamp-2">
+                          <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
                             {task.description}
                           </p>
                         )}
 
                         <div className="flex items-center justify-between mt-2">
-                          <div className="flex items-center space-x-2 text-xs text-gray-500">
+                          <div className="flex items-center space-x-2 text-xs text-muted-foreground">
                             <Tag className="h-3 w-3" />
                             <span>{task.category}</span>
                             <Clock className="h-3 w-3 ml-2" />
@@ -510,7 +510,7 @@ export default function AdvancedTaskManager({ workspaceId }: AdvancedTaskManager
                             )}
                           </div>
 
-                          <div className="text-xs text-gray-400">
+                          <div className="text-xs text-muted-foreground">
                             {new Date(task.createdAt).toLocaleDateString()}
                           </div>
                         </div>
@@ -524,11 +524,11 @@ export default function AdvancedTaskManager({ workspaceId }: AdvancedTaskManager
 
           {tasksToShow.length === 0 && !isLoadingTasks && (
             <div className="text-center py-12">
-              <CheckSquare className="mx-auto h-12 w-12 text-gray-400" />
-              <h3 className="mt-2 text-sm font-medium text-gray-900">
+              <CheckSquare className="mx-auto h-12 w-12 text-muted-foreground" />
+              <h3 className="mt-2 text-sm font-medium text-foreground">
                 {searchQuery || activeFilters.length > 0 ? 'No tasks found' : 'No tasks yet'}
               </h3>
-              <p className="mt-1 text-sm text-gray-500">
+              <p className="mt-1 text-sm text-muted-foreground">
                 {searchQuery || activeFilters.length > 0 
                   ? 'Try adjusting your search or filters'
                   : 'Create your first task or apply a template to get started'
@@ -554,7 +554,7 @@ export default function AdvancedTaskManager({ workspaceId }: AdvancedTaskManager
                     {facet.values.slice(0, 5).map((value) => (
                       <div key={value.value} className="flex justify-between text-xs">
                         <span>{value.value}</span>
-                        <span className="text-gray-500">{value.count}</span>
+                        <span className="text-muted-foreground">{value.count}</span>
                       </div>
                     ))}
                   </div>
@@ -570,7 +570,7 @@ export default function AdvancedTaskManager({ workspaceId }: AdvancedTaskManager
                     <Badge
                       key={index}
                       variant="outline"
-                      className="cursor-pointer hover:bg-gray-100"
+                      className="cursor-pointer hover:bg-muted"
                       onClick={() => setSearchQuery(suggestion)}
                     >
                       {suggestion}

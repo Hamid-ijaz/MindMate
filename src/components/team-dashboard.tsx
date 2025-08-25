@@ -11,6 +11,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { WorkspaceCard } from '@/components/workspace-card';
+import { TeamInviteDialog } from '@/components/team-invite-dialog';
 import { 
   Users, 
   Plus, 
@@ -71,6 +73,7 @@ export default function TeamDashboard() {
   const [newWorkspaceDescription, setNewWorkspaceDescription] = useState('');
   const [newMemberEmail, setNewMemberEmail] = useState('');
   const [newMemberRole, setNewMemberRole] = useState<TeamRole>('member');
+  const [isInviteDialogOpen, setIsInviteDialogOpen] = useState(false);
 
   const handleCreateTeam = async () => {
     if (!user?.email || !newTeamName.trim()) return;
@@ -140,18 +143,15 @@ export default function TeamDashboard() {
     }
   };
 
-  const handleAddMember = async () => {
-    if (!currentTeam || !newMemberEmail.trim()) return;
+  const handleInviteMembers = async (emails: string[], role: TeamRole, message?: string) => {
+    if (!currentTeam) return;
 
-    try {
-      await addTeamMember(currentTeam.id, newMemberEmail.trim(), newMemberRole);
+    // For each email, create an invitation
+    const invitePromises = emails.map(email => 
+      addTeamMember(currentTeam.id, email, role)
+    );
 
-      setIsAddMemberOpen(false);
-      setNewMemberEmail('');
-      setNewMemberRole('member');
-    } catch (error) {
-      console.error('Failed to add team member:', error);
-    }
+    await Promise.all(invitePromises);
   };
 
   const getInitials = (name: string | undefined) => {
@@ -390,51 +390,10 @@ export default function TeamDashboard() {
           <TabsContent value="members" className="space-y-6">
             <div className="flex justify-between items-center">
               <h3 className="text-lg font-medium">Team Members</h3>
-              <Dialog open={isAddMemberOpen} onOpenChange={setIsAddMemberOpen}>
-                <DialogTrigger asChild>
-                  <Button>
-                    <UserPlus className="h-4 w-4 mr-2" />
-                    Add Member
-                  </Button>
-                </DialogTrigger>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>Add Team Member</DialogTitle>
-                  </DialogHeader>
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-medium mb-2">Email</label>
-                      <Input
-                        type="email"
-                        value={newMemberEmail}
-                        onChange={(e) => setNewMemberEmail(e.target.value)}
-                        placeholder="Enter email address"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium mb-2">Role</label>
-                      <Select value={newMemberRole} onValueChange={(value) => setNewMemberRole(value as TeamRole)}>
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="admin">Admin</SelectItem>
-                          <SelectItem value="member">Member</SelectItem>
-                          <SelectItem value="viewer">Viewer</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="flex gap-2 pt-4">
-                      <Button onClick={handleAddMember} disabled={!newMemberEmail.trim()}>
-                        Add Member
-                      </Button>
-                      <Button variant="outline" onClick={() => setIsAddMemberOpen(false)}>
-                        Cancel
-                      </Button>
-                    </div>
-                  </div>
-                </DialogContent>
-              </Dialog>
+              <Button onClick={() => setIsInviteDialogOpen(true)}>
+                <UserPlus className="h-4 w-4 mr-2" />
+                Invite Members
+              </Button>
             </div>
 
             {isLoadingMembers ? (
@@ -530,29 +489,12 @@ export default function TeamDashboard() {
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 <AnimatePresence>
                   {workspaces.map((workspace) => (
-                    <motion.div
+                    <WorkspaceCard
                       key={workspace.id}
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -20 }}
-                      className={`cursor-pointer ${currentWorkspace?.id === workspace.id ? 'ring-2 ring-blue-500' : ''}`}
+                      workspace={workspace}
+                      isSelected={currentWorkspace?.id === workspace.id}
                       onClick={() => setCurrentWorkspace(workspace)}
-                    >
-                      <Card>
-                        <CardHeader>
-                          <CardTitle className="text-lg">{workspace.name}</CardTitle>
-                          {workspace.description && (
-                            <p className="text-sm text-muted-foreground">{workspace.description}</p>
-                          )}
-                        </CardHeader>
-                        <CardContent>
-                          <div className="flex justify-between items-center text-sm text-muted-foreground">
-                            <span>{workspace.stats.totalMembers} members</span>
-                            <span>{workspace.stats.activeTasks} active tasks</span>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    </motion.div>
+                    />
                   ))}
                 </AnimatePresence>
               </div>
@@ -638,6 +580,17 @@ export default function TeamDashboard() {
             )}
           </TabsContent>
         </Tabs>
+      )}
+
+      {/* Team Invite Dialog */}
+      {currentTeam && (
+        <TeamInviteDialog
+          open={isInviteDialogOpen}
+          onOpenChange={setIsInviteDialogOpen}
+          teamId={currentTeam.id}
+          teamName={currentTeam.name}
+          onInviteSent={handleInviteMembers}
+        />
       )}
     </div>
   );
