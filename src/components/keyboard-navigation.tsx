@@ -36,15 +36,12 @@ export function KeyboardNavigation({ isEnabled = true }: KeyboardNavigationProps
             path = '/calendar';
             break;
           case '3':
-            path = '/goals';
-            break;
-          case '4':
             path = '/notes';
             break;
-          case '5':
+          case '4':
             path = '/analytics';
             break;
-          case '6':
+          case '5':
             path = '/pending';
             break;
           case '7':

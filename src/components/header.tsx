@@ -17,7 +17,7 @@ import { Badge } from './ui/badge';
 import { NotificationBadge } from './ui/notification-badge';
 import { 
   MessageSquare, ListChecks, HomeIcon, ListTodo, Settings, 
-  Notebook, Calendar, Target, BarChart3, Menu, X,
+  Notebook, Calendar, BarChart3, Menu, X,
   User, LogOut, Bell, Keyboard, ChevronDown, Plus,
   Zap, Search, Command as CommandIcon, Palette, BookOpen, Timer,
   TrendingUp, Activity, CheckCircle2, Clock, Globe, CheckSquare, StickyNote
@@ -214,13 +214,6 @@ export function Header() {
       description: 'Schedule and time management'
     },
     { 
-      label: 'Goals', 
-      href: '/goals', 
-      icon: Target, 
-      category: 'secondary',
-      description: 'Track your objectives and milestones'
-    },
-    { 
       label: 'Analytics', 
       href: '/analytics', 
       icon: BarChart3, 
@@ -347,12 +340,6 @@ export function Header() {
       if (matchesShortcut(e, ['cmd'], 'c')) {
         e.preventDefault();
         window.location.href = '/calendar';
-        return;
-      }
-
-      if (matchesShortcut(e, ['cmd'], 'g')) {
-        e.preventDefault();
-        window.location.href = '/goals';
         return;
       }
 
