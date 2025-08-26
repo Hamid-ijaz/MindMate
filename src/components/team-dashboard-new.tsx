@@ -26,9 +26,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { WorkspaceCard } from '@/components/workspace-card';
 import { TeamInviteDialog } from '@/components/team-invite-dialog';
-import AdvancedTaskManager from '@/components/advanced-task-manager';
-import TeamTaskManager from '@/components/team-task-manager';
-import TeamCollaboration from '@/components/team-collaboration';
+import { AdvancedTaskManager } from '@/components/advanced-task-manager';
 import { 
   Users, 
   Plus, 
@@ -58,7 +56,6 @@ import {
   Filter,
   Search,
   SortAsc,
-  MessageSquare,
   Mail,
   Copy,
   ExternalLink,
@@ -284,9 +281,9 @@ export default function TeamDashboard() {
 
   // Get current user permissions
   const userPermissions = currentTeam ? getUserPermissions(currentTeam.id) : null;
-  const canManageTeam = userPermissions?.canManageMembers || false; // Use existing permission
+  const canManageTeam = userPermissions?.canManageTeam || false;
   const canManageMembers = userPermissions?.canManageMembers || false;
-  const canManageTasks = userPermissions?.canManageMembers || false; // Use existing permission
+  const canManageTasks = userPermissions?.canManageTasks || false;
 
   // Filtered and sorted tasks
   const filteredTasks = useMemo(() => {
@@ -345,7 +342,6 @@ export default function TeamDashboard() {
         description: newTeamDescription.trim() || undefined,
         ownerId: user.email,
         ownerName: `${user.firstName} ${user.lastName}`,
-        isActive: true,
         settings: {
           allowMemberInvites: true,
           defaultMemberRole: 'member',
@@ -674,7 +670,7 @@ export default function TeamDashboard() {
       {/* Main Content Tabs */}
       {currentTeam ? (
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-5 lg:grid-cols-6">
+          <TabsList className="grid w-full grid-cols-4 lg:grid-cols-5">
             <TabsTrigger value="overview" className="text-xs sm:text-sm">
               <BarChart3 className="h-4 w-4 mr-1" />
               <span className="hidden sm:inline">Overview</span>
@@ -690,10 +686,6 @@ export default function TeamDashboard() {
             <TabsTrigger value="members" className="text-xs sm:text-sm">
               <Users className="h-4 w-4 mr-1" />
               <span className="hidden sm:inline">Members</span>
-            </TabsTrigger>
-            <TabsTrigger value="collaboration" className="text-xs sm:text-sm">
-              <MessageSquare className="h-4 w-4 mr-1" />
-              <span className="hidden sm:inline">Live</span>
             </TabsTrigger>
             <TabsTrigger value="analytics" className="text-xs sm:text-sm hidden lg:flex">
               <PieChart className="h-4 w-4 mr-1" />
@@ -898,8 +890,8 @@ export default function TeamDashboard() {
                   </div>
                 </div>
 
-                {/* Team Task Manager */}
-                <TeamTaskManager workspaceId={currentWorkspace.id} />
+                {/* Advanced Task Manager */}
+                <AdvancedTaskManager workspaceId={currentWorkspace.id} />
               </div>
             ) : (
               <div className="text-center py-16">
@@ -1139,26 +1131,6 @@ export default function TeamDashboard() {
                     Invite First Member
                   </Button>
                 )}
-              </div>
-            )}
-          </TabsContent>
-
-          {/* Collaboration Tab */}
-          <TabsContent value="collaboration" className="space-y-6">
-            {currentWorkspace ? (
-              <TeamCollaboration workspaceId={currentWorkspace.id} />
-            ) : (
-              <div className="text-center py-16">
-                <MessageSquare className="mx-auto h-16 w-16 text-muted-foreground" />
-                <h3 className="mt-4 text-xl font-semibold text-foreground">Select a workspace</h3>
-                <p className="mt-2 text-muted-foreground">Choose a workspace to collaborate with your team in real-time.</p>
-                <Button 
-                  className="mt-6"
-                  onClick={() => setActiveTab('workspaces')}
-                >
-                  <Briefcase className="h-4 w-4 mr-2" />
-                  Browse Workspaces
-                </Button>
               </div>
             )}
           </TabsContent>

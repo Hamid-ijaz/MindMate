@@ -126,13 +126,13 @@ const deserializeTaskFromFirestore = (docSnap: any) => {
     return {
       ...data,
       id: docSnap.id,
-      createdAt: data.createdAt?.toMillis() || Date.now(),
-      completedAt: data.completedAt?.toMillis(),
-      lastRejectedAt: data.lastRejectedAt?.toMillis(),
-      reminderAt: data.reminderAt?.toMillis(),
+      createdAt: data.createdAt?.toMillis ? data.createdAt.toMillis() : (data.createdAt || Date.now()),
+      completedAt: data.completedAt?.toMillis ? data.completedAt.toMillis() : data.completedAt,
+      lastRejectedAt: data.lastRejectedAt?.toMillis ? data.lastRejectedAt.toMillis() : data.lastRejectedAt,
+      reminderAt: data.reminderAt?.toMillis ? data.reminderAt.toMillis() : data.reminderAt,
       recurrence: data.recurrence ? {
           ...data.recurrence,
-          endDate: data.recurrence.endDate?.toMillis(),
+          endDate: data.recurrence.endDate?.toMillis ? data.recurrence.endDate.toMillis() : data.recurrence.endDate,
       } : undefined,
     } as Task;
 }

@@ -26,9 +26,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { WorkspaceCard } from '@/components/workspace-card';
 import { TeamInviteDialog } from '@/components/team-invite-dialog';
-import AdvancedTaskManager from '@/components/advanced-task-manager';
-import TeamTaskManager from '@/components/team-task-manager';
-import TeamCollaboration from '@/components/team-collaboration';
+import { AdvancedTaskManager } from '@/components/advanced-task-manager';
 import { 
   Users, 
   Plus, 
@@ -58,7 +56,6 @@ import {
   Filter,
   Search,
   SortAsc,
-  MessageSquare,
   Mail,
   Copy,
   ExternalLink,
@@ -284,9 +281,9 @@ export default function TeamDashboard() {
 
   // Get current user permissions
   const userPermissions = currentTeam ? getUserPermissions(currentTeam.id) : null;
-  const canManageTeam = userPermissions?.canManageMembers || false; // Use existing permission
+  const canManageTeam = userPermissions?.canManageTeam || false;
   const canManageMembers = userPermissions?.canManageMembers || false;
-  const canManageTasks = userPermissions?.canManageMembers || false; // Use existing permission
+  const canManageTasks = userPermissions?.canManageTasks || false;
 
   // Filtered and sorted tasks
   const filteredTasks = useMemo(() => {
@@ -345,7 +342,6 @@ export default function TeamDashboard() {
         description: newTeamDescription.trim() || undefined,
         ownerId: user.email,
         ownerName: `${user.firstName} ${user.lastName}`,
-        isActive: true,
         settings: {
           allowMemberInvites: true,
           defaultMemberRole: 'member',
@@ -522,7 +518,6 @@ export default function TeamDashboard() {
       </div>
     );
   }
-
   // Main dashboard with team selected
   return (
     <div className="space-y-6">
@@ -674,7 +669,7 @@ export default function TeamDashboard() {
       {/* Main Content Tabs */}
       {currentTeam ? (
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-5 lg:grid-cols-6">
+          <TabsList className="grid w-full grid-cols-4 lg:grid-cols-5">
             <TabsTrigger value="overview" className="text-xs sm:text-sm">
               <BarChart3 className="h-4 w-4 mr-1" />
               <span className="hidden sm:inline">Overview</span>
@@ -690,10 +685,6 @@ export default function TeamDashboard() {
             <TabsTrigger value="members" className="text-xs sm:text-sm">
               <Users className="h-4 w-4 mr-1" />
               <span className="hidden sm:inline">Members</span>
-            </TabsTrigger>
-            <TabsTrigger value="collaboration" className="text-xs sm:text-sm">
-              <MessageSquare className="h-4 w-4 mr-1" />
-              <span className="hidden sm:inline">Live</span>
             </TabsTrigger>
             <TabsTrigger value="analytics" className="text-xs sm:text-sm hidden lg:flex">
               <PieChart className="h-4 w-4 mr-1" />
@@ -846,7 +837,6 @@ export default function TeamDashboard() {
               </CardContent>
             </Card>
           </TabsContent>
-
           {/* Tasks Tab */}
           <TabsContent value="tasks" className="space-y-6">
             {currentWorkspace ? (
@@ -898,8 +888,8 @@ export default function TeamDashboard() {
                   </div>
                 </div>
 
-                {/* Team Task Manager */}
-                <TeamTaskManager workspaceId={currentWorkspace.id} />
+                {/* Advanced Task Manager */}
+                <AdvancedTaskManager workspaceId={currentWorkspace.id} />
               </div>
             ) : (
               <div className="text-center py-16">
@@ -1013,17 +1003,102 @@ export default function TeamDashboard() {
               </div>
             )}
           </TabsContent>
+              </div>
+            </DialogContent>
+          </Dialog>
+        </div>
+      </div>
 
-          {/* Members Tab */}
+      {currentTeam && (
+        <Tabs defaultValue="overview" className="space-y-6">
+          <TabsList>
+            <TabsTrigger value="overview">Overview</TabsTrigger>
+            <TabsTrigger value="members">Members</TabsTrigger>
+            <TabsTrigger value="workspaces">Workspaces</TabsTrigger>
+            <TabsTrigger value="tasks">Tasks</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="overview" className="space-y-6">
+            {/* Team Stats */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Team Members</CardTitle>
+                  <Users className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{currentTeam.memberCount}</div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Workspaces</CardTitle>
+                  <Briefcase className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{workspaces.length}</div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Active Tasks</CardTitle>
+                  <CheckSquare className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{teamTasks.filter(t => !t.completedAt).length}</div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">My Tasks</CardTitle>
+                  <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{assignedTasks.filter(t => !t.completedAt).length}</div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Recent Activity */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Recent Activity</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {teamTasks.slice(0, 5).map((task) => (
+                    <div key={task.id} className="flex items-center space-x-4 hover:bg-muted/30 p-2 rounded-lg transition-colors">
+                      <div className="w-2 h-2 bg-primary rounded-full"></div>
+                      <div className="flex-1">
+                        <p className="text-sm font-medium">{task.title}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {task.assigneeName ? `Assigned to ${task.assigneeName}` : 'Unassigned'} • 
+                          {new Date(task.createdAt).toLocaleDateString()}
+                        </p>
+                      </div>
+                      <Badge variant={task.completedAt ? 'default' : 'secondary'}>
+                        {task.completedAt ? 'Completed' : task.priority}
+                      </Badge>
+                    </div>
+                  ))}
+                  {teamTasks.length === 0 && (
+                    <p className="text-sm text-muted-foreground text-center py-8">No recent activity</p>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
           <TabsContent value="members" className="space-y-6">
             <div className="flex justify-between items-center">
-              <h3 className="text-lg font-semibold">Team Members</h3>
-              {canManageMembers && (
-                <Button onClick={() => setIsInviteDialogOpen(true)}>
-                  <UserPlus className="h-4 w-4 mr-2" />
-                  Invite Member
-                </Button>
-              )}
+              <h3 className="text-lg font-medium">Team Members</h3>
+              <Button onClick={() => setIsInviteDialogOpen(true)}>
+                <UserPlus className="h-4 w-4 mr-2" />
+                Invite Members
+              </Button>
             </div>
 
             {isLoadingMembers ? (
@@ -1033,273 +1108,183 @@ export default function TeamDashboard() {
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 <AnimatePresence>
-                  {teamMembers.map((member, index) => {
-                    const roleInfo = roleConfig[member.role];
-                    const IconComponent = roleInfo.icon;
-                    
-                    return (
-                      <motion.div
-                        key={member.id}
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -20 }}
-                        transition={{ delay: index * 0.1 }}
-                      >
-                        <Card className="hover:shadow-md transition-shadow">
-                          <CardContent className="p-6">
-                            <div className="flex items-center space-x-4">
-                              <Avatar className="h-12 w-12">
-                                <AvatarImage src={member.userAvatar} />
-                                <AvatarFallback className="bg-primary/10">
-                                  {getInitials(member.userName)}
-                                </AvatarFallback>
-                              </Avatar>
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center space-x-2">
-                                  <h4 className="font-semibold truncate">
-                                    {member.userName || member.userId.split('@')[0]}
-                                  </h4>
-                                  {member.role === 'owner' && (
-                                    <Star className="h-4 w-4 text-yellow-500" />
-                                  )}
-                                </div>
-                                <p className="text-sm text-muted-foreground truncate">
-                                  {member.userId}
-                                </p>
-                                <div className="flex items-center space-x-2 mt-2">
-                                  <Badge className={roleInfo.color}>
-                                    <IconComponent className="h-3 w-3 mr-1" />
-                                    {roleInfo.label}
-                                  </Badge>
-                                </div>
-                              </div>
-                              
-                              {canManageMembers && member.role !== 'owner' && (
-                                <DropdownMenu>
-                                  <DropdownMenuTrigger asChild>
-                                    <Button variant="ghost" size="sm">
-                                      <MoreHorizontal className="h-4 w-4" />
-                                    </Button>
-                                  </DropdownMenuTrigger>
-                                  <DropdownMenuContent align="end">
-                                    <DropdownMenuLabel>Member Actions</DropdownMenuLabel>
-                                    <DropdownMenuSeparator />
-                                    <DropdownMenuItem onClick={() => setSelectedMember(member)}>
-                                      <Edit3 className="h-4 w-4 mr-2" />
-                                      Change Role
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem>
-                                      <Mail className="h-4 w-4 mr-2" />
-                                      Send Message
-                                    </DropdownMenuItem>
-                                    <DropdownMenuSeparator />
-                                    <DropdownMenuItem 
-                                      className="text-destructive"
-                                      onClick={() => removeTeamMember(member.id)}
-                                    >
-                                      <Trash2 className="h-4 w-4 mr-2" />
-                                      Remove Member
-                                    </DropdownMenuItem>
-                                  </DropdownMenuContent>
-                                </DropdownMenu>
-                              )}
+                  {teamMembers.map((member) => (
+                    <motion.div
+                      key={member.id}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -20 }}
+                    >
+                      <Card>
+                        <CardContent className="p-6">
+                          <div className="flex items-center space-x-4">
+                            <Avatar>
+                              <AvatarImage src={member.userAvatar} />
+                              <AvatarFallback>{getInitials(member.userName)}</AvatarFallback>
+                            </Avatar>
+                            <div className="flex-1">
+                              <h4 className="font-medium">{member.userName || member.userId.split('@')[0]}</h4>
+                              <p className="text-sm text-muted-foreground">{member.userId}</p>
+                              <Badge className={`mt-2 ${roleColors[member.role]}`}>
+                                {roleLabels[member.role]}
+                              </Badge>
                             </div>
-                            
-                            <div className="mt-4 pt-4 border-t">
-                              <div className="flex items-center justify-between text-xs text-muted-foreground">
-                                <span>Joined {new Date(member.joinedAt).toLocaleDateString()}</span>
-                                <span>
-                                  {member.lastActiveAt 
-                                    ? `Active ${new Date(member.lastActiveAt).toLocaleDateString()}`
-                                    : 'Never active'
-                                  }
-                                </span>
-                              </div>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      </motion.div>
-                    );
-                  })}
+                          </div>
+                          <div className="mt-4 text-xs text-muted-foreground">
+                            Joined {new Date(member.joinedAt).toLocaleDateString()}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </motion.div>
+                  ))}
                 </AnimatePresence>
               </div>
             )}
+          </TabsContent>
 
-            {teamMembers.length === 0 && !isLoadingMembers && (
-              <div className="text-center py-16">
-                <Users className="mx-auto h-16 w-16 text-muted-foreground" />
-                <h3 className="mt-4 text-xl font-semibold text-foreground">No team members</h3>
-                <p className="mt-2 text-muted-foreground">Invite people to join your team.</p>
-                {canManageMembers && (
-                  <Button 
-                    className="mt-6"
-                    onClick={() => setIsInviteDialogOpen(true)}
-                  >
-                    <UserPlus className="h-4 w-4 mr-2" />
-                    Invite First Member
+          <TabsContent value="workspaces" className="space-y-6">
+            <div className="flex justify-between items-center">
+              <h3 className="text-lg font-medium">Workspaces</h3>
+              <Dialog open={isCreateWorkspaceOpen} onOpenChange={setIsCreateWorkspaceOpen}>
+                <DialogTrigger asChild>
+                  <Button>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Create Workspace
                   </Button>
-                )}
-              </div>
-            )}
-          </TabsContent>
-
-          {/* Collaboration Tab */}
-          <TabsContent value="collaboration" className="space-y-6">
-            {currentWorkspace ? (
-              <TeamCollaboration workspaceId={currentWorkspace.id} />
-            ) : (
-              <div className="text-center py-16">
-                <MessageSquare className="mx-auto h-16 w-16 text-muted-foreground" />
-                <h3 className="mt-4 text-xl font-semibold text-foreground">Select a workspace</h3>
-                <p className="mt-2 text-muted-foreground">Choose a workspace to collaborate with your team in real-time.</p>
-                <Button 
-                  className="mt-6"
-                  onClick={() => setActiveTab('workspaces')}
-                >
-                  <Briefcase className="h-4 w-4 mr-2" />
-                  Browse Workspaces
-                </Button>
-              </div>
-            )}
-          </TabsContent>
-
-          {/* Analytics Tab */}
-          <TabsContent value="analytics" className="space-y-6">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Task Distribution */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center space-x-2">
-                    <PieChart className="h-5 w-5" />
-                    <span>Task Distribution</span>
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Create New Workspace</DialogTitle>
+                  </DialogHeader>
                   <div className="space-y-4">
-                    {Object.entries({
-                      Critical: teamTasks.filter(t => t.priority === 'Critical' && !t.completedAt).length,
-                      High: teamTasks.filter(t => t.priority === 'High' && !t.completedAt).length,
-                      Medium: teamTasks.filter(t => t.priority === 'Medium' && !t.completedAt).length,
-                      Low: teamTasks.filter(t => t.priority === 'Low' && !t.completedAt).length,
-                    }).map(([priority, count]) => {
-                      const total = teamTasks.filter(t => !t.completedAt).length;
-                      const percentage = total > 0 ? Math.round((count / total) * 100) : 0;
-                      const config = priorityConfig[priority as keyof typeof priorityConfig];
-                      
-                      return (
-                        <div key={priority} className="space-y-2">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center space-x-2">
-                              <span>{config.icon}</span>
-                              <span className="font-medium">{priority}</span>
-                            </div>
-                            <span className="text-sm text-muted-foreground">{count} tasks</span>
-                          </div>
-                          <Progress value={percentage} className="h-2" />
-                        </div>
-                      );
-                    })}
+                    <div>
+                      <label className="block text-sm font-medium mb-2">Workspace Name</label>
+                      <Input
+                        value={newWorkspaceName}
+                        onChange={(e) => setNewWorkspaceName(e.target.value)}
+                        placeholder="Enter workspace name"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-2">Description (Optional)</label>
+                      <Input
+                        value={newWorkspaceDescription}
+                        onChange={(e) => setNewWorkspaceDescription(e.target.value)}
+                        placeholder="Enter workspace description"
+                      />
+                    </div>
+                    <div className="flex gap-2 pt-4">
+                      <Button onClick={handleCreateWorkspace} disabled={!newWorkspaceName.trim()}>
+                        Create Workspace
+                      </Button>
+                      <Button variant="outline" onClick={() => setIsCreateWorkspaceOpen(false)}>
+                        Cancel
+                      </Button>
+                    </div>
                   </div>
-                </CardContent>
-              </Card>
-
-              {/* Member Performance */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center space-x-2">
-                    <TrendingUp className="h-5 w-5" />
-                    <span>Member Performance</span>
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    {teamMembers.slice(0, 5).map((member) => {
-                      const memberTasks = teamTasks.filter(t => t.assigneeId === member.userId);
-                      const completedTasks = memberTasks.filter(t => t.completedAt);
-                      const completionRate = memberTasks.length > 0 
-                        ? Math.round((completedTasks.length / memberTasks.length) * 100) 
-                        : 0;
-                      
-                      return (
-                        <div key={member.id} className="space-y-2">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center space-x-2">
-                              <Avatar className="h-6 w-6">
-                                <AvatarImage src={member.userAvatar} />
-                                <AvatarFallback className="text-xs">
-                                  {getInitials(member.userName)}
-                                </AvatarFallback>
-                              </Avatar>
-                              <span className="font-medium text-sm">
-                                {member.userName?.split(' ')[0] || member.userId.split('@')[0]}
-                              </span>
-                            </div>
-                            <span className="text-sm text-muted-foreground">
-                              {completionRate}% completed
-                            </span>
-                          </div>
-                          <Progress value={completionRate} className="h-2" />
-                        </div>
-                      );
-                    })}
-                  </div>
-                </CardContent>
-              </Card>
+                </DialogContent>
+              </Dialog>
             </div>
 
-            {/* Workspace Analytics */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center space-x-2">
-                  <BarChart3 className="h-5 w-5" />
-                  <span>Workspace Activity</span>
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {workspaces.map((workspace) => {
-                    const workspaceTasks = teamTasks.filter(t => t.workspaceId === workspace.id);
-                    const activeTasks = workspaceTasks.filter(t => !t.completedAt);
-                    const completedTasks = workspaceTasks.filter(t => t.completedAt);
-                    
-                    return (
-                      <Card key={workspace.id} className="p-4">
-                        <div className="space-y-3">
-                          <div className="flex items-center justify-between">
-                            <h4 className="font-medium text-sm truncate">{workspace.name}</h4>
-                            <Badge variant="outline" className="text-xs">
-                              {workspace.memberIds.length} members
-                            </Badge>
-                          </div>
-                          <div className="space-y-2">
-                            <div className="flex justify-between text-xs">
-                              <span>Active Tasks</span>
-                              <span className="font-medium">{activeTasks.length}</span>
-                            </div>
-                            <div className="flex justify-between text-xs">
-                              <span>Completed</span>
-                              <span className="font-medium">{completedTasks.length}</span>
-                            </div>
-                            <Progress 
-                              value={workspaceTasks.length > 0 ? (completedTasks.length / workspaceTasks.length) * 100 : 0} 
-                              className="h-1"
-                            />
-                          </div>
-                        </div>
-                      </Card>
-                    );
-                  })}
+            {isLoadingWorkspaces ? (
+              <div className="flex items-center justify-center h-32">
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <AnimatePresence>
+                  {workspaces.map((workspace) => (
+                    <WorkspaceCard
+                      key={workspace.id}
+                      workspace={workspace}
+                      isSelected={currentWorkspace?.id === workspace.id}
+                      onClick={() => setCurrentWorkspace(workspace)}
+                    />
+                  ))}
+                </AnimatePresence>
+              </div>
+            )}
+          </TabsContent>
+
+          <TabsContent value="tasks" className="space-y-6">
+            {currentWorkspace ? (
+              <div className="space-y-6">
+                <div className="flex justify-between items-center">
+                  <h3 className="text-lg font-medium">Tasks in {currentWorkspace.name}</h3>
+                  <div className="flex space-x-2">
+                    <Badge variant="secondary">
+                      {teamTasks.filter(t => !t.completedAt).length} Active
+                    </Badge>
+                    <Badge variant="outline">
+                      {teamTasks.filter(t => t.completedAt).length} Completed
+                    </Badge>
+                  </div>
                 </div>
-              </CardContent>
-            </Card>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* Assigned to Me */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-base">Assigned to Me</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      {assignedTasks.filter(t => !t.completedAt).slice(0, 5).map((task) => (
+                        <div key={task.id} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg hover:bg-muted/70 transition-colors">
+                          <div className="flex-1">
+                            <p className="font-medium text-sm">{task.title}</p>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              Due: {task.timeOfDay} • {task.priority} priority
+                            </p>
+                          </div>
+                          <Badge 
+                            className={task.assignmentStatus === 'pending' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-300' : ''}
+                          >
+                            {task.assignmentStatus || 'assigned'}
+                          </Badge>
+                        </div>
+                      ))}
+                      {assignedTasks.filter(t => !t.completedAt).length === 0 && (
+                        <p className="text-sm text-muted-foreground text-center py-8">No tasks assigned to you</p>
+                      )}
+                    </CardContent>
+                  </Card>
+
+                  {/* All Team Tasks */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-base">All Tasks</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      {teamTasks.filter(t => !t.completedAt).slice(0, 5).map((task) => (
+                        <div key={task.id} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg hover:bg-muted/70 transition-colors">
+                          <div className="flex-1">
+                            <p className="font-medium text-sm">{task.title}</p>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              {task.assigneeName ? `Assigned to ${task.assigneeName}` : 'Unassigned'} • 
+                              {task.priority} priority
+                            </p>
+                          </div>
+                          <Badge variant="secondary">
+                            {task.category}
+                          </Badge>
+                        </div>
+                      ))}
+                      {teamTasks.filter(t => !t.completedAt).length === 0 && (
+                        <p className="text-sm text-muted-foreground text-center py-8">No active tasks</p>
+                      )}
+                    </CardContent>
+                  </Card>
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-12">
+                <Briefcase className="mx-auto h-12 w-12 text-muted-foreground" />
+                <h3 className="mt-2 text-sm font-medium text-foreground">Select a workspace</h3>
+                <p className="mt-1 text-sm text-muted-foreground">Choose a workspace to view and manage tasks.</p>
+              </div>
+            )}
           </TabsContent>
         </Tabs>
-      ) : (
-        <div className="text-center py-16">
-          <Building2 className="mx-auto h-16 w-16 text-muted-foreground" />
-          <h3 className="mt-4 text-xl font-semibold text-foreground">Select a team</h3>
-          <p className="mt-2 text-muted-foreground">Choose a team from the dropdown above to get started.</p>
-        </div>
       )}
 
       {/* Team Invite Dialog */}
@@ -1311,49 +1296,6 @@ export default function TeamDashboard() {
           teamName={currentTeam.name}
           onInviteSent={handleInviteMembers}
         />
-      )}
-
-      {/* Member Role Change Dialog */}
-      {selectedMember && (
-        <Dialog open={!!selectedMember} onOpenChange={() => setSelectedMember(null)}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Change Member Role</DialogTitle>
-              <DialogDescription>
-                Update the role for {selectedMember.userName || selectedMember.userId}
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4 pt-4">
-              <div className="space-y-3">
-                {Object.entries(roleConfig).map(([role, config]) => {
-                  if (role === 'owner') return null; // Can't change to owner
-                  
-                  const IconComponent = config.icon;
-                  return (
-                    <div 
-                      key={role}
-                      className={`p-4 border rounded-lg cursor-pointer transition-colors hover:bg-muted/50 ${
-                        selectedMember.role === role ? 'border-primary bg-primary/10' : ''
-                      }`}
-                      onClick={async () => {
-                        await updateTeamMemberRole(selectedMember.id, role as TeamRole);
-                        setSelectedMember(null);
-                      }}
-                    >
-                      <div className="flex items-center space-x-3">
-                        <IconComponent className="h-5 w-5" />
-                        <div>
-                          <h4 className="font-medium">{config.label}</h4>
-                          <p className="text-sm text-muted-foreground">{config.description}</p>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </DialogContent>
-        </Dialog>
       )}
     </div>
   );
