@@ -80,7 +80,7 @@ const settingsItems = [
   }
 ];
 
-function SettingsPageInner() {
+function SettingsPageContent() {
   const searchParams = useSearchParams();
   const [currentSetting, setCurrentSetting] = useState(searchParams.get('section') || 'overview');
 
@@ -219,7 +219,7 @@ export default function SettingsPageWrapper(props: any) {
   return (
     <NotificationProvider>
       <Suspense fallback={<SettingsSkeleton />}>
-        <SettingsPageInner {...props} />
+        <SettingsPageContent {...props} />
       </Suspense>
     </NotificationProvider>
   );

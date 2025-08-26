@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode, useRef } from 'react';
 import type { Task, Accomplishment, TaskCategory, TaskDuration, TimeOfDay, Note } from '@/lib/types';
-import { taskService, accomplishmentService, userSettingsService } from '@/lib/firestore';
+import { taskService, accomplishmentService, userSettingsService, notificationService } from '@/lib/firestore';
 import { useAuth } from './auth-context';
 import { useToast } from '@/hooks/use-toast';
 import { useNotifications } from './notification-context';
@@ -243,8 +243,16 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
 
   const deleteTask = useCallback(async (id: string) => {
     try {
+      // Delete the task and its subtasks
       await taskService.deleteTask(id);
       await taskService.deleteTasksWithParentId(id);
+      
+      // Delete all related notifications
+      if (user?.email) {
+        await notificationService.deleteNotificationsByTaskId(user.email, id);
+      }
+      
+      // Update UI state
       setTasks(prev => prev.filter(t => t.id !== id && t.parentId !== id));
     } catch (error) {
       console.error('Error deleting task:', error);
@@ -254,7 +262,7 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
         variant: "destructive",
       });
     }
-  }, [toast]);
+  }, [toast, user?.email]);
   
   const acceptTask = useCallback(async (id: string, options?: { showNotification?: boolean; onComplete?: () => void }) => {
     const task = tasks.find(t => t.id === id);
@@ -271,15 +279,17 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
       });
       return;
     }
-    
+
     // Handle recurrence
     if (task.recurrence && task.recurrence.frequency !== 'none') {
         const now = new Date();
         if (task.recurrence.endDate && now.getTime() > task.recurrence.endDate) {
-                    // End date is passed, just complete the task without rescheduling
-         await updateTask(id, { completedAt: Date.now() });
-         options?.onComplete?.();
-         return;
+            // End date is passed, just complete the task without rescheduling
+            await updateTask(id, { completedAt: Date.now() });
+            // Delete notifications for this completed task
+            await notificationService.deleteNotificationsByTaskId(user.email, id);
+            options?.onComplete?.();
+            return;
         }
 
         const reminderDate = task.reminderAt ? new Date(task.reminderAt) : new Date();
@@ -302,6 +312,8 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
         // If next date is past the end date, complete without rescheduling
         if (task.recurrence.endDate && nextReminderDate.getTime() > task.recurrence.endDate) {
             await updateTask(id, { completedAt: Date.now() });
+            // Delete notifications for this completed task
+            await notificationService.deleteNotificationsByTaskId(user.email, id);
             options?.onComplete?.();
             return;
         }
@@ -322,6 +334,9 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
         // Batch operation: complete old task, add new one
         await taskService.completeAndReschedule(task.id, user.email, newTaskData);
 
+        // Delete notifications for the completed task
+        await notificationService.deleteNotificationsByTaskId(user.email, id);
+
         // UI update
         setTasks(prev => {
             const completed = prev.map(t => t.id === id ? { ...t, completedAt: Date.now() } as Task : t);
@@ -337,6 +352,8 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
     } else {
         // Not a recurring task
         await updateTask(id, { completedAt: Date.now() });
+        // Delete notifications for this completed task
+        await notificationService.deleteNotificationsByTaskId(user.email, id);
         options?.onComplete?.();
     }
   }, [tasks, updateTask, toast, user?.email]);

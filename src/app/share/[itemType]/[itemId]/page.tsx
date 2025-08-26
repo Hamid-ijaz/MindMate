@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, Suspense } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -44,7 +44,7 @@ interface SharedContentPageProps {
   };
 }
 
-export default function SharedContentPage() {
+function SharedContentContent() {
   const params = useParams();
   const searchParams = useSearchParams();
   const { user } = useAuth();
@@ -950,5 +950,25 @@ export default function SharedContentPage() {
         />
       )}
     </div>
+  );
+}
+
+export default function SharedContentPage() {
+  return (
+    <Suspense fallback={
+      <div className="container max-w-5xl mx-auto py-8 px-4">
+        <Card className="border shadow-md">
+          <CardHeader className="pb-4 space-y-1">
+            <CardTitle className="text-xl">Loading shared content...</CardTitle>
+            <CardDescription>Please wait</CardDescription>
+          </CardHeader>
+          <CardContent className="flex justify-center py-8">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          </CardContent>
+        </Card>
+      </div>
+    }>
+      <SharedContentContent />
+    </Suspense>
   );
 }

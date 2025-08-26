@@ -17,6 +17,7 @@ import {
   limit,
   startAfter,
   DocumentSnapshot,
+  DocumentReference,
   increment
 } from 'firebase/firestore';
 import { db } from './firebase';
@@ -1270,6 +1271,55 @@ export const notificationService = {
   async deleteNotification(userEmail: string, notificationId: string): Promise<void> {
     const notificationRef = doc(db, `users/${userEmail}/notifications`, notificationId);
     await deleteDoc(notificationRef);
+  },
+
+  // Delete notifications by taskId
+  async deleteNotificationsByTaskId(userEmail: string, taskId: string): Promise<void> {
+    if (!userEmail || !taskId) return;
+    
+    const notificationsRef = collection(db, `users/${userEmail}/notifications`);
+    
+    // First query: check relatedTaskId field
+    const relatedTaskQuery = query(
+      notificationsRef, 
+      where('relatedTaskId', '==', taskId)
+    );
+    
+    // Second query: check data.taskId field
+    const dataTaskIdQuery = query(
+      notificationsRef, 
+      where('data.taskId', '==', taskId)
+    );
+    
+    try {
+      // Execute both queries
+      const [relatedTaskSnapshot, dataTaskIdSnapshot] = await Promise.all([
+        getDocs(relatedTaskQuery),
+        getDocs(dataTaskIdQuery)
+      ]);
+      
+      if (relatedTaskSnapshot.empty && dataTaskIdSnapshot.empty) {
+        return; // No notifications to delete
+      }
+      
+      // Combine results, avoiding duplicates
+      const toDelete = new Set<DocumentReference>();
+      relatedTaskSnapshot.docs.forEach(doc => toDelete.add(doc.ref));
+      dataTaskIdSnapshot.docs.forEach(doc => toDelete.add(doc.ref));
+      
+      // Delete in batch
+      if (toDelete.size > 0) {
+        const batch = writeBatch(db);
+        toDelete.forEach(docRef => {
+          batch.delete(docRef);
+        });
+        await batch.commit();
+        console.log(`Deleted ${toDelete.size} notifications for task ${taskId}`);
+      }
+    } catch (error) {
+      console.error('Error deleting notifications by taskId:', error);
+      throw error;
+    }
   },
 
   // Clear all notifications

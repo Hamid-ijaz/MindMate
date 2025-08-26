@@ -73,7 +73,7 @@ export function SubtaskList({
     setCompletingSubtasks(prev => new Set(prev).add(subtaskId));
     try {
       await acceptTask(subtaskId);
-      await deleteNotification(subtaskId);
+      // Notification deletion is now handled in acceptTask
       toast({
         title: "Subtask completed!",
         description: "Great job! The subtask has been marked as complete"
