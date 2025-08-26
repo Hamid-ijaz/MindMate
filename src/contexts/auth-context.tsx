@@ -75,6 +75,25 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       await userService.createUser(newUser);
       setUser(newUser);
       Cookies.set(AUTH_COOKIE_KEY, newUser.email, { expires: 7, path: '/' });
+      
+      // Send welcome email
+      try {
+        await fetch('/api/email/welcome', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            userEmail: newUser.email,
+            userName: newUser.name,
+            action: 'welcome',
+          }),
+        });
+      } catch (emailError) {
+        console.error('Failed to send welcome email:', emailError);
+        // Don't fail signup if email fails
+      }
+      
       return true;
     } catch (error) {
       console.error('Error during signup:', error);

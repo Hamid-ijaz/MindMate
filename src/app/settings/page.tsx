@@ -1,522 +1,217 @@
-
 "use client";
 
-import { useState, useEffect, Suspense } from 'react';
+import { Suspense, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { motion } from 'framer-motion';
-import { useForm, useFieldArray } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
-import { useAuth } from '@/contexts/auth-context';
-import { useTasks } from '@/contexts/task-context';
-import { useNotifications } from '@/contexts/notification-context';
-import { useToast } from '@/hooks/use-toast';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from '@/components/ui/form';
+import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { NotificationProvider } from '@/contexts/notification-context';
+import { Settings, User, Palette, Bell, Smartphone, Shield, ArrowLeft, Mail } from 'lucide-react';
+import { ProfileSettings } from '@/components/settings/profile-settings';
+import { ThemeSettings } from '@/components/settings/theme-settings';
 import { NotificationSettings } from '@/components/notification-settings';
-import { CalendarConnections } from '@/components/calendar-connections';
-import { ThemePicker } from '@/components/theme-picker';
-import { PWASettings } from '@/components/pwa-settings';
-import { Trash2, Plus, Bell, BellOff, Palette } from 'lucide-react';
-import { Separator } from "@/components/ui/separator";
-import { Loader2 } from "lucide-react";
-import { pageVariants, cardVariants, staggerContainer } from '@/lib/animations';
-
-const profileSchema = z.object({
-  firstName: z.string().min(2, "First name is required"),
-  lastName: z.string().min(2, "Last name is required"),
-  email: z.string().email(),
-});
-
-const taskSettingsSchema = z.object({
-    categories: z.array(z.object({ value: z.string().min(1, "Category cannot be empty") })),
-    durations: z.array(z.object({ value: z.coerce.number().min(1, "Duration must be at least 1") }))
-});
+import { TaskCategorySettings } from '@/components/settings/task-category-settings';
+import { PWASettings } from '@/components/settings/pwa-settings';
+import { AdminSettings } from '@/components/settings/admin-settings';
+import { EmailPreferencesSettings } from '@/components/email-preferences-settings';
 
 function SettingsSkeleton() {
   return (
-    <div className="grid gap-8">
-      <Card>
-        <CardHeader>
-          <CardTitle>My Profile</CardTitle>
-          <CardDescription>Update your personal information.</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Skeleton className="h-4 w-20" />
-              <Skeleton className="h-10 w-full" />
-            </div>
-            <div className="space-y-2">
-              <Skeleton className="h-4 w-20" />
-              <Skeleton className="h-10 w-full" />
-            </div>
-          </div>
-          <div className="space-y-2">
-            <Skeleton className="h-4 w-12" />
-            <Skeleton className="h-10 w-full" />
-          </div>
-          <div className="flex justify-end">
-            <Skeleton className="h-10 w-28" />
-          </div>
-        </CardContent>
-      </Card>
-       <Card>
-        <CardHeader>
-          <CardTitle>Task Settings</CardTitle>
-          <CardDescription>Customize the categories and durations available when creating tasks.</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-           <div className="space-y-2">
-              <Skeleton className="h-4 w-32" />
-              <Skeleton className="h-10 w-full" />
-              <Skeleton className="h-10 w-full" />
-            </div>
-        </CardContent>
-      </Card>
-      <Card>
-        <CardHeader>
-          <CardTitle>Theme & Appearance</CardTitle>
-          <CardDescription>Customize the look and feel of your workspace.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center justify-between">
-            <div className="space-y-1">
-              <Skeleton className="h-4 w-24" />
-              <Skeleton className="h-3 w-48" />
-            </div>
-            <Skeleton className="h-10 w-10" />
-          </div>
-        </CardContent>
-      </Card>
+    <div className="p-4 space-y-4 max-w-4xl mx-auto">
+      <Skeleton className="h-8 w-48" />
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        {Array.from({ length: 6 }).map((_, i) => (
+          <Skeleton key={i} className="h-24 w-full" />
+        ))}
+      </div>
     </div>
   );
 }
 
-import { NotificationProvider } from '@/contexts/notification-context';
+const settingsItems = [
+  {
+    id: 'profile',
+    title: 'Profile',
+    description: 'Personal information',
+    icon: User,
+    component: ProfileSettings
+  },
+  {
+    id: 'theme',
+    title: 'Theme',
+    description: 'Appearance settings',
+    icon: Palette,
+    component: ThemeSettings
+  },
+  {
+    id: 'notifications',
+    title: 'Notifications',
+    description: 'Alert preferences',
+    icon: Bell,
+    component: NotificationSettings
+  },
+  {
+    id: 'email',
+    title: 'Email Preferences',
+    description: 'Email notifications and settings',
+    icon: Mail,
+    component: EmailPreferencesSettings
+  },
+  {
+    id: 'tasks',
+    title: 'Task Settings',
+    description: 'Categories and durations',
+    icon: Settings,
+    component: TaskCategorySettings
+  },
+  {
+    id: 'pwa',
+    title: 'App Settings',
+    description: 'Installation and features',
+    icon: Smartphone,
+    component: PWASettings
+  },
+  {
+    id: 'admin',
+    title: 'Admin Tools',
+    description: 'Advanced options',
+    icon: Shield,
+    component: AdminSettings
+  }
+];
 
 function SettingsPageInner() {
   const searchParams = useSearchParams();
-  const { user, updateUser, loading: authLoading } = useAuth();
-  const { toast } = useToast();
-  const { taskCategories, setTaskCategories, taskDurations, setTaskDurations, isLoading: tasksLoading } = useTasks();
-  const { permission, requestPermission } = useNotifications();
-  const [isRequestingPermission, setIsRequestingPermission] = useState(false);
-  const [calendarRefreshTrigger, setCalendarRefreshTrigger] = useState(0);
-  const [isAdmin, setIsAdmin] = useState(false);
+  const [currentSetting, setCurrentSetting] = useState(searchParams.get('section') || 'overview');
 
-  const isLoading = authLoading || tasksLoading;
+  const CurrentComponent = settingsItems.find(item => item.id === currentSetting)?.component;
 
-  const profileForm = useForm<z.infer<typeof profileSchema>>({
-    resolver: zodResolver(profileSchema),
-    defaultValues: {
-      firstName: "",
-      lastName: "",
-      email: "",
-    },
-  });
+  if (currentSetting === 'overview' || !CurrentComponent) {
+    return (
+      <div className="min-h-screen bg-background">
+        {/* Mobile Header */}
+        <div className="lg:hidden sticky top-0 z-10 bg-background border-b px-4 py-3">
+          <div className="flex items-center gap-3">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => window.history.back()}
+              className="p-1 h-8 w-8 min-w-8"
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </Button>
+            <div className="flex-1 min-w-0">
+              <h1 className="text-lg font-semibold truncate">Settings</h1>
+            </div>
+          </div>
+        </div>
 
-  const taskSettingsForm = useForm<z.infer<typeof taskSettingsSchema>>({
-      resolver: zodResolver(taskSettingsSchema),
-      defaultValues: {
-          categories: [],
-          durations: [],
-      }
-  });
-  
-  const { isSubmitting: isProfileSubmitting } = profileForm.formState;
-  const { isSubmitting: isTaskSettingsSubmitting } = taskSettingsForm.formState;
+        <div className="max-w-6xl mx-auto p-4 space-y-6">
+          {/* Header */}
+          <div className="text-center space-y-2 py-6 hidden lg:block">
+            <div className="flex justify-center mb-4">
+              <div className="p-3 bg-primary/10 rounded-full">
+                <Settings className="h-8 w-8 text-primary" />
+              </div>
+            </div>
+            <h1 className="text-3xl font-bold">Settings</h1>
+            <p className="text-muted-foreground">Manage your preferences</p>
+          </div>
 
-  useEffect(() => {
-    if (!isLoading && user) {
-        profileForm.reset({
-          firstName: user.firstName,
-          lastName: user.lastName,
-          email: user.email,
-        });
-        setIsAdmin(user.email === "hamid.ijaz91@gmail.com");
-
-    }
-  }, [isLoading, user, profileForm]);
-
-  useEffect(() => {
-     if (!isLoading) {
-        taskSettingsForm.reset({
-          categories: taskCategories.map(c => ({ value: c })),
-          durations: taskDurations.map(d => ({ value: d })),
-        });
-     }
-  }, [isLoading, taskCategories, taskDurations, taskSettingsForm]);
-
-  // Handle OAuth callback parameters
-  useEffect(() => {
-    const success = searchParams.get('success');
-    const error = searchParams.get('error');
-    const googleConnected = searchParams.get('google_connected');
-    const googleEmail = searchParams.get('google_email');
-    
-    if (success === 'google_calendar_connected' || googleConnected === 'true') {
-      toast({
-        title: "Connected Successfully",
-        description: `Google Calendar has been connected to your account${googleEmail ? ` (${decodeURIComponent(googleEmail)})` : ''}.`,
-      });
-      setCalendarRefreshTrigger(prev => prev + 1);
-      
-      // If we get the google_connected=true format, trigger a manual refresh
-      if (googleConnected === 'true') {
-        // Force refresh the calendar settings after a short delay
-        setTimeout(() => {
-          setCalendarRefreshTrigger(prev => prev + 1);
-        }, 1000);
-      }
-      
-      // Clean up URL parameters
-      window.history.replaceState({}, '', '/settings');
-    } else if (error) {
-      let errorMessage = "An error occurred.";
-      switch (error) {
-        case 'google_calendar_denied':
-          errorMessage = "Google Calendar access was denied.";
-          break;
-        case 'google_calendar_no_code':
-          errorMessage = "Authorization code was not received.";
-          break;
-        case 'google_calendar_connection_failed':
-          errorMessage = "Failed to connect to Google Calendar.";
-          break;
-      }
-      toast({
-        title: "Connection Failed",
-        description: errorMessage,
-        variant: "destructive",
-      });
-      // Clean up URL parameters
-      window.history.replaceState({}, '', '/settings');
-    }
-  }, [searchParams, toast]);
-
-
-  const { fields: categoryFields, append: appendCategory, remove: removeCategory } = useFieldArray({
-      control: taskSettingsForm.control,
-      name: "categories"
-  });
-  
-  const { fields: durationFields, append: appendDuration, remove: removeDuration } = useFieldArray({
-      control: taskSettingsForm.control,
-      name: "durations"
-  });
-
-
-  const onProfileSubmit = async (data: z.infer<typeof profileSchema>) => {
-    try {
-      await updateUser(data);
-      toast({ title: "Profile Updated", description: "Your information has been saved." });
-    } catch (error) {
-      toast({ 
-        title: "Update Failed", 
-        description: "Failed to update profile. Please try again.",
-        variant: "destructive"
-      });
-    }
-  };
-
-  const onTaskSettingsSubmit = async (data: z.infer<typeof taskSettingsSchema>) => {
-    const newCategories = data.categories.map(c => c.value);
-    const newDurations = data.durations.map(d => d.value).sort((a, b) => a - b);
-    
-    await setTaskCategories(newCategories as [string, ...string[]]);
-    await setTaskDurations(newDurations as [number, ...number[]]);
-
-    toast({ title: "Task Settings Saved", description: "Your custom categories and durations have been updated." });
-  };
-  
-  const handleRequestPermission = async () => {
-    setIsRequestingPermission(true);
-    await requestPermission();
-    setIsRequestingPermission(false);
+          {/* Settings Grid */}
+          <div className="grid gap-4 md:gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            {settingsItems.map((item) => {
+              const Icon = item.icon;
+              return (
+                <Card 
+                  key={item.id}
+                  className="cursor-pointer hover:shadow-md transition-shadow duration-200"
+                  onClick={() => setCurrentSetting(item.id)}
+                >
+                  <CardHeader className="pb-3">
+                    <div className="flex items-center space-x-3">
+                      <div className="p-2 bg-primary/10 rounded-lg">
+                        <Icon className="h-5 w-5 text-primary" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <CardTitle className="text-base">{item.title}</CardTitle>
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="pt-0">
+                    <CardDescription className="text-sm leading-relaxed">
+                      {item.description}
+                    </CardDescription>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    );
   }
 
-  useEffect(() => {
-    setIsAdmin(user?.email === "hamid.ijaz91@gmail.com");
-  }, [user]);
-  const [adminLoading, setAdminLoading] = useState(false);
-  const handleAdminPost = async () => {
-    // setAdminLoading(true);
-    try {
-      toast({ title: "POST Sending", description: "Comprehensive check POST request sent." });
-      const res = await fetch("/api/notifications/comprehensive-check", { method: "POST" });
-      // setAdminLoading(false);
-      if (res.ok) {
-        toast({ title: "POST Success", description: "Comprehensive check POST request sent." });
-      } else {
-        toast({ title: "POST Failed", description: "Request failed.", variant: "destructive" });
-      }
-    } catch (e) {
-      toast({ title: "POST Error", description: "An error occurred.", variant: "destructive" });
-    }
-  };
-  const handleAdminDelete = async () => {
-    setAdminLoading(true);
-    try {
-      const res = await fetch("/api/notifications/comprehensive-check", { method: "DELETE" });
-      if (res.ok) {
-        toast({ title: "DELETE Success", description: "Comprehensive check DELETE request sent." });
-      } else {
-        toast({ title: "DELETE Failed", description: "Request failed.", variant: "destructive" });
-      }
-    } catch (e) {
-      toast({ title: "DELETE Error", description: "An error occurred.", variant: "destructive" });
-    }
-    setAdminLoading(false);
-  };
+  const currentItem = settingsItems.find(item => item.id === currentSetting);
 
   return (
-    <motion.div 
-      className="container mx-auto max-w-4xl py-8 md:py-12 px-4"
-      variants={pageVariants}
-      initial="initial"
-      animate="animate"
-      exit="exit"
-    >
-      <motion.div className="mb-8" variants={cardVariants}>
-        <h1 className="text-3xl font-bold tracking-tighter sm:text-4xl">Settings</h1>
-        <p className="mt-2 text-muted-foreground">Manage your account and application settings.</p>
-      </motion.div>
+    <div className="min-h-screen bg-background">
+      {/* Mobile Header */}
+      <div className="lg:hidden sticky top-0 z-10 bg-background border-b px-4 py-3">
+        <div className="flex items-center gap-3">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setCurrentSetting('overview')}
+            className="p-1 h-8 w-8 min-w-8"
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+          <div className="flex-1 min-w-0">
+            <h1 className="text-lg font-semibold truncate">{currentItem?.title}</h1>
+            <p className="text-sm text-muted-foreground truncate">{currentItem?.description}</p>
+          </div>
+        </div>
+      </div>
 
-      {isAdmin && (
-        <motion.div variants={cardVariants}>
-          <Card className="mb-8 border-2 border-red-500">
-            <CardHeader>
-              <CardTitle>Admin Section</CardTitle>
-              <CardDescription>Developer tools for admin only</CardDescription>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-4">
-              <Button variant="destructive" onClick={handleAdminPost} disabled={adminLoading}>
-                Send POST to /api/notifications/comprehensive-check
-              </Button>
-              <Button variant="outline" onClick={handleAdminDelete} disabled={adminLoading}>
-                Send DELETE to /api/notifications/comprehensive-check
-              </Button>
-            </CardContent>
-          </Card>
-        </motion.div>
-      )}
+      <div className="max-w-4xl mx-auto p-4 space-y-6">
+        {/* Back Button and Header - Desktop */}
+        <div className="border-b pb-4 mb-6 hidden lg:block">
+          {/* Back Button */}
+          <div className="mb-4">
+            <Button 
+              variant="outline" 
+              size="sm"
+              className="flex items-center gap-1 text-sm px-3 py-1 h-auto"
+              onClick={() => setCurrentSetting('overview')}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+                <path d="m15 18-6-6 6-6"/>
+              </svg>
+              Back to Settings
+            </Button>
+          </div>
 
-      {isLoading ? (
-        <SettingsSkeleton />
-      ) : (
-        <motion.div 
-          className="grid gap-8"
-          variants={staggerContainer}
-          initial="initial"
-          animate="animate"
-        >
-            <motion.div variants={cardVariants}>
-              <Card>
-                <CardHeader>
-                    <CardTitle>My Profile</CardTitle>
-                    <CardDescription>Update your personal information.</CardDescription>
-                </CardHeader>
-              <CardContent>
-                  <Form {...profileForm}>
-                  <form onSubmit={profileForm.handleSubmit(onProfileSubmit)} className="space-y-4">
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <FormField
-                          control={profileForm.control}
-                          name="firstName"
-                          render={({ field }) => (
-                              <FormItem>
-                              <FormLabel>First Name</FormLabel>
-                              <FormControl><Input {...field} /></FormControl>
-                              <FormMessage />
-                              </FormItem>
-                          )}
-                          />
-                          <FormField
-                          control={profileForm.control}
-                          name="lastName"
-                          render={({ field }) => (
-                              <FormItem>
-                              <FormLabel>Last Name</FormLabel>
-                              <FormControl><Input {...field} /></FormControl>
-                              <FormMessage />
-                              </FormItem>
-                          )}
-                          />
-                      </div>
-                      <FormField
-                      control={profileForm.control}
-                      name="email"
-                      render={({ field }) => (
-                          <FormItem>
-                          <FormLabel>Email</FormLabel>
-                          <FormControl><Input readOnly disabled {...field} /></FormControl>
-                          <FormMessage />
-                          </FormItem>
-                      )}
-                      />
-                      <div className="flex justify-end">
-                      <Button type="submit" disabled={isProfileSubmitting}>
-                         {isProfileSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                         Save Profile
-                      </Button>
-                      </div>
-                  </form>
-                  </Form>
-              </CardContent>
-            </Card>
-            </motion.div>
-            
-            <motion.div variants={cardVariants}>
-            <Card>
-              <CardHeader>
-                <CardTitle>Notifications</CardTitle>
-                <CardDescription>Manage how you receive reminders.</CardDescription>
-              </CardHeader>
-              <CardContent>
-                {permission === 'granted' && (
-                  <div className="flex items-center text-sm text-green-600">
-                    <Bell className="mr-2 h-4 w-4" />
-                    <span>Notifications are enabled.</span>
-                  </div>
-                )}
-                 {permission === 'denied' && (
-                  <div className="flex items-center text-sm text-destructive">
-                    <BellOff className="mr-2 h-4 w-4" />
-                    <span>Notifications are blocked. You'll need to enable them in your browser settings.</span>
-                  </div>
-                )}
-                {permission === 'default' && (
-                  <Button onClick={handleRequestPermission} disabled={isRequestingPermission}>
-                    {isRequestingPermission ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Bell className="mr-2 h-4 w-4" />}
-                    Enable Notifications
-                  </Button>
-                )}
-              </CardContent>
-            </Card>
-            </motion.div>
+          {/* Header with Icon */}
+          {currentItem && (
+            <div className="flex items-center gap-3 mt-2">
+              <div className="p-2 bg-primary/10 rounded-lg">
+                <currentItem.icon className="h-5 w-5 text-primary" />
+              </div>
+              <div>
+                <h1 className="text-xl font-bold md:text-2xl">{currentItem.title}</h1>
+                <p className="text-sm text-muted-foreground">{currentItem.description}</p>
+              </div>
+            </div>
+          )}
+        </div>
 
-            {/* Theme & Appearance Settings */}
-            <motion.div variants={cardVariants}>
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Palette className="h-5 w-5" />
-                  Theme & Appearance
-                </CardTitle>
-                <CardDescription>Customize the look and feel of your workspace.</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-1">
-                      <p className="text-sm font-medium">Theme Selector</p>
-                      <p className="text-xs text-muted-foreground">
-                        Choose between light, dark mode and different color themes
-                      </p>
-                    </div>
-                    <ThemePicker />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-            </motion.div>
-
-            <motion.div variants={cardVariants}>
-            <Card>
-                <CardHeader>
-                    <CardTitle>Task Settings</CardTitle>
-                    <CardDescription>Customize the categories and durations available when creating tasks.</CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <Form {...taskSettingsForm}>
-                        <form onSubmit={taskSettingsForm.handleSubmit(onTaskSettingsSubmit)} className="space-y-8">
-                            
-                            <div className="space-y-4">
-                                <FormLabel>Task Categories</FormLabel>
-                                <FormDescription>Add or remove the categories you use to organize tasks.</FormDescription>
-                                {categoryFields.map((field, index) => (
-                                    <FormField
-                                        key={field.id}
-                                        control={taskSettingsForm.control}
-                                        name={`categories.${index}.value`}
-                                        render={({ field }) => (
-                                            <FormItem className="flex items-center gap-2">
-                                                <FormControl><Input {...field} /></FormControl>
-                                                <Button type="button" variant="ghost" size="icon" onClick={() => removeCategory(index)}>
-                                                    <Trash2 className="text-destructive"/>
-                                                </Button>
-                                            </FormItem>
-                                        )}
-                                    />
-                                ))}
-                                <Button type="button" variant="outline" size="sm" onClick={() => appendCategory({ value: '' })}>
-                                    <Plus className="mr-2"/> Add Category
-                                </Button>
-                            </div>
-                            
-                            <Separator />
-
-                            <div className="space-y-4">
-                                <FormLabel>Task Durations (in minutes)</FormLabel>
-                                <FormDescription>Set the time estimates you want to assign to tasks.</FormDescription>
-                                {durationFields.map((field, index) => (
-                                    <FormField
-                                        key={field.id}
-                                        control={taskSettingsForm.control}
-                                        name={`durations.${index}.value`}
-                                        render={({ field }) => (
-                                            <FormItem className="flex items-center gap-2">
-                                                <FormControl><Input type="number" {...field} /></FormControl>
-                                                <Button type="button" variant="ghost" size="icon" onClick={() => removeDuration(index)}>
-                                                    <Trash2 className="text-destructive"/>
-                                                </Button>
-                                            </FormItem>
-                                        )}
-                                    />
-                                ))}
-                                <Button type="button" variant="outline" size="sm" onClick={() => appendDuration({ value: 0 })}>
-                                    <Plus className="mr-2"/> Add Duration
-                                </Button>
-                            </div>
-
-                            <div className="flex justify-end">
-                                <Button type="submit" disabled={isTaskSettingsSubmitting}>
-                                    {isTaskSettingsSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                    Save Task Settings
-                                </Button>
-                            </div>
-                        </form>
-                    </Form>
-                </CardContent>
-            </Card>
-            </motion.div>
-
-            <motion.div variants={cardVariants}>
-              <NotificationSettings />
-            </motion.div>
-
-            <motion.div variants={cardVariants}>
-              <PWASettings />
-            </motion.div>
-
-            {/* <motion.div variants={cardVariants}>
-              <Card>
-                <CardHeader>
-                  <CardTitle>Calendar Integration</CardTitle>
-                  <CardDescription>Connect external calendars to sync your tasks and events.</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <CalendarConnections key={calendarRefreshTrigger} />
-                </CardContent>
-              </Card>
-            </motion.div> */}
-        </motion.div>
-      )}
-    </motion.div>
+        {/* Settings Content */}
+        <div className="pb-16">
+          {CurrentComponent && <CurrentComponent />}
+        </div>
+      </div>
+    </div>
   );
 }
 

@@ -8,9 +8,11 @@ export function middleware(request: NextRequest) {
 
 const isAuthPage =
     pathname === '/login' ||
-    pathname === '/signup';
-    
-  const isPublicPage = 
+    pathname === '/signup' ||
+    pathname === '/reset-password' ||
+    pathname === '/forgot-password';
+
+  const isPublicPage =
     isAuthPage ||
     pathname.startsWith('/share');
   // If user is authenticated
