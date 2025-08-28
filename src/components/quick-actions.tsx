@@ -15,7 +15,7 @@ import { useAuth } from '@/contexts/auth-context';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { motion } from 'framer-motion';
-import type { Priority, TaskCategory, TaskDuration, TimeOfDay } from '@/lib/types';
+import type { Priority, TaskCategory, TaskDuration } from '@/lib/types';
 
 const QUICK_TASK_TEMPLATES = [
   {
@@ -24,7 +24,6 @@ const QUICK_TASK_TEMPLATES = [
     category: "Personal" as TaskCategory,
     duration: 15 as TaskDuration,
     priority: "Low" as Priority,
-    timeOfDay: "Afternoon" as TimeOfDay,
   },
   {
     icon: BookOpen,
@@ -32,7 +31,6 @@ const QUICK_TASK_TEMPLATES = [
     category: "Study" as TaskCategory,
     duration: 30 as TaskDuration,
     priority: "Medium" as Priority,
-    timeOfDay: "Evening" as TimeOfDay,
   },
   {
     icon: Dumbbell,
@@ -40,7 +38,6 @@ const QUICK_TASK_TEMPLATES = [
     category: "Personal" as TaskCategory,
     duration: 15 as TaskDuration,
     priority: "High" as Priority,
-    timeOfDay: "Morning" as TimeOfDay,
   },
   {
     icon: Lightbulb,
@@ -48,7 +45,6 @@ const QUICK_TASK_TEMPLATES = [
     category: "Work" as TaskCategory,
     duration: 30 as TaskDuration,
     priority: "Medium" as Priority,
-    timeOfDay: "Morning" as TimeOfDay,
   },
 ];
 
@@ -66,7 +62,6 @@ export function QuickActions({ className }: QuickActionsProps) {
     category: 'Work' as TaskCategory,
     duration: 30 as TaskDuration,
     priority: 'Medium' as Priority,
-    timeOfDay: 'Morning' as TimeOfDay,
   });
   const [isLoading, setIsLoading] = useState(false);
 
@@ -80,7 +75,6 @@ export function QuickActions({ className }: QuickActionsProps) {
         category: template.category,
         duration: template.duration,
         priority: template.priority,
-        timeOfDay: template.timeOfDay,
         userEmail: user.email,
       });
 
@@ -119,7 +113,6 @@ export function QuickActions({ className }: QuickActionsProps) {
         category: 'Work',
         duration: 30,
         priority: 'Medium',
-        timeOfDay: 'Morning',
       });
       setIsAddingCustom(false);
     } catch (error) {

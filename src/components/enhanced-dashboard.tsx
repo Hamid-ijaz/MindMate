@@ -45,7 +45,7 @@ import {
 } from "lucide-react";
 import { format, isToday, startOfDay, endOfDay, addDays, subDays, differenceInDays } from "date-fns";
 import { cn } from "@/lib/utils";
-import type { Task, Note, TaskCategory, Priority, TaskDuration, TimeOfDay } from "@/lib/types";
+import type { Task, Note, TaskCategory, Priority, TaskDuration } from "@/lib/types";
 
 // Weather API integration
 const useWeatherData = () => {
@@ -172,7 +172,6 @@ const getTaskSuggestions = (timeInfo: any, weather: any, energyLevel: number) =>
     category: 'Work',
     priority: 'Medium',
     duration: 20,
-    timeOfDay: 'Morning',
     icon: <BookOpen className="w-4 h-4" />,
     reason: 'Perfect for high energy morning time'
   },
@@ -183,7 +182,6 @@ const getTaskSuggestions = (timeInfo: any, weather: any, energyLevel: number) =>
     category: 'Health',
     priority: 'Low',
     duration: 30,
-    timeOfDay: 'Afternoon',
     icon: <Globe className="w-4 h-4" />,
     reason: weather.condition === 'sunny' ? 'Great weather for outdoor activity' : 'Good for mental clarity'
   },
@@ -194,7 +192,6 @@ const getTaskSuggestions = (timeInfo: any, weather: any, energyLevel: number) =>
     category: 'Work',
     priority: 'High',
     duration: 90,
-    timeOfDay: timeInfo.energy === 'high' ? 'Morning' : 'Afternoon',
     icon: <Rocket className="w-4 h-4" />,
     reason: energyLevel > 70 ? 'High energy level detected' : 'Good for sustained focus'
   },
@@ -205,7 +202,6 @@ const getTaskSuggestions = (timeInfo: any, weather: any, energyLevel: number) =>
     category: 'Work',
     priority: 'Medium',
     duration: 15,
-    timeOfDay: 'Afternoon',
     icon: <Users className="w-4 h-4" />,
     reason: 'Good time for team collaboration'
   },
@@ -216,7 +212,6 @@ const getTaskSuggestions = (timeInfo: any, weather: any, energyLevel: number) =>
     category: 'Personal',
     priority: 'Medium',
     duration: 25,
-    timeOfDay: 'Evening',
     icon: <Compass className="w-4 h-4" />,
     reason: timeInfo.energy === 'low' ? 'Perfect evening activity' : 'Great for reflection'
   }
@@ -328,7 +323,6 @@ export default function EnhancedDashboard() {
         category: (taskCategories[0] || "Personal") as TaskCategory,
         priority: "Medium" as Priority,
         duration: 30 as TaskDuration,
-        timeOfDay: "Morning" as TimeOfDay,
         createdAt: Date.now(),
         rejectionCount: 0,
         isMuted: false,
@@ -481,14 +475,6 @@ export default function EnhancedDashboard() {
   // Task suggestions
   const taskSuggestions = useMemo(() => {
     return getTaskSuggestions(timeInfo, weather, energyLevel)
-      .filter(suggestion => {
-        // Filter based on current time
-        const currentHour = new Date().getHours();
-        if (suggestion.timeOfDay === 'Morning' && currentHour >= 12) return false;
-        if (suggestion.timeOfDay === 'Afternoon' && (currentHour < 12 || currentHour >= 17)) return false;
-        if (suggestion.timeOfDay === 'Evening' && currentHour < 17) return false;
-        return true;
-      })
       .slice(0, 4);
   }, [timeInfo, weather, energyLevel]);
 
@@ -714,7 +700,6 @@ export default function EnhancedDashboard() {
         category: 'Work',
         priority: 'Medium',
         duration: 30,
-        timeOfDay: timeInfo.energy === 'high' ? 'Morning' : 'Afternoon'
       });
       setNewTaskText("");
     }

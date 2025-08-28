@@ -1,7 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode, useRef } from 'react';
-import type { Task, Accomplishment, TaskCategory, TaskDuration, TimeOfDay, Note } from '@/lib/types';
+import type { Task, Accomplishment, TaskCategory, TaskDuration, Note } from '@/lib/types';
 import { taskService, accomplishmentService, userSettingsService, notificationService } from '@/lib/firestore';
 import { useAuth } from './auth-context';
 import { useToast } from '@/hooks/use-toast';
@@ -167,7 +167,6 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
         category: taskData.category,
         priority: 'Low', // Default to low priority
         duration: 15, // Default to 15 mins
-        timeOfDay: taskData.timeOfDay,
         userEmail: user.email, // Add missing userEmail
       }));
     }

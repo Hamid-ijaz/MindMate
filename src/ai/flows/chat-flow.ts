@@ -20,7 +20,6 @@ const TaskSchema = z.object({
   category: z.string(),
   energyLevel: z.enum(['Low', 'Medium', 'High']),
   duration: z.number(),
-  timeOfDay: z.enum(['Morning', 'Afternoon', 'Evening']),
   completedAt: z.number().optional(),
   parentId: z.string().optional(),
   priority: z.enum(['Low', 'Medium', 'High', 'Critical']).optional(),
@@ -62,7 +61,6 @@ const SuggestedTaskSchema = z.object({
     category: z.string().optional().describe("Suggested category for the task."),
     priority: z.enum(['Low', 'Medium', 'High', 'Critical']).optional().describe("Suggested priority level."),
     duration: z.number().optional().describe("Estimated duration in minutes."),
-    timeOfDay: z.enum(['Morning', 'Afternoon', 'Evening']).optional().describe("Suggested time of day."),
 });
 
 const QuickActionSchema = z.object({
@@ -105,7 +103,7 @@ const prompt = ai.definePrompt({
 ### Current Tasks ({{context.tasks.length}} total):
 {{#if context.tasks}}
   {{#each context.tasks}}
-    - **{{this.title}}** ({{this.category}}, {{this.priority}} priority, {{this.duration}} mins, {{this.timeOfDay}})
+    - **{{this.title}}** ({{this.category}}, {{this.priority}} priority, {{this.duration}} mins)
       {{#if this.description}}Description: {{this.description}}{{/if}}
       {{#if this.completedAt}}✅ Completed{{else}}⏳ Pending{{/if}}
       {{#if this.parentId}}└─ Subtask{{/if}}

@@ -190,7 +190,6 @@ function SharedContentContent() {
       if (taskData.category && taskData.category !== originalTask.category) changedFields.push('category');
       if (taskData.priority && taskData.priority !== originalTask.priority) changedFields.push('priority');
       if (taskData.duration && taskData.duration !== originalTask.duration) changedFields.push('duration');
-      if (taskData.timeOfDay && taskData.timeOfDay !== originalTask.timeOfDay) changedFields.push('timeOfDay');
       if (taskData.reminderAt !== originalTask.reminderAt) changedFields.push('reminder');
 
       // Update the task
@@ -625,7 +624,6 @@ function SharedContentContent() {
                         category: (content as Task).category,
                         priority: (content as Task).priority,
                         duration: (content as Task).duration,
-                        timeOfDay: (content as Task).timeOfDay,
                         reminderAt: (content as Task).reminderAt ? new Date((content as Task).reminderAt!) : undefined,
                         recurrence: (content as Task).recurrence ? {
                           frequency: (content as Task).recurrence!.frequency,
@@ -701,9 +699,6 @@ function SharedContentContent() {
                         <Badge variant="secondary" className="font-medium">
                           <Clock className="h-3 w-3 mr-1" />
                           {(content as Task).duration} min
-                        </Badge>
-                        <Badge variant="secondary" className="font-medium">
-                          {(content as Task).timeOfDay}
                         </Badge>
                         {(content as Task).reminderAt && (
                           <Badge variant="outline" className="font-medium">
@@ -798,7 +793,6 @@ function SharedContentContent() {
                           onFinished={() => setShowAddSubtask(false)}
                           defaultValues={{
                             category: (content as Task).category,
-                            timeOfDay: (content as Task).timeOfDay,
                           }}
                           customAddHandler={handleSubtaskAdd}
                         />

@@ -162,7 +162,6 @@ export function TimeBlockDialog({
         estimatedPomodoros,
         isTimeBlocked,
         isAllDay,
-        timeOfDay: 'Morning' // Default, could be calculated from time
       };
 
       if (scheduledTimes && !isAllDay) {

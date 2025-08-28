@@ -11,9 +11,6 @@ export const priorities: [Priority, ...Priority[]] = ['Low', 'Medium', 'High', '
 export type TaskDuration = number;
 export const taskDurations: [TaskDuration, ...TaskDuration[]] = [15, 30, 60, 90]; // Default values
 
-export type TimeOfDay = 'Morning' | 'Afternoon' | 'Evening';
-export const timesOfDay: [TimeOfDay, ...TimeOfDay[]] = ['Morning', 'Afternoon', 'Evening'];
-
 export type RecurrenceFrequency = 'none' | 'daily' | 'weekly' | 'monthly';
 export const recurrenceFrequencies: RecurrenceFrequency[] = ['none', 'daily', 'weekly', 'monthly'];
 
@@ -235,7 +232,6 @@ export interface Task {
   category: TaskCategory;
   priority: Priority;
   duration: TaskDuration;
-  timeOfDay: TimeOfDay;
   createdAt: number;
   rejectionCount: number;
   lastRejectedAt?: number;
@@ -585,7 +581,6 @@ export interface SuggestedTask {
   category?: string;
   priority?: Priority;
   duration?: number;
-  timeOfDay?: TimeOfDay;
 }
 
 export interface QuickAction {

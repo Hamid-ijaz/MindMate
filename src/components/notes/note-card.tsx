@@ -9,7 +9,7 @@ import { ShareDialog } from '@/components/share-dialog';
 import { SharingHistory } from '@/components/sharing-history';
 import { useNotes } from '@/contexts/note-context';
 import { useTasks } from '@/contexts/task-context';
-import type { TaskCategory, Priority, TaskDuration, TimeOfDay } from '@/lib/types';
+import type { TaskCategory, Priority, TaskDuration } from '@/lib/types';
 
 interface NoteCardProps {
     note: Note;
@@ -47,7 +47,6 @@ export function NoteCard({ note, onClick, className = "" }: NoteCardProps & { cl
                 category: "Personal" as TaskCategory,
                 priority: "Medium" as Priority,
                 duration: 30 as TaskDuration,
-                timeOfDay: "Morning" as TimeOfDay,
                 createdAt: Date.now(),
                 rejectionCount: 0,
                 isMuted: false,

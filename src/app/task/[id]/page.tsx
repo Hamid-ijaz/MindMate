@@ -384,10 +384,6 @@ function TaskPageInner() {
                                     <Clock className="h-3 w-3 mr-1" />
                                     {task.duration} min
                                 </Badge>
-                                <Badge variant="secondary" className="font-medium">
-                                    <Timer className="h-3 w-3 mr-1" />
-                                    {task.timeOfDay}
-                                </Badge>
                                 {task.reminderAt && (
                                     <Badge variant="outline" className="font-medium">
                                         <CalendarIcon className="h-3 w-3 mr-1" />
@@ -587,7 +583,6 @@ function TaskPageInner() {
                                                     defaultValues={{
                                                         category: task.category,
                                                         priority: task.priority,
-                                                        timeOfDay: task.timeOfDay,
                                                     }}
                                                 />
                                             </div>

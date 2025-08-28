@@ -16,7 +16,7 @@ import { useToast } from '@/hooks/use-toast';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTasks } from '@/contexts/task-context';
 import { cn } from '@/lib/utils';
-import { Priority, TimeOfDay } from '@/lib/types';
+import { Priority } from '@/lib/types';
 
 interface VoiceTaskDialogProps {
   isOpen: boolean;
@@ -218,7 +218,6 @@ export function VoiceTaskDialog({ isOpen, onClose, initialStream }: VoiceTaskDia
         category: 'Personal',
         priority: 'Medium' as Priority,
         duration: 30,
-        timeOfDay: 'Morning' as TimeOfDay
       };
       
       await addTask(taskData as any);
@@ -259,7 +258,6 @@ export function VoiceTaskDialog({ isOpen, onClose, initialStream }: VoiceTaskDia
       category: 'Personal',
       priority: 'Medium' as Priority,
       duration: 30,
-      timeOfDay: 'Morning' as TimeOfDay
     });
 
     // Close this dialog and open the task sheet

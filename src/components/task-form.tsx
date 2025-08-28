@@ -24,7 +24,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { timesOfDay, Task, Priority, TaskDuration, priorities, recurrenceFrequencies, RecurrenceFrequency } from "@/lib/types";
+import { Task, Priority, TaskDuration, priorities, recurrenceFrequencies, RecurrenceFrequency } from "@/lib/types";
 import { getDefaultPriority } from "@/lib/utils";
 // ...existing code...
 import { useState, useTransition, useEffect } from "react";
@@ -49,7 +49,6 @@ const formSchema = z.object({
   category: z.string().min(1, "Category is required."),
   priority: z.enum(priorities),
   duration: z.coerce.number().min(1, "Duration is required"),
-  timeOfDay: z.enum(timesOfDay),
   reminderAt: z.date().optional(),
   onlyNotifyAtReminder: z.boolean().optional().default(false),
   isArchived: z.boolean().optional().default(false),
@@ -134,7 +133,6 @@ export function TaskForm({ task, onFinished, parentId, defaultValues: propDefaul
     category: preFilledData?.category || taskCategories[0] || "",
     priority: preFilledData?.priority || (typeof getDefaultPriority === 'function' ? getDefaultPriority() : "Medium"),
     duration: preFilledData?.duration || taskDurations[1] || 30,
-    timeOfDay: preFilledData?.timeOfDay || "Afternoon",
     reminderAt: undefined,
     location: "",
     isAllDay: true, // Always true
@@ -163,7 +161,6 @@ export function TaskForm({ task, onFinished, parentId, defaultValues: propDefaul
         category: preFilledData?.category || taskCategories[0] || "",
         priority: preFilledData?.priority || (typeof getDefaultPriority === 'function' ? getDefaultPriority() : "Medium"),
         duration: preFilledData?.duration || taskDurations[1] || 30,
-        timeOfDay: preFilledData?.timeOfDay || "Afternoon",
         reminderAt: undefined,
         location: "",
         isAllDay: true,
@@ -203,7 +200,6 @@ export function TaskForm({ task, onFinished, parentId, defaultValues: propDefaul
             form.setValue("category", typeof result.category === 'string' ? result.category : "");
             form.setValue("priority", priorities.includes(result.priority) ? result.priority : "Medium");
             form.setValue("duration", typeof result.duration === 'number' ? result.duration : 30);
-            form.setValue("timeOfDay", timesOfDay.includes(result.timeOfDay) ? result.timeOfDay : "Afternoon");
 
             toast({
                 title: "Task Enhanced!",
@@ -483,28 +479,6 @@ export function TaskForm({ task, onFinished, parentId, defaultValues: propDefaul
                   <SelectContent>
                     {taskDurations.map((dur) => (
                       <SelectItem key={dur} value={String(dur)} className="text-sm sm:text-base">{dur} minutes</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={form.control}
-            name="timeOfDay"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel className="text-sm sm:text-base">Preferred Time of Day</FormLabel>
-                <Select onValueChange={field.onChange} value={field.value}>
-                  <FormControl>
-                    <SelectTrigger className="h-9 sm:h-10 text-sm sm:text-base">
-                      <SelectValue placeholder="When is it best to do this?" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    {timesOfDay.map((time) => (
-                      <SelectItem key={time} value={time} className="text-sm sm:text-base">{time}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>

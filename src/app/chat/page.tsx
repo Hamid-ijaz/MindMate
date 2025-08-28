@@ -217,7 +217,6 @@ export default function EnhancedChatPage() {
       category: t.category,
       energyLevel: (t.priority === 'Low' ? 'Low' : t.priority === 'High' ? 'High' : 'Medium') as 'Low' | 'Medium' | 'High',
       duration: t.duration,
-      timeOfDay: t.timeOfDay,
       completedAt: t.completedAt,
       parentId: t.parentId,
       priority: t.priority,
@@ -251,7 +250,6 @@ export default function EnhancedChatPage() {
         category: suggestedTask.category || 'Personal',
         priority: suggestedTask.priority || 'Medium',
         duration: suggestedTask.duration || 30,
-        timeOfDay: suggestedTask.timeOfDay || 'Afternoon',
         userEmail: user.email,
       });
       

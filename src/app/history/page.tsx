@@ -284,11 +284,6 @@ export default function HistoryPage() {
               <Badge variant="outline" className="text-xs">
                 ⏱️ {task.duration}m
               </Badge>
-              
-              {/* Time of day */}
-              <Badge variant="secondary" className="text-xs">
-                🕒 {task.timeOfDay}
-              </Badge>
 
               {/* Completion badge */}
               <Badge className="text-xs bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">

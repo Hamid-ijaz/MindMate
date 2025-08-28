@@ -301,11 +301,6 @@ export function TaskItem({ task, extraActions, isSubtask = false, isHistoryView 
               ⏱️ {task.duration}m
             </Badge>
             
-            {/* Time of day */}
-            <Badge variant="secondary" className="text-xs">
-              🕒 {task.timeOfDay}
-            </Badge>
-            
             {/* Reminder */}
             {task.reminderAt && (
               <Badge variant="outline" className="text-xs flex items-center gap-1">
