@@ -36,7 +36,7 @@ export async function POST(request: NextRequest) {
     const templateData = {
       sharedItemTitle,
       sharedItemType,
-      sharedByName: sharedByUser.name,
+      sharedByName: sharedByUser.firstName || 'Someone',
       sharedByEmail,
       shareLink,
       shareMessage,

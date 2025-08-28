@@ -46,9 +46,11 @@ export async function GET(request: NextRequest) {
           shareNotifications: true,
           teamInvitations: true,
           weeklyDigest: true,
+          dailyDigest: true,
           marketingEmails: false,
           reminderFrequency: 'immediate',
           digestDay: 'monday',
+          dailyDigestTime: '09:00',
           quietHours: {
             enabled: false,
             startTime: '22:00',

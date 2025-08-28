@@ -58,7 +58,7 @@ export async function POST(request: NextRequest) {
 
         const templateData = {
           teamName,
-          inviterName: inviterUser.name,
+          inviterName: inviterUser.firstName || 'Someone',
           inviteLink,
           customMessage,
           role,

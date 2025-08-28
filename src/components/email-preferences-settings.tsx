@@ -28,9 +28,11 @@ interface EmailPreferences {
   shareNotifications: boolean;
   teamInvitations: boolean;
   weeklyDigest: boolean;
+  dailyDigest: boolean;
   marketingEmails: boolean;
   reminderFrequency: 'immediate' | 'hourly' | 'daily' | 'weekly';
   digestDay: 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday' | 'sunday';
+  dailyDigestTime: string;
   quietHours: {
     enabled: boolean;
     startTime: string;
@@ -44,9 +46,11 @@ const defaultPreferences: EmailPreferences = {
   shareNotifications: true,
   teamInvitations: true,
   weeklyDigest: true,
+  dailyDigest: true,
   marketingEmails: false,
   reminderFrequency: 'immediate',
   digestDay: 'monday',
+  dailyDigestTime: '09:00',
   quietHours: {
     enabled: false,
     startTime: '22:00',
@@ -146,7 +150,7 @@ export function EmailPreferencesSettings() {
         },
         body: JSON.stringify({
           userEmail: user.email,
-          userName: user.name,
+          userName: user.firstName ? `${user.firstName} ${user.lastName || ''}`.trim() : user.email,
         }),
       });
 
@@ -266,6 +270,22 @@ export function EmailPreferencesSettings() {
 
               <div className="flex items-center justify-between">
                 <div>
+                  <Label htmlFor="dailyDigest" className="text-sm font-medium">
+                    Daily Digest
+                  </Label>
+                  <p className="text-sm text-muted-foreground">
+                    Get a daily summary of your tasks and progress
+                  </p>
+                </div>
+                <Switch
+                  id="dailyDigest"
+                  checked={preferences.dailyDigest}
+                  onCheckedChange={(checked) => updatePreference('dailyDigest', checked)}
+                />
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div>
                   <Label htmlFor="marketingEmails" className="text-sm font-medium">
                     Product Updates
                   </Label>
@@ -330,6 +350,18 @@ export function EmailPreferencesSettings() {
                       <SelectItem value="sunday">Sunday</SelectItem>
                     </SelectContent>
                   </Select>
+                </div>
+              )}
+
+              {preferences.dailyDigest && (
+                <div className="space-y-2">
+                  <Label htmlFor="dailyDigestTime">Daily Digest Time</Label>
+                  <Input
+                    id="dailyDigestTime"
+                    type="time"
+                    value={preferences.dailyDigestTime}
+                    onChange={(e) => updatePreference('dailyDigestTime', e.target.value)}
+                  />
                 </div>
               )}
             </div>

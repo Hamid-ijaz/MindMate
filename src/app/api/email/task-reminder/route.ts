@@ -38,7 +38,7 @@ export async function POST(request: NextRequest) {
     const taskLink = `${process.env.NEXT_PUBLIC_URL || 'http://localhost:3000'}/task/${taskId}`;
 
     const templateData = {
-      userName: user.name,
+      userName: user.firstName || 'there',
       taskTitle: task.title,
       taskDescription: task.description,
       dueDate: task.dueDate,
@@ -97,7 +97,7 @@ export async function GET(request: NextRequest) {
         const taskLink = `${process.env.NEXT_PUBLIC_URL || 'http://localhost:3000'}/task/${task.id}`;
 
         const templateData = {
-          userName: user.name,
+          userName: user.firstName || 'there',
           taskTitle: task.title,
           taskDescription: task.description,
           dueDate: task.dueDate,

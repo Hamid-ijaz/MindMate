@@ -126,17 +126,40 @@ SMTP_PASS=your_mailgun_smtp_password
 }
 ```
 
-### 6. Weekly Digest Email
+### 6. Daily Digest Email
+**Trigger:** Scheduled daily (configurable time)
+**API Endpoint:** `POST /api/email/daily-digest`
+**Payload:**
+```json
+{
+  "userEmail": "user@example.com",  // Optional, sends to all users if omitted
+  "forceToday": false               // Optional, forces sending regardless of user time preference
+}
+```
+
+### 7. Weekly Digest Email
 **Trigger:** Scheduled weekly (configurable day)
 **API Endpoint:** `POST /api/email/weekly-digest`
 **Payload:**
 ```json
 {
-  "userEmail": "user@example.com"  // Optional, sends to all users if omitted
+  "userEmail": "user@example.com",  // Optional, sends to all users if omitted
+  "forceToday": false               // Optional, forces sending regardless of digest day
 }
 ```
 
-### 7. Test Email
+### 8. Enhanced Weekly Digest Email
+**Trigger:** Scheduled weekly with comprehensive analytics
+**API Endpoint:** `POST /api/email/weekly-digest-enhanced`
+**Payload:**
+```json
+{
+  "userEmail": "user@example.com",  // Optional, sends to all users if omitted
+  "forceToday": false               // Optional, forces sending regardless of digest day
+}
+```
+
+### 9. Test Email
 **Trigger:** User testing email configuration
 **API Endpoint:** `POST /api/email/test`
 **Payload:**
@@ -155,11 +178,35 @@ Users can configure their email preferences through the settings interface:
 - **Task Reminders**: Email notifications for due tasks
 - **Share Notifications**: Notifications when items are shared with them
 - **Team Invitations**: Team invitation emails
-- **Weekly Digest**: Weekly productivity summary
+- **Daily Digest**: Daily productivity summary and task overview
+- **Weekly Digest**: Weekly productivity summary with analytics
 - **Marketing Emails**: Product updates and feature announcements
 - **Reminder Frequency**: immediate, hourly, daily, weekly
-- **Digest Day**: Which day of the week to receive the digest
+- **Digest Day**: Which day of the week to receive the weekly digest
+- **Daily Digest Time**: What time of day to receive the daily digest (e.g., "09:00")
 - **Quiet Hours**: Time range to avoid sending emails
+
+### Default Preferences
+When a user first registers, the following default preferences are set:
+```json
+{
+  "welcomeEmails": true,
+  "taskReminders": true,
+  "shareNotifications": true,
+  "teamInvitations": true,
+  "weeklyDigest": true,
+  "dailyDigest": true,
+  "marketingEmails": false,
+  "reminderFrequency": "immediate",
+  "digestDay": "monday",
+  "dailyDigestTime": "09:00",
+  "quietHours": {
+    "enabled": false,
+    "startTime": "22:00",
+    "endTime": "08:00"
+  }
+}
+```
 
 ### API Endpoints
 - `GET /api/email/preferences?userEmail=user@example.com` - Get preferences
@@ -209,10 +256,17 @@ The system includes bulk task reminder processing:
 - Can be called by cron jobs or schedulers
 - Automatically prevents spam (max 3 reminders per task, 4-hour cooldown)
 
-#### 2. Weekly Digests
+#### 2. Daily Digests
+- Automatically sends based on user preferences and daily digest time
+- Includes today's tasks, completion status, overdue warnings
+- Configurable send time (e.g., 9:00 AM)
+- Respects quiet hours settings
+
+#### 3. Weekly Digests
 - Automatically sends based on user preferences
-- Includes productivity metrics, task completion rates
+- Includes comprehensive productivity metrics, task completion rates, trends
 - Configurable send day (Monday-Sunday)
+- Enhanced version includes streaks, category breakdown, and insights
 
 ## Scheduled Email Jobs
 
@@ -224,10 +278,22 @@ The system includes bulk task reminder processing:
 0 * * * * curl -X GET https://your-domain.com/api/email/task-reminder
 ```
 
-#### 2. Weekly Digests (Run daily at 9 AM)
+#### 2. Daily Digests (Run every hour to check for users)
+```bash
+# Add to crontab (crontab -e)
+0 * * * * curl -X GET https://your-domain.com/api/email/daily-digest
+```
+
+#### 3. Weekly Digests (Run daily at 9 AM)
 ```bash
 # Add to crontab (crontab -e)
 0 9 * * * curl -X POST https://your-domain.com/api/email/weekly-digest
+```
+
+#### 4. Enhanced Weekly Digests (Run daily at 9 AM)
+```bash
+# Add to crontab (crontab -e)
+0 9 * * * curl -X POST https://your-domain.com/api/email/weekly-digest-enhanced
 ```
 
 ### Vercel Cron (Recommended for Vercel deployments)
@@ -240,7 +306,11 @@ Create `vercel.json`:
       "schedule": "0 * * * *"
     },
     {
-      "path": "/api/email/weekly-digest",
+      "path": "/api/email/daily-digest",
+      "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/email/weekly-digest-enhanced",
       "schedule": "0 9 * * *"
     }
   ]
