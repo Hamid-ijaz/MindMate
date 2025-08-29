@@ -496,12 +496,18 @@ export function BulkTaskManagement() {
   // Column resizing handlers
   const handleResizeStart = useCallback((columnKey: string, event: React.MouseEvent) => {
     event.preventDefault();
+    event.stopPropagation();
+    
     setIsResizing(true);
     setResizingColumn(columnKey);
     
+    // Add body class to prevent text selection during resize
+    document.body.style.userSelect = 'none';
+    document.body.style.cursor = 'col-resize';
+    
     const startX = event.clientX;
     const column = columns.find(col => col.key === columnKey);
-    const startWidth = column?.width ? parseInt(column.width) : 100;
+    const startWidth = column?.width ? parseInt(column.width.replace('px', '')) : 100;
 
     const handleMouseMove = (e: MouseEvent) => {
       const deltaX = e.clientX - startX;
@@ -510,6 +516,7 @@ export function BulkTaskManagement() {
         Math.min(column?.maxWidth || 500, startWidth + deltaX)
       );
       
+      // Real-time update with smooth transition
       setColumns(prev => prev.map(col => 
         col.key === columnKey ? { ...col, width: `${newWidth}px` } : col
       ));
@@ -518,6 +525,11 @@ export function BulkTaskManagement() {
     const handleMouseUp = () => {
       setIsResizing(false);
       setResizingColumn(null);
+      
+      // Restore body styles
+      document.body.style.userSelect = '';
+      document.body.style.cursor = '';
+      
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
     };
@@ -902,6 +914,13 @@ export function BulkTaskManagement() {
       "min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50 dark:from-gray-950 dark:via-gray-950 dark:to-black transition-colors duration-300",
       isResizing && "cursor-col-resize select-none"
     )}>
+      {/* Resize feedback overlay */}
+      {isResizing && resizingColumn && (
+        <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 bg-black/80 dark:bg-white/80 text-white dark:text-black px-3 py-1 rounded-lg text-sm font-medium shadow-lg backdrop-blur-sm">
+          Resizing {columns.find(col => col.key === resizingColumn)?.label}: {columns.find(col => col.key === resizingColumn)?.width}
+        </div>
+      )}
+      
       <div className="max-w-7xl mx-auto p-4 sm:p-6 space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -1488,19 +1507,25 @@ export function BulkTaskManagement() {
       {/* Tasks Display - Responsive */}
       <Card className="backdrop-blur-sm bg-white/70 dark:bg-gray-950/70 border border-white/20 dark:border-gray-700/50 shadow-xl transition-colors duration-300">
         {/* Desktop Table View */}
-        <div className="hidden lg:block">
-          <div className="overflow-x-auto rounded-lg">
-            <Table className="dark:bg-gray-900/50">
+        {viewMode === 'table' && (
+          <div className="hidden lg:block">
+            <div className="overflow-x-auto rounded-lg">
+            <Table className="dark:bg-gray-900/50 w-full" style={{ tableLayout: 'fixed' }}>
               <TableHeader>
                 <TableRow className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50/50 dark:hover:bg-gray-800/50 transition-colors duration-200">
                   {visibleColumns.map(column => (
                     <TableHead 
                       key={column.key} 
                       className={cn(
-                        "whitespace-nowrap relative group text-gray-900 dark:text-gray-100 font-semibold bg-gradient-to-b from-gray-50/80 to-gray-100/80 dark:from-gray-800/80 dark:to-gray-900/80",
-                        column.width && `w-[${column.width}]`
+                        "whitespace-nowrap relative group text-gray-900 dark:text-gray-100 font-semibold bg-gradient-to-b from-gray-50/80 to-gray-100/80 dark:from-gray-800/80 dark:to-gray-900/80 border-r border-gray-200 dark:border-gray-700",
+                        "transition-all duration-150 ease-out"
                       )}
-                      style={{ width: column.width }}
+                      style={{ 
+                        width: column.width, 
+                        minWidth: column.width,
+                        maxWidth: column.width,
+                        position: 'relative' 
+                      }}
                     >
                       <div className="flex items-center justify-between">
                         {column.key === 'select' ? (
@@ -1566,10 +1591,42 @@ export function BulkTaskManagement() {
                       {/* Resize Handle */}
                       {column.resizable !== false && (
                         <div
-                          className="absolute right-0 top-0 h-full w-1 cursor-col-resize bg-border hover:bg-primary transition-colors opacity-0 group-hover:opacity-100"
-                          onMouseDown={(e) => handleResizeStart(column.key.toString(), e)}
+                          className={cn(
+                            "absolute right-0 top-0 h-full w-1 cursor-col-resize transition-all duration-200 group/resize",
+                            "hover:w-2 hover:bg-gradient-to-r hover:from-blue-400/60 hover:to-purple-500/60",
+                            resizingColumn === column.key 
+                              ? "w-2 bg-gradient-to-r from-blue-500 to-purple-600 shadow-lg shadow-blue-500/50" 
+                              : "bg-gray-300/40 hover:bg-gradient-to-r hover:from-blue-400/60 hover:to-purple-500/60",
+                            "dark:bg-gray-600/40 dark:hover:from-blue-400/70 dark:hover:to-purple-500/70",
+                            "z-30"
+                          )}
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            handleResizeStart(column.key.toString(), e);
+                          }}
                           title="Drag to resize column"
-                        />
+                        >
+                          {/* Visual resize indicator */}
+                          <div className={cn(
+                            "absolute right-0 top-1/2 transform -translate-y-1/2 w-1 h-8 rounded-full transition-all duration-200",
+                            "bg-gradient-to-b from-blue-400 via-purple-500 to-blue-600 opacity-0 group-hover/resize:opacity-100",
+                            resizingColumn === column.key && "opacity-100 shadow-lg shadow-blue-500/30 animate-pulse"
+                          )} />
+                          
+                          {/* Dotted pattern for better visibility */}
+                          <div className={cn(
+                            "absolute right-0 top-0 h-full w-1 transition-all duration-200",
+                            "bg-gradient-to-b from-transparent via-gray-400/30 to-transparent opacity-0",
+                            "group-hover/resize:opacity-100",
+                            resizingColumn === column.key && "opacity-100"
+                          )}
+                          style={{
+                            backgroundImage: 'radial-gradient(circle, rgba(99, 102, 241, 0.6) 1px, transparent 1px)',
+                            backgroundSize: '2px 8px',
+                            backgroundRepeat: 'repeat-y'
+                          }} />
+                        </div>
                       )}
                     </TableHead>
                   ))}
@@ -1601,9 +1658,14 @@ export function BulkTaskManagement() {
                       <TableCell 
                         key={`${task.id}-${column.key}`}
                         className={cn(
-                          "text-gray-900 dark:text-gray-100 transition-colors duration-200",
+                          "text-gray-900 dark:text-gray-100 transition-all duration-150 ease-out",
                           column.key === 'title' && "align-top py-3 font-medium"
                         )}
+                        style={{ 
+                          width: column.width, 
+                          minWidth: column.width,
+                          maxWidth: column.width
+                        }}
                       >
                         {column.key === 'select' && (
                           <Checkbox
@@ -1689,6 +1751,7 @@ export function BulkTaskManagement() {
           </Table>
           </div>
         </div>
+        )}
         
         {/* Mobile Table View - Horizontally Scrollable */}
         <div className="lg:hidden">
@@ -1784,7 +1847,12 @@ export function BulkTaskManagement() {
                       {visibleColumns.map(column => (
                         <TableCell 
                           key={`${task.id}-${column.key}`}
-                          className="text-gray-900 dark:text-gray-100 transition-colors duration-200 px-3 py-2 text-xs"
+                          className="text-gray-900 dark:text-gray-100 transition-all duration-150 ease-out px-3 py-2 text-xs"
+                          style={{ 
+                            width: column.width, 
+                            minWidth: column.width,
+                            maxWidth: column.width
+                          }}
                         >
                           {column.key === 'select' && (
                             <Checkbox
@@ -1870,94 +1938,98 @@ export function BulkTaskManagement() {
             </Table>
           </div>
         </div>
-      </Card>
 
-      {/* Card View */}
-      {viewMode === 'cards' && (
-        <div className="space-y-4">
-          {paginatedTasks.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              {filteredAndSortedTasks.length === 0 
-                ? "No tasks found matching your filters"
-                : "No tasks on this page"
-              }
-            </div>
-          ) : (
-            paginatedTasks.map(task => (
-              <motion.div
-                key={task.id}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                className={cn(
-                  "border rounded-lg p-4 space-y-3",
-                  selectedTasks.has(task.id) && "bg-muted/30 border-primary"
-                )}
-              >
-                <div className="flex items-start justify-between">
-                  <div className="flex items-start gap-3 flex-1">
-                    <Checkbox
-                      checked={selectedTasks.has(task.id)}
-                      onCheckedChange={(checked) => handleSelectTask(task.id, !!checked)}
-                      className="mt-1"
-                    />
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-medium truncate">{task.title}</h3>
-                      {task.description && (
-                        <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
-                          {task.description}
-                        </p>
-                      )}
-                    </div>
+        {/* Desktop Card View */}
+        {viewMode === 'cards' && (
+          <div className="hidden lg:block">
+            <CardContent className="p-6">
+              <div className="space-y-4">
+                {paginatedTasks.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    {filteredAndSortedTasks.length === 0 
+                      ? "No tasks found matching your filters"
+                      : "No tasks on this page"
+                    }
                   </div>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                        <MoreHorizontal className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem>
-                        <Edit className="mr-2 h-4 w-4" />
-                        Edit
-                      </DropdownMenuItem>
-                      <DropdownMenuItem>
-                        <Copy className="mr-2 h-4 w-4" />
-                        Duplicate
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem
-                        className="text-destructive"
-                        onClick={() => handleSelectTask(task.id, true)}
-                      >
-                        <Trash2 className="mr-2 h-4 w-4" />
-                        Delete
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
-                
-                <div className="flex items-center gap-2 flex-wrap">
-                  <Badge variant="outline">{task.category}</Badge>
-                  {getPriorityBadge(task.priority)}
-                  {getStatusBadge(task)}
-                  <Badge variant="secondary" className="text-xs">
-                    {task.duration}m
-                  </Badge>
-                </div>
-                
-                <div className="flex items-center justify-between text-sm text-muted-foreground">
-                  <span>Created: {format(new Date(task.createdAt), 'MMM dd, yyyy')}</span>
-                  {task.completedAt ? (
-                    <span>Completed: {format(new Date(task.completedAt), 'MMM dd, yyyy')}</span>
-                  ) : task.reminderAt ? (
-                    <span>Due: {format(new Date(task.reminderAt), 'MMM dd, yyyy')}</span>
-                  ) : null}
-                </div>
-              </motion.div>
-            ))
-          )}
-        </div>
-      )}
+                ) : (
+                  paginatedTasks.map(task => (
+                    <motion.div
+                      key={task.id}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className={cn(
+                        "border rounded-lg p-4 space-y-3 bg-white dark:bg-gray-800 shadow-sm hover:shadow-md transition-all duration-200",
+                        selectedTasks.has(task.id) && "bg-muted/30 border-primary ring-2 ring-primary/20"
+                      )}
+                    >
+                      <div className="flex items-start justify-between">
+                        <div className="flex items-start gap-3 flex-1">
+                          <Checkbox
+                            checked={selectedTasks.has(task.id)}
+                            onCheckedChange={(checked) => handleSelectTask(task.id, !!checked)}
+                            className="mt-1"
+                          />
+                          <div className="flex-1 min-w-0">
+                            <h3 className="font-medium truncate">{task.title}</h3>
+                            {task.description && (
+                              <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
+                                {task.description}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem>
+                              <Edit className="mr-2 h-4 w-4" />
+                              Edit
+                            </DropdownMenuItem>
+                            <DropdownMenuItem>
+                              <Copy className="mr-2 h-4 w-4" />
+                              Duplicate
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              className="text-destructive"
+                              onClick={() => handleSelectTask(task.id, true)}
+                            >
+                              <Trash2 className="mr-2 h-4 w-4" />
+                              Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                      
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <Badge variant="outline">{task.category}</Badge>
+                        {getPriorityBadge(task.priority)}
+                        {getStatusBadge(task)}
+                        <Badge variant="secondary" className="text-xs">
+                          {task.duration}m
+                        </Badge>
+                      </div>
+                      
+                      <div className="flex items-center justify-between text-sm text-muted-foreground">
+                        <span>Created: {format(new Date(task.createdAt), 'MMM dd, yyyy')}</span>
+                        {task.completedAt ? (
+                          <span>Completed: {format(new Date(task.completedAt), 'MMM dd, yyyy')}</span>
+                        ) : task.reminderAt ? (
+                          <span>Due: {format(new Date(task.reminderAt), 'MMM dd, yyyy')}</span>
+                        ) : null}
+                      </div>
+                    </motion.div>
+                  ))
+                )}
+              </div>
+            </CardContent>
+          </div>
+        )}
+      </Card>
 
       {/* Pagination */}
       {totalPages > 1 && (
