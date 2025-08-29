@@ -279,10 +279,30 @@ export function ShareDialog({ isOpen, onClose, itemType, itemTitle, itemId }: Sh
         user?.email || ''
       );
       
+      // Send email notification about the shared item
+      try {
+        await fetch('/api/email/share-notification', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            recipientEmail: collaboratorEmail.trim(),
+            sharedItemId: itemId,
+            sharedItemTitle: itemTitle,
+            sharedItemType: itemType,
+            sharedByEmail: user?.email,
+          }),
+        });
+      } catch (emailError) {
+        console.error('Failed to send share notification email:', emailError);
+        // Don't fail the sharing if email fails
+      }
+      
       setCollaboratorEmail('');
       toast({
         title: "Collaborator added!",
-        description: `${collaboratorEmail.trim()} has been added with ${collaboratorPermission} permission`
+        description: `${collaboratorEmail.trim()} has been added with ${collaboratorPermission} permission. They'll receive an email notification.`
       });
       
       await loadSharedItems();

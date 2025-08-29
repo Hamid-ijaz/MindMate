@@ -17,6 +17,7 @@ import {
   limit,
   startAfter,
   DocumentSnapshot,
+  DocumentReference,
   increment
 } from 'firebase/firestore';
 import { db } from './firebase';
@@ -82,12 +83,32 @@ export const userService = {
 
 const serializeTaskForFirestore = (task: any) => {
     const data: any = { ...task };
+    
+    // Helper function to safely convert to Firestore Timestamp
+    const safeToTimestamp = (value: any) => {
+      if (!value) return undefined;
+      if (typeof value === 'number') return Timestamp.fromMillis(value);
+      if (value.toMillis && typeof value.toMillis === 'function') return value; // Already a Timestamp
+      if (value instanceof Date) return Timestamp.fromDate(value);
+      return undefined;
+    };
+    
     if (data.reminderAt) {
-      data.reminderAt = Timestamp.fromMillis(data.reminderAt);
+      data.reminderAt = safeToTimestamp(data.reminderAt);
+    }
+    if (data.completedAt) {
+      data.completedAt = safeToTimestamp(data.completedAt);
+    }
+    if (data.lastRejectedAt) {
+      data.lastRejectedAt = safeToTimestamp(data.lastRejectedAt);
+    }
+    if (data.notifiedAt) {
+      data.notifiedAt = safeToTimestamp(data.notifiedAt);
     }
     if (data.recurrence?.endDate) {
-      data.recurrence.endDate = Timestamp.fromMillis(data.recurrence.endDate);
+      data.recurrence.endDate = safeToTimestamp(data.recurrence.endDate);
     }
+    
     // Remove fields with undefined values to avoid Firestore errors
     Object.keys(data).forEach(key => {
       if (data[key] === undefined) {
@@ -102,16 +123,31 @@ const serializeTaskForFirestore = (task: any) => {
 
 const deserializeTaskFromFirestore = (docSnap: any) => {
     const data = docSnap.data();
+    
+    // Helper function to safely convert timestamps
+    const safeToMillis = (timestamp: any): number | undefined => {
+      if (!timestamp) return undefined;
+      if (typeof timestamp === 'number') return timestamp; // Already a timestamp
+      if (timestamp.toMillis && typeof timestamp.toMillis === 'function') {
+        return timestamp.toMillis(); // Firestore Timestamp
+      }
+      if (timestamp.seconds) {
+        return timestamp.seconds * 1000 + (timestamp.nanoseconds || 0) / 1000000; // Manual Timestamp conversion
+      }
+      return undefined;
+    };
+    
     return {
       ...data,
       id: docSnap.id,
-      createdAt: data.createdAt?.toMillis() || Date.now(),
-      completedAt: data.completedAt?.toMillis(),
-      lastRejectedAt: data.lastRejectedAt?.toMillis(),
-      reminderAt: data.reminderAt?.toMillis(),
+      createdAt: safeToMillis(data.createdAt) || Date.now(),
+      completedAt: safeToMillis(data.completedAt),
+      lastRejectedAt: safeToMillis(data.lastRejectedAt),
+      reminderAt: safeToMillis(data.reminderAt),
+      notifiedAt: safeToMillis(data.notifiedAt),
       recurrence: data.recurrence ? {
           ...data.recurrence,
-          endDate: data.recurrence.endDate?.toMillis(),
+          endDate: safeToMillis(data.recurrence.endDate),
       } : undefined,
     } as Task;
 }
@@ -196,35 +232,17 @@ export const taskService = {
 
   async updateTask(taskId: string, updates: Partial<Omit<Task, 'id' | 'userEmail'>>): Promise<void> {
     const taskRef = doc(db, COLLECTIONS.TASKS, taskId);
-    const updateData: any = { ...updates };
     
-    // Remove undefined fields before processing
+    // Use the same serialization logic for consistency
+    const updateData = serializeTaskForFirestore(updates);
+    
+    // Remove any undefined fields
     Object.keys(updateData).forEach(key => {
         if (updateData[key] === undefined) {
             delete updateData[key];
         }
     });
 
-    // Convert timestamps
-    if ('completedAt' in updateData && updateData.completedAt) {
-      updateData.completedAt = Timestamp.fromMillis(updateData.completedAt);
-    }
-    if ('lastRejectedAt' in updateData && updateData.lastRejectedAt) {
-      updateData.lastRejectedAt = Timestamp.fromMillis(updateData.lastRejectedAt);
-    }
-    if ('reminderAt' in updateData && updateData.reminderAt) {
-      updateData.reminderAt = Timestamp.fromMillis(updateData.reminderAt);
-    }
-     if ('notifiedAt' in updateData && updateData.notifiedAt) {
-      updateData.notifiedAt = Timestamp.fromMillis(updateData.notifiedAt);
-    }
-    if (updateData.recurrence && 'endDate' in updateData.recurrence && updateData.recurrence.endDate) {
-        updateData.recurrence.endDate = Timestamp.fromMillis(updateData.recurrence.endDate);
-    } else if (updateData.recurrence && 'endDate' in updateData.recurrence) {
-        // Handle removal of endDate
-        delete updateData.recurrence.endDate;
-    }
-    
     await updateDoc(taskRef, updateData);
   },
 
@@ -1270,6 +1288,55 @@ export const notificationService = {
   async deleteNotification(userEmail: string, notificationId: string): Promise<void> {
     const notificationRef = doc(db, `users/${userEmail}/notifications`, notificationId);
     await deleteDoc(notificationRef);
+  },
+
+  // Delete notifications by taskId
+  async deleteNotificationsByTaskId(userEmail: string, taskId: string): Promise<void> {
+    if (!userEmail || !taskId) return;
+    
+    const notificationsRef = collection(db, `users/${userEmail}/notifications`);
+    
+    // First query: check relatedTaskId field
+    const relatedTaskQuery = query(
+      notificationsRef, 
+      where('relatedTaskId', '==', taskId)
+    );
+    
+    // Second query: check data.taskId field
+    const dataTaskIdQuery = query(
+      notificationsRef, 
+      where('data.taskId', '==', taskId)
+    );
+    
+    try {
+      // Execute both queries
+      const [relatedTaskSnapshot, dataTaskIdSnapshot] = await Promise.all([
+        getDocs(relatedTaskQuery),
+        getDocs(dataTaskIdQuery)
+      ]);
+      
+      if (relatedTaskSnapshot.empty && dataTaskIdSnapshot.empty) {
+        return; // No notifications to delete
+      }
+      
+      // Combine results, avoiding duplicates
+      const toDelete = new Set<DocumentReference>();
+      relatedTaskSnapshot.docs.forEach(doc => toDelete.add(doc.ref));
+      dataTaskIdSnapshot.docs.forEach(doc => toDelete.add(doc.ref));
+      
+      // Delete in batch
+      if (toDelete.size > 0) {
+        const batch = writeBatch(db);
+        toDelete.forEach(docRef => {
+          batch.delete(docRef);
+        });
+        await batch.commit();
+        console.log(`Deleted ${toDelete.size} notifications for task ${taskId}`);
+      }
+    } catch (error) {
+      console.error('Error deleting notifications by taskId:', error);
+      throw error;
+    }
   },
 
   // Clear all notifications

@@ -110,18 +110,194 @@ async function setLoopRunningState(isRunning: boolean) {
 
 let loopStartTime: Date | null = null;
 
-async function executeNotificationCheck(): Promise<any> {
-  console.log('Executing notification check cycle...');
+// Helper function to send daily digest email
+async function sendDailyDigestForUser(userEmail: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    const baseUrl = process.env.NEXT_PUBLIC_URL || 'https://mindmate.hamidijaz.dev';
+    const apiUrl = `${baseUrl}/api/email/daily-digest`;
+    
+    console.log(`📧 Sending daily digest request to ${userEmail} via ${apiUrl}`);
+    
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ userEmail }),
+    });
+
+    console.log(`📧 Daily digest API response: ${response.status} ${response.statusText}`);
+
+    if (response.ok) {
+      console.log(`✅ Daily digest sent successfully to ${userEmail}`);
+      return { success: true };
+    } else {
+      // Log response body for debugging
+      const responseText = await response.text();
+      console.log(`📧 Daily digest error response body:`, responseText);
+      
+      let errorData;
+      try {
+        errorData = JSON.parse(responseText);
+      } catch (jsonError) {
+        // Response doesn't contain valid JSON
+        errorData = { error: `HTTP ${response.status}: ${response.statusText}` };
+      }
+      console.error(`❌ Failed to send daily digest to ${userEmail}:`, errorData);
+      return { success: false, error: errorData.error || `HTTP ${response.status}` };
+    }
+  } catch (error) {
+    console.error(`❌ Error sending daily digest to ${userEmail}:`, error);
+    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+  }
+}
+
+// Helper function to send weekly digest email
+async function sendWeeklyDigestForUser(userEmail: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    const baseUrl = process.env.NEXT_PUBLIC_URL || 'https://mindmate.hamidijaz.dev';
+    const apiUrl = `${baseUrl}/api/email/weekly-digest-enhanced`;
+    
+    console.log(`📧 Sending weekly digest request to ${userEmail} via ${apiUrl}`);
+    
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ userEmail }),
+    });
+
+    console.log(`📧 Weekly digest API response: ${response.status} ${response.statusText}`);
+
+    if (response.ok) {
+      console.log(`✅ Weekly digest sent successfully to ${userEmail}`);
+      return { success: true };
+    } else {
+      // Log response body for debugging
+      const responseText = await response.text();
+      console.log(`📧 Weekly digest error response body:`, responseText);
+      
+      let errorData;
+      try {
+        errorData = JSON.parse(responseText);
+      } catch (jsonError) {
+        // Response doesn't contain valid JSON
+        errorData = { error: `HTTP ${response.status}: ${response.statusText}` };
+      }
+      console.error(`❌ Failed to send weekly digest to ${userEmail}:`, errorData);
+      return { success: false, error: errorData.error || `HTTP ${response.status}` };
+    }
+  } catch (error) {
+    console.error(`❌ Error sending weekly digest to ${userEmail}:`, error);
+    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+  }
+}
+
+// Helper function to check if daily digest should be sent based on schedule and sent history
+async function shouldSendDailyDigest(preferences: any, now: Date, db: any, userEmail: string): Promise<{ shouldSend: boolean; reason: string }> {
+  if (!preferences.dailyDigest) {
+    return { shouldSend: false, reason: 'Daily digest disabled' };
+  }
   
-  const db = getFirestore();
-  const now = new Date();
+  const dailyDigestTime = preferences.dailyDigestTime || '09:00';
+  const [hour, minute] = dailyDigestTime.split(':').map(Number);
+  
+  const currentHour = now.getHours();
+  const currentMinute = now.getMinutes();
+  
+  // Check if we've passed the scheduled time today
+  const scheduledMinutes = hour * 60 + minute;
+  const currentMinutes = currentHour * 60 + currentMinute;
+  
+  if (currentMinutes < scheduledMinutes) {
+    return { shouldSend: false, reason: `Scheduled time (${dailyDigestTime}) not yet reached today` };
+  }
+  
+  // Check if daily digest has already been sent today
+  const today = new Date(now);
+  today.setHours(0, 0, 0, 0);
+  const todayTimestamp = today.getTime();
+  
+  const lastDailySent = preferences.lastDailySent;
+  if (lastDailySent) {
+    const lastSentDate = lastDailySent.toDate ? lastDailySent.toDate() : new Date(lastDailySent);
+    const lastSentDay = new Date(lastSentDate);
+    lastSentDay.setHours(0, 0, 0, 0);
+    
+    if (lastSentDay.getTime() === todayTimestamp) {
+      return { shouldSend: false, reason: `Daily digest already sent today at ${lastSentDate.toLocaleTimeString()}` };
+    }
+  }
+  
+  return { shouldSend: true, reason: `Scheduled time passed and not yet sent today` };
+}
+
+// Helper function to check if weekly digest should be sent based on schedule and sent history
+async function shouldSendWeeklyDigest(preferences: any, now: Date, db: any, userEmail: string): Promise<{ shouldSend: boolean; reason: string }> {
+  if (!preferences.weeklyDigest) {
+    return { shouldSend: false, reason: 'Weekly digest disabled' };
+  }
+  
+  const digestDay = preferences.digestDay || 'monday';
+  const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+  const targetDay = dayNames.indexOf(digestDay.toLowerCase());
+  
+  if (targetDay === -1) {
+    return { shouldSend: false, reason: 'Invalid digest day configured' };
+  }
+  
+  const currentDay = now.getDay();
+  const currentHour = now.getHours();
+  
+  // Check if it's the right day and we've passed 9 AM
+  if (currentDay !== targetDay) {
+    const currentDayName = dayNames[currentDay];
+    return { shouldSend: false, reason: `Today is ${currentDayName}, weekly digest scheduled for ${digestDay}` };
+  }
+  
+  if (currentHour < 9) {
+    return { shouldSend: false, reason: `Scheduled time (9:00 AM) not yet reached today` };
+  }
+  
+  // Check if weekly digest has already been sent this week
+  // Calculate start of current week (Sunday)
+  const startOfWeek = new Date(now);
+  const daysFromSunday = now.getDay();
+  startOfWeek.setDate(now.getDate() - daysFromSunday);
+  startOfWeek.setHours(0, 0, 0, 0);
+  
+  const lastWeeklySent = preferences.lastWeeklySent;
+  if (lastWeeklySent) {
+    const lastSentDate = lastWeeklySent.toDate ? lastWeeklySent.toDate() : new Date(lastWeeklySent);
+    
+    // Check if last sent date is within current week
+    if (lastSentDate >= startOfWeek) {
+      return { shouldSend: false, reason: `Weekly digest already sent this week on ${lastSentDate.toLocaleDateString()} at ${lastSentDate.toLocaleTimeString()}` };
+    }
+  }
+  
+  return { shouldSend: true, reason: `Scheduled day and time passed, not yet sent this week` };
+}
+
+// Separate function for handling push notifications
+async function processPushNotifications(db: any, now: Date): Promise<any> {
+  console.log('🔔 Processing push notifications...');
   
   const results = {
+    type: 'push_notifications',
+    startTime: now.toISOString(),
     usersProcessed: 0,
+    usersSkipped: 0,
     overdueNotifications: 0,
     reminderNotifications: 0,
     totalNotificationsSent: 0,
-    errors: [] as string[]
+    totalSubscriptionsProcessed: 0,
+    invalidSubscriptionsRemoved: 0,
+    errors: [] as string[],
+    successLogs: [] as string[],
+    userDetails: [] as any[],
+    summary: {} as any
   };
 
   // Get all users who have push notification preferences
@@ -131,19 +307,54 @@ async function executeNotificationCheck(): Promise<any> {
   for (const prefDoc of preferencesSnapshot.docs) {
     
     const userEmail = prefDoc.id;
-    console.log("🚀 > executeNotificationCheck > userEmail:", userEmail)
+    console.log("🚀 > processPushNotifications > userEmail:", userEmail)
     const preferences = prefDoc.data();
-    // console.log("🚀 > executeNotificationCheck > preferences:", preferences)
+
+    const userDetail = {
+      userEmail,
+      preferences: {
+        enabled: preferences.enabled,
+        overdueAlerts: preferences.overdueAlerts,
+        taskReminders: preferences.taskReminders,
+        quietHours: preferences.quietHours
+      },
+      status: '',
+      notifications: {
+        overdue: 0,
+        reminders: 0,
+        total: 0
+      },
+      subscriptions: {
+        total: 0,
+        active: 0,
+        removed: 0
+      },
+      tasks: {
+        total: 0,
+        overdue: 0,
+        reminders: 0
+      },
+      errors: [] as string[],
+      logs: [] as string[]
+    };
 
     try {
       // Skip if notifications are disabled for this user
       if (!preferences.enabled) {
+        userDetail.status = 'skipped_disabled';
+        userDetail.logs.push('Notifications disabled for user');
+        results.usersSkipped++;
+        results.userDetails.push(userDetail);
         continue;
       }
 
       // Check quiet hours
       if (isInQuietHours(preferences.quietHours)) {
+        userDetail.status = 'skipped_quiet_hours';
+        userDetail.logs.push('User in quiet hours');
         console.log(`Skipping user ${userEmail} - in quiet hours`);
+        results.usersSkipped++;
+        results.userDetails.push(userDetail);
         continue;
       }
 
@@ -154,16 +365,27 @@ async function executeNotificationCheck(): Promise<any> {
         .get();
 
       if (subscriptionsSnapshot.empty) {
+        userDetail.status = 'skipped_no_subscriptions';
+        userDetail.logs.push('No push subscriptions found');
+        results.usersSkipped++;
+        results.userDetails.push(userDetail);
         continue;
       }
 
       const subscriptions = subscriptionsSnapshot.docs;
+      userDetail.subscriptions.total = subscriptions.length;
+      userDetail.logs.push(`Found ${subscriptions.length} push subscriptions`);
+      results.totalSubscriptionsProcessed += subscriptions.length;
 
       // Fetch all tasks for this user once
       const allTasksSnapshot = await db
         .collection('tasks')
         .where('userEmail', '==', userEmail)
         .get();
+      
+      userDetail.tasks.total = allTasksSnapshot.docs.length;
+      userDetail.logs.push(`Found ${allTasksSnapshot.docs.length} total tasks`);
+      
       function toMillis(val: any): number | undefined {
         if (!val) return undefined;
         if (typeof val === 'number') return val;
@@ -172,9 +394,8 @@ async function executeNotificationCheck(): Promise<any> {
         }
         return undefined;
       }
-      const allTasks = allTasksSnapshot.docs.map(doc => {
+      const allTasks = allTasksSnapshot.docs.map((doc: any) => {
         const data = doc.data();
-        // console.log("🚀 > executeNotificationCheck > data:", data.reminderAt)
         // Normalize all relevant fields to millis if present
         return {
           ...data,
@@ -188,10 +409,13 @@ async function executeNotificationCheck(): Promise<any> {
 
       // Check for overdue tasks
       if (preferences.overdueAlerts) {
-        const overdueTasks = allTasks.filter(task => {
+        const overdueTasks = allTasks.filter((task: any) => {
           return task.reminderAt !=  undefined;
         });
-        console.log("🚀 > executeNotificationCheck > overdueTasks:", overdueTasks.length)
+        
+        userDetail.tasks.overdue = overdueTasks.length;
+        userDetail.logs.push(`Found ${overdueTasks.length} tasks with reminder times`);
+        
         // Only process tasks that have reminderAt and completedAt fields
         const twentyFourHoursAgo = now.getTime() - (24 * 60 * 60 * 1000);
         const overdueTasksToNotify = overdueTasks.filter((task: any) => {
@@ -201,7 +425,8 @@ async function executeNotificationCheck(): Promise<any> {
           return task.reminderAt < now.getTime();
         });
 
-        console.log("🚀 > executeNotificationCheck > overdueTasksToNotify.length:", overdueTasksToNotify.length)
+        userDetail.logs.push(`${overdueTasksToNotify.length} overdue tasks to notify`);
+
         if (overdueTasksToNotify.length > 0) {
           for (const task of overdueTasksToNotify) {
             
@@ -221,7 +446,6 @@ async function executeNotificationCheck(): Promise<any> {
                 .where('isRead', '==', false)
                 .limit(1)
                 .get();
-              console.log("🚀 > executeNotificationCheck > unreadQuery.empty:", unreadQuery.empty);
 
               if (!unreadQuery.empty) {
                 console.log(`Skipping overdue notification for task ${task._doc.id} because an unread notification already exists.`);
@@ -303,7 +527,7 @@ async function executeNotificationCheck(): Promise<any> {
       if (preferences.taskReminders) {
         const reminderTime = now.getTime() + (2 * 60 * 60 * 1000); // 2 hours from now
         const thirtyMinutesAgo = now.getTime() - (30 * 60 * 1000); // 30 minutes ago
-        const RemindTasks = allTasks.filter(task => {
+        const RemindTasks = allTasks.filter((task: any) => {
                   return task.reminderAt !=  undefined;
                 });
         // Only process tasks that have reminderAt field
@@ -337,7 +561,6 @@ async function executeNotificationCheck(): Promise<any> {
               .limit(1)
               .get();
 
-            console.log("🚀 > executeNotificationCheck > unreadReminderQuery.empty:", unreadReminderQuery.empty);
             if (!unreadReminderQuery.empty) {
               console.log(`Skipping reminder for task ${task._doc.id} because an unread reminder notification already exists.`);
               continue;
@@ -412,15 +635,287 @@ async function executeNotificationCheck(): Promise<any> {
         }
       }
 
+      userDetail.status = 'processed';
+      userDetail.notifications.total = userDetail.notifications.overdue + userDetail.notifications.reminders;
+      userDetail.logs.push(`Completed processing: ${userDetail.notifications.total} notifications sent`);
       results.usersProcessed++;
+      results.userDetails.push(userDetail);
+      results.successLogs.push(`✅ User ${userEmail}: ${userDetail.notifications.total} notifications sent`);
 
     } catch (error: any) {
+      userDetail.status = 'error';
+      userDetail.errors.push(error.message);
+      results.userDetails.push(userDetail);
       console.error(`Error processing notifications for user ${userEmail}:`, error);
       results.errors.push(`User ${userEmail}: ${error.message}`);
     }
   }
 
+  // Generate comprehensive summary
+  const endTime = new Date();
+  results.summary = {
+    totalUsers: preferencesSnapshot.docs.length,
+    usersProcessed: results.usersProcessed,
+    usersSkipped: results.usersSkipped,
+    successRate: results.usersProcessed > 0 ? ((results.usersProcessed / (results.usersProcessed + results.usersSkipped)) * 100).toFixed(2) + '%' : '0%',
+    notificationTypes: {
+      overdue: results.overdueNotifications,
+      reminders: results.reminderNotifications,
+      total: results.totalNotificationsSent
+    },
+    subscriptions: {
+      total: results.totalSubscriptionsProcessed,
+      invalidRemoved: results.invalidSubscriptionsRemoved
+    },
+    executionTime: endTime.getTime() - now.getTime(),
+    endTime: endTime.toISOString()
+  };
+
+  console.log('🔔 Push notifications processing completed:', results.summary);
   return results;
+}
+
+// Separate function for handling email digests
+async function processEmailDigests(db: any, now: Date): Promise<any> {
+  console.log('📧 Processing email digests...');
+  
+  const results = {
+    type: 'email_digests',
+    startTime: now.toISOString(),
+    usersProcessed: 0,
+    usersSkipped: 0,
+    dailyDigestsSent: 0,
+    weeklyDigestsSent: 0,
+    emailErrors: 0,
+    errors: [] as string[],
+    successLogs: [] as string[],
+    userDetails: [] as any[],
+    summary: {} as any
+  };
+
+  // Get all users who have email preferences (independent of push notifications)
+  const emailPreferencesSnapshot = await db.collection('emailPreferences').get();
+
+  for (const emailPrefDoc of emailPreferencesSnapshot.docs) {
+    const userEmail = emailPrefDoc.id;
+    const emailPreferences = emailPrefDoc.data();
+
+    const userDetail = {
+      userEmail,
+      preferences: {
+        dailyDigest: emailPreferences.dailyDigest,
+        weeklyDigest: emailPreferences.weeklyDigest,
+        dailyDigestTime: emailPreferences.dailyDigestTime,
+        digestDay: emailPreferences.digestDay,
+        quietHours: emailPreferences.quietHours,
+        lastDailySent: emailPreferences.lastDailySent,
+        lastWeeklySent: emailPreferences.lastWeeklySent
+      },
+      status: '',
+      digests: {
+        daily: { shouldSend: false, sent: false, error: null as string | null },
+        weekly: { shouldSend: false, sent: false, error: null as string | null }
+      },
+      logs: [] as string[],
+      errors: [] as string[]
+    };
+
+    try {
+      console.log(`📧 Checking email preferences for user: ${userEmail}`);
+      userDetail.logs.push('Started email digest check');
+
+      let digestsSent = 0;
+
+      // Check if it's time to send daily digest
+      const dailyCheck = await shouldSendDailyDigest(emailPreferences, now, db, userEmail);
+      userDetail.digests.daily.shouldSend = dailyCheck.shouldSend;
+      userDetail.logs.push(`Daily digest check: ${dailyCheck.reason}`);
+      
+      if (dailyCheck.shouldSend) {
+        console.log(`📧 Time to send daily digest for user: ${userEmail} - ${dailyCheck.reason}`);
+        
+        // Check quiet hours for email
+        if (!isInQuietHours(emailPreferences.quietHours)) {
+          const dailyResult = await sendDailyDigestForUser(userEmail);
+          userDetail.digests.daily.sent = dailyResult.success;
+          
+          if (dailyResult.success) {
+            // Update the lastDailySent timestamp in emailPreferences
+            try {
+              await db.collection('emailPreferences').doc(userEmail).update({
+                lastDailySent: new Date()
+              });
+              console.log(`📝 Updated lastDailySent for ${userEmail}`);
+            } catch (updateError) {
+              console.error('Error updating lastDailySent:', updateError);
+            }
+            
+            results.dailyDigestsSent++;
+            digestsSent++;
+            userDetail.logs.push('✅ Daily digest sent successfully and timestamp updated');
+            console.log(`✅ Daily digest sent to ${userEmail}`);
+          } else {
+            userDetail.digests.daily.error = dailyResult.error || 'Unknown error';
+            results.emailErrors++;
+            userDetail.errors.push(`Daily digest failed: ${dailyResult.error}`);
+            results.errors.push(`Daily digest failed for ${userEmail}: ${dailyResult.error}`);
+          }
+        } else {
+          userDetail.logs.push('🔇 Daily digest skipped - in quiet hours');
+          console.log(`🔇 Skipping daily digest for ${userEmail} - in quiet hours`);
+        }
+      }
+
+      // Check if it's time to send weekly digest
+      const weeklyCheck = await shouldSendWeeklyDigest(emailPreferences, now, db, userEmail);
+      userDetail.digests.weekly.shouldSend = weeklyCheck.shouldSend;
+      userDetail.logs.push(`Weekly digest check: ${weeklyCheck.reason}`);
+      
+      if (weeklyCheck.shouldSend) {
+        console.log(`📧 Time to send weekly digest for user: ${userEmail} - ${weeklyCheck.reason}`);
+        
+        // Check quiet hours for email
+        if (!isInQuietHours(emailPreferences.quietHours)) {
+          const weeklyResult = await sendWeeklyDigestForUser(userEmail);
+          userDetail.digests.weekly.sent = weeklyResult.success;
+          
+          if (weeklyResult.success) {
+            // Update the lastWeeklySent timestamp in emailPreferences
+            try {
+              await db.collection('emailPreferences').doc(userEmail).update({
+                lastWeeklySent: new Date()
+              });
+              console.log(`📝 Updated lastWeeklySent for ${userEmail}`);
+            } catch (updateError) {
+              console.error('Error updating lastWeeklySent:', updateError);
+            }
+            
+            results.weeklyDigestsSent++;
+            digestsSent++;
+            userDetail.logs.push('✅ Weekly digest sent successfully and timestamp updated');
+            console.log(`✅ Weekly digest sent to ${userEmail}`);
+          } else {
+            userDetail.digests.weekly.error = weeklyResult.error || 'Unknown error';
+            results.emailErrors++;
+            userDetail.errors.push(`Weekly digest failed: ${weeklyResult.error}`);
+            results.errors.push(`Weekly digest failed for ${userEmail}: ${weeklyResult.error}`);
+          }
+        } else {
+          userDetail.logs.push('🔇 Weekly digest skipped - in quiet hours');
+          console.log(`🔇 Skipping weekly digest for ${userEmail} - in quiet hours`);
+        }
+      }
+
+      userDetail.status = digestsSent > 0 ? 'digests_sent' : 'no_digests_due';
+      userDetail.logs.push(`Completed processing: ${digestsSent} digests sent`);
+      results.usersProcessed++;
+      results.userDetails.push(userDetail);
+      
+      if (digestsSent > 0) {
+        results.successLogs.push(`✅ User ${userEmail}: ${digestsSent} digest(s) sent`);
+      }
+
+    } catch (emailError: any) {
+      userDetail.status = 'error';
+      userDetail.errors.push(emailError.message);
+      results.userDetails.push(userDetail);
+      console.error(`Error checking email digests for user ${userEmail}:`, emailError);
+      results.emailErrors++;
+      results.errors.push(`Email digest check failed for ${userEmail}: ${emailError.message}`);
+    }
+  }
+
+  // Generate comprehensive summary
+  const endTime = new Date();
+  results.summary = {
+    totalUsers: emailPreferencesSnapshot.docs.length,
+    usersProcessed: results.usersProcessed,
+    digestsSent: {
+      daily: results.dailyDigestsSent,
+      weekly: results.weeklyDigestsSent,
+      total: results.dailyDigestsSent + results.weeklyDigestsSent
+    },
+    errors: {
+      count: results.emailErrors,
+      rate: results.usersProcessed > 0 ? ((results.emailErrors / results.usersProcessed) * 100).toFixed(2) + '%' : '0%'
+    },
+    successRate: results.usersProcessed > 0 ? (((results.usersProcessed - results.emailErrors) / results.usersProcessed) * 100).toFixed(2) + '%' : '0%',
+    executionTime: endTime.getTime() - now.getTime(),
+    endTime: endTime.toISOString()
+  };
+
+  console.log('📧 Email digests processing completed:', results.summary);
+  return results;
+}
+
+// Main function that orchestrates both push notifications and email digests
+async function executeNotificationCheck(): Promise<any> {
+  console.log('🚀 Executing comprehensive notification and email digest check...');
+  
+  const db = getFirestore();
+  const now = new Date();
+  const startTime = now.getTime();
+  
+  // Run push notifications and email digests independently
+  const [pushResults, emailResults] = await Promise.all([
+    processPushNotifications(db, now),
+    processEmailDigests(db, now)
+  ]);
+
+  const endTime = new Date();
+  const totalExecutionTime = endTime.getTime() - startTime;
+
+  // Create comprehensive combined results
+  const combinedResults = {
+    success: true,
+    timestamp: now.toISOString(),
+    executionTime: totalExecutionTime,
+    
+    // Overall summary
+    overall: {
+      totalUsersChecked: (pushResults.summary?.totalUsers || 0) + (emailResults.summary?.totalUsers || 0),
+      totalUsersProcessed: pushResults.usersProcessed + emailResults.usersProcessed,
+      totalErrors: pushResults.errors.length + emailResults.errors.length,
+      executionTime: totalExecutionTime
+    },
+
+    // Push notifications detailed results
+    pushNotifications: {
+      ...pushResults,
+      description: 'Push notification processing results with detailed user information'
+    },
+
+    // Email digests detailed results  
+    emailDigests: {
+      ...emailResults,
+      description: 'Email digest processing results with detailed user information'
+    },
+
+    // Legacy compatibility (for existing integrations)
+    usersProcessed: pushResults.usersProcessed + emailResults.usersProcessed,
+    overdueNotifications: pushResults.overdueNotifications,
+    reminderNotifications: pushResults.reminderNotifications,
+    totalNotificationsSent: pushResults.totalNotificationsSent,
+    dailyDigestsSent: emailResults.dailyDigestsSent,
+    weeklyDigestsSent: emailResults.weeklyDigestsSent,
+    emailErrors: emailResults.emailErrors,
+    errors: [...pushResults.errors, ...emailResults.errors],
+
+    // Comprehensive logs
+    logs: {
+      success: [...pushResults.successLogs, ...emailResults.successLogs],
+      errors: [...pushResults.errors, ...emailResults.errors],
+      combined: [
+        ...pushResults.successLogs.map((log: string) => `[PUSH] ${log}`),
+        ...emailResults.successLogs.map((log: string) => `[EMAIL] ${log}`),
+        ...pushResults.errors.map((error: string) => `[PUSH ERROR] ${error}`),
+        ...emailResults.errors.map((error: string) => `[EMAIL ERROR] ${error}`)
+      ]
+    }
+  };
+
+  console.log('🚀 Comprehensive notification check completed:', combinedResults.overall);
+  return combinedResults;
 }
 
 async function startNotificationLoop() {
@@ -440,6 +935,9 @@ async function startNotificationLoop() {
     totalOverdueNotifications: 0,
     totalReminderNotifications: 0,
     totalNotificationsSent: 0,
+    totalDailyDigestsSent: 0,
+    totalWeeklyDigestsSent: 0,
+    totalEmailErrors: 0,
     allErrors: [] as string[],
     startTime: loopStartTime.toISOString(),
     endTime: ''
@@ -463,6 +961,9 @@ async function startNotificationLoop() {
         totalResults.totalOverdueNotifications += cycleResults.overdueNotifications;
         totalResults.totalReminderNotifications += cycleResults.reminderNotifications;
         totalResults.totalNotificationsSent += cycleResults.totalNotificationsSent;
+        totalResults.totalDailyDigestsSent += cycleResults.dailyDigestsSent;
+        totalResults.totalWeeklyDigestsSent += cycleResults.weeklyDigestsSent;
+        totalResults.totalEmailErrors += cycleResults.emailErrors;
         totalResults.allErrors.push(...cycleResults.errors);
         
         const cycleDuration = Date.now() - cycleStart.getTime();

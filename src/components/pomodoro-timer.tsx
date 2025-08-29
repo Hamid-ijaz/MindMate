@@ -261,17 +261,17 @@ export function PomodoroTimer({
 
   const getSessionColor = () => {
     switch (sessionType) {
-      case 'work': return 'text-blue-600';
-      case 'short-break': return 'text-green-600';
-      case 'long-break': return 'text-purple-600';
+      case 'work': return 'text-blue-600 dark:text-blue-400';
+      case 'short-break': return 'text-green-600 dark:text-green-400';
+      case 'long-break': return 'text-purple-600 dark:text-purple-400';
     }
   };
 
   const getSessionBgColor = () => {
     switch (sessionType) {
-      case 'work': return 'bg-blue-50 border-blue-200';
-      case 'short-break': return 'bg-green-50 border-green-200';
-      case 'long-break': return 'bg-purple-50 border-purple-200';
+      case 'work': return 'bg-blue-50/50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800';
+      case 'short-break': return 'bg-green-50/50 dark:bg-green-950/20 border-green-200 dark:border-green-800';
+      case 'long-break': return 'bg-purple-50/50 dark:bg-purple-950/20 border-purple-200 dark:border-purple-800';
     }
   };
 
@@ -368,14 +368,14 @@ export function PomodoroTimer({
           </div>
           
           <div>
-            <div className="text-2xl font-bold text-green-600">
+            <div className="text-2xl font-bold text-green-600 dark:text-green-400">
               {completedSessions.filter(s => s.type !== 'work').length}
             </div>
             <div className="text-xs text-muted-foreground">Breaks</div>
           </div>
           
           <div>
-            <div className="text-2xl font-bold text-purple-600">
+            <div className="text-2xl font-bold text-purple-600 dark:text-purple-400">
               {Math.round(completedSessions.reduce((acc, s) => acc + s.duration, 0) / 60)}h
             </div>
             <div className="text-xs text-muted-foreground">Total Time</div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, Suspense } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -44,7 +44,7 @@ interface SharedContentPageProps {
   };
 }
 
-export default function SharedContentPage() {
+function SharedContentContent() {
   const params = useParams();
   const searchParams = useSearchParams();
   const { user } = useAuth();
@@ -190,7 +190,6 @@ export default function SharedContentPage() {
       if (taskData.category && taskData.category !== originalTask.category) changedFields.push('category');
       if (taskData.priority && taskData.priority !== originalTask.priority) changedFields.push('priority');
       if (taskData.duration && taskData.duration !== originalTask.duration) changedFields.push('duration');
-      if (taskData.timeOfDay && taskData.timeOfDay !== originalTask.timeOfDay) changedFields.push('timeOfDay');
       if (taskData.reminderAt !== originalTask.reminderAt) changedFields.push('reminder');
 
       // Update the task
@@ -625,7 +624,6 @@ export default function SharedContentPage() {
                         category: (content as Task).category,
                         priority: (content as Task).priority,
                         duration: (content as Task).duration,
-                        timeOfDay: (content as Task).timeOfDay,
                         reminderAt: (content as Task).reminderAt ? new Date((content as Task).reminderAt!) : undefined,
                         recurrence: (content as Task).recurrence ? {
                           frequency: (content as Task).recurrence!.frequency,
@@ -701,9 +699,6 @@ export default function SharedContentPage() {
                         <Badge variant="secondary" className="font-medium">
                           <Clock className="h-3 w-3 mr-1" />
                           {(content as Task).duration} min
-                        </Badge>
-                        <Badge variant="secondary" className="font-medium">
-                          {(content as Task).timeOfDay}
                         </Badge>
                         {(content as Task).reminderAt && (
                           <Badge variant="outline" className="font-medium">
@@ -798,7 +793,6 @@ export default function SharedContentPage() {
                           onFinished={() => setShowAddSubtask(false)}
                           defaultValues={{
                             category: (content as Task).category,
-                            timeOfDay: (content as Task).timeOfDay,
                           }}
                           customAddHandler={handleSubtaskAdd}
                         />
@@ -950,5 +944,25 @@ export default function SharedContentPage() {
         />
       )}
     </div>
+  );
+}
+
+export default function SharedContentPage() {
+  return (
+    <Suspense fallback={
+      <div className="container max-w-5xl mx-auto py-8 px-4">
+        <Card className="border shadow-md">
+          <CardHeader className="pb-4 space-y-1">
+            <CardTitle className="text-xl">Loading shared content...</CardTitle>
+            <CardDescription>Please wait</CardDescription>
+          </CardHeader>
+          <CardContent className="flex justify-center py-8">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          </CardContent>
+        </Card>
+      </div>
+    }>
+      <SharedContentContent />
+    </Suspense>
   );
 }

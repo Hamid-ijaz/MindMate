@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import type { Priority, Task, TimeOfDay } from "@/lib/types";
+import type { Priority, Task } from "@/lib/types";
 import { AlertCircle, Check, Sparkles, X, Loader2, Wand2, Edit, CalendarIcon, Repeat, ExternalLink, ChevronLeft, ChevronRight, Target, List, Clock, Keyboard } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { getRandomQuote } from "@/lib/motivational-quotes";
@@ -16,7 +16,7 @@ import { AlertDialog, AlertDialogContent, AlertDialogDescription, AlertDialogFoo
 import { AddTaskButton } from "./manage-tasks-sheet";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "./ui/accordion";
 import { rewordTask } from '@/ai/flows/reword-task-flow';
-import { getCurrentTimeOfDay, getDefaultPriority, cn, safeDateFormat, isTaskOverdue } from "@/lib/utils";
+import { getDefaultPriority, cn, safeDateFormat, isTaskOverdue } from "@/lib/utils";
 import { TaskItem } from "@/components/task-item";
 import { Checkbox } from "./ui/checkbox";
 import { Label } from "./ui/label";
@@ -356,7 +356,6 @@ export function TaskSuggestion() {
             title: s.title,
             description: s.description,
             category: currentTask.category,
-            timeOfDay: currentTask.timeOfDay,
             priority: 'Low',
             duration: 15,
             userEmail: user?.email || '', // Add missing userEmail
@@ -695,9 +694,6 @@ export function TaskSuggestion() {
                           <Badge variant="outline" className="text-xs px-2 py-0.5">
                             <Clock className="w-3 h-3 mr-1" />
                             {task.duration}m
-                          </Badge>
-                          <Badge variant="outline" className="text-xs px-2 py-0.5">
-                            {task.timeOfDay}
                           </Badge>
                           {task.reminderAt && (
                             <Badge variant="outline" className="text-xs px-2 py-0.5 flex items-center gap-1">

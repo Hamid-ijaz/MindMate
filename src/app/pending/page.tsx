@@ -197,7 +197,6 @@ function PendingTasksContent() {
             title: suggestion.title,
             description: suggestion.description,
             category: taskToReword.category,
-            timeOfDay: taskToReword.timeOfDay,
             priority: 'Low',
             duration: 15,
             userEmail: user?.email || '', // Add missing userEmail

@@ -86,14 +86,14 @@ export function TaskItem({ task, extraActions, isSubtask = false, isHistoryView 
     await acceptTask(task.id, {
       onComplete: () => handleTaskCompletion(completeButtonRef.current)
     });
-    await deleteNotification(task.id);
+    // Notification deletion is now handled in acceptTask
     setIsCompleting(false);
   };
 
   const handleDelete = async () => {
     setIsDeleting(true);
     await deleteTask(task.id);
-    await deleteNotification(task.id);
+    // Notification deletion is now handled in deleteTask
     setIsDeleting(false);
   };
 
@@ -299,11 +299,6 @@ export function TaskItem({ task, extraActions, isSubtask = false, isHistoryView 
             {/* Duration with better mobile display */}
             <Badge variant="outline" className="text-xs">
               ⏱️ {task.duration}m
-            </Badge>
-            
-            {/* Time of day */}
-            <Badge variant="secondary" className="text-xs">
-              🕒 {task.timeOfDay}
             </Badge>
             
             {/* Reminder */}

@@ -10,7 +10,7 @@
 
 import { ai } from '@/ai/genkit';
 import { z } from 'zod';
-import { priorities, timesOfDay } from '@/lib/types';
+import { priorities } from '@/lib/types';
 
 
 const EnhanceTaskInputSchema = z.object({
@@ -24,7 +24,6 @@ const EnhanceTaskOutputSchema = z.object({
   category: z.string().describe("The predicted category for the task."),
   priority: z.enum(priorities).describe("The predicted priority/urgency for the task."),
   duration: z.coerce.number().describe("The predicted duration in minutes for the task."),
-  timeOfDay: z.enum(timesOfDay).describe("The predicted best time of day to perform the task."),
 });
 export type EnhanceTaskOutput = z.infer<typeof EnhanceTaskOutputSchema>;
 
@@ -66,7 +65,6 @@ Your tasks are:
     *   \`category\`: Choose one from: \${getUserTaskSettings().taskCategories.join(', ')}.
             *   \`priority\`: Choose one from: \${priorities.join(', ')}.
     *   \`duration\`: Estimate the time required in minutes. Choose one from: \${getUserTaskSettings().taskDurations.join(', ')}.
-    *   \`timeOfDay\`: Choose the best time of day. Choose one from: \${timesOfDay.join(', ')}.
 
 Example:
 User Input Title: "team meeting"
@@ -76,8 +74,7 @@ Output:
   "description": "Outline key discussion points, and gather necessary documents for the upcoming weekly team meeting to ensure a productive session.",
   "category": "Work",
           "priority": "Medium",
-  "duration": 30,
-  "timeOfDay": "Morning"
+  "duration": 30
 }
 
 Example 2:
@@ -88,8 +85,7 @@ Output:
   "description": "Complete today's planned workout session to build strength and improve fitness.",
   "category": "Personal",
           "priority": "High",
-  "duration": 60,
-  "timeOfDay": "Evening"
+  "duration": 60
 }
 
 Now, process the user's task title.`,

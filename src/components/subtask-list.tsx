@@ -73,7 +73,7 @@ export function SubtaskList({
     setCompletingSubtasks(prev => new Set(prev).add(subtaskId));
     try {
       await acceptTask(subtaskId);
-      await deleteNotification(subtaskId);
+      // Notification deletion is now handled in acceptTask
       toast({
         title: "Subtask completed!",
         description: "Great job! The subtask has been marked as complete"
@@ -145,7 +145,6 @@ export function SubtaskList({
                       category: subtask.category,
                       priority: subtask.priority,
                       duration: subtask.duration,
-                      timeOfDay: subtask.timeOfDay,
                       reminderAt: subtask.reminderAt ? new Date(subtask.reminderAt) : undefined,
                     }}
                     customSaveHandler={(taskData) => handleSubtaskEdit(subtask.id, taskData)}
@@ -217,10 +216,6 @@ export function SubtaskList({
                         
                         <Badge variant="outline" className="text-xs px-1.5 py-0.5 h-5">
                           ⏱️ {subtask.duration}m
-                        </Badge>
-                        
-                        <Badge variant="outline" className="text-xs px-1.5 py-0.5 h-5">
-                          🕒 {subtask.timeOfDay}
                         </Badge>
                         
                         {subtask.completedAt && (
@@ -318,7 +313,6 @@ export function SubtaskList({
                     defaultValues={{
                       category: parentTask.category,
                       priority: parentTask.priority,
-                      timeOfDay: parentTask.timeOfDay,
                     }}
                   />
                 </CardContent>
