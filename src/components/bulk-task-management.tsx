@@ -494,7 +494,7 @@ export function BulkTaskManagement() {
   }, []);
 
   // Column resizing handlers
-  const handleResizeStart = useCallback((columnKey: string, event: React.MouseEvent) => {
+  const handleResizeStart = useCallback((columnKey: string, event: React.MouseEvent | MouseEvent) => {
     event.preventDefault();
     event.stopPropagation();
     
@@ -509,8 +509,9 @@ export function BulkTaskManagement() {
     const column = columns.find(col => col.key === columnKey);
     const startWidth = column?.width ? parseInt(column.width.replace('px', '')) : 100;
 
-    const handleMouseMove = (e: MouseEvent) => {
-      const deltaX = e.clientX - startX;
+    const handleMouseMove = (e: MouseEvent | TouchEvent) => {
+      const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+      const deltaX = clientX - startX;
       const newWidth = Math.max(
         column?.minWidth || 50,
         Math.min(column?.maxWidth || 500, startWidth + deltaX)
@@ -532,10 +533,15 @@ export function BulkTaskManagement() {
       
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
+      document.removeEventListener('touchmove', handleMouseMove);
+      document.removeEventListener('touchend', handleMouseUp);
     };
 
+    // Add both mouse and touch event listeners for mobile support
     document.addEventListener('mousemove', handleMouseMove);
     document.addEventListener('mouseup', handleMouseUp);
+    document.addEventListener('touchmove', handleMouseMove, { passive: false });
+    document.addEventListener('touchend', handleMouseUp);
   }, [columns]);
 
   // Bulk actions
@@ -1517,7 +1523,7 @@ export function BulkTaskManagement() {
                     <TableHead 
                       key={column.key} 
                       className={cn(
-                        "whitespace-nowrap relative group text-gray-900 dark:text-gray-100 font-semibold bg-gradient-to-b from-gray-50/80 to-gray-100/80 dark:from-gray-800/80 dark:to-gray-900/80 border-r border-gray-200 dark:border-gray-700",
+                        "whitespace-nowrap relative group text-gray-900 dark:text-gray-100 font-semibold bg-gradient-to-b from-gray-50/80 to-gray-100/80 dark:from-gray-800/80 dark:to-gray-900/80",
                         "transition-all duration-150 ease-out"
                       )}
                       style={{ 
@@ -1592,40 +1598,57 @@ export function BulkTaskManagement() {
                       {column.resizable !== false && (
                         <div
                           className={cn(
-                            "absolute right-0 top-0 h-full w-1 cursor-col-resize transition-all duration-200 group/resize",
-                            "hover:w-2 hover:bg-gradient-to-r hover:from-blue-400/60 hover:to-purple-500/60",
-                            resizingColumn === column.key 
-                              ? "w-2 bg-gradient-to-r from-blue-500 to-purple-600 shadow-lg shadow-blue-500/50" 
-                              : "bg-gray-300/40 hover:bg-gradient-to-r hover:from-blue-400/60 hover:to-purple-500/60",
-                            "dark:bg-gray-600/40 dark:hover:from-blue-400/70 dark:hover:to-purple-500/70",
-                            "z-30"
+                            "absolute right-0 top-0 h-full w-3 cursor-col-resize transition-all duration-300 group/resize",
+                            "opacity-0 hover:opacity-100 group-hover:opacity-100",
+                            resizingColumn === column.key && "opacity-100"
                           )}
                           onMouseDown={(e) => {
                             e.preventDefault();
                             e.stopPropagation();
                             handleResizeStart(column.key.toString(), e);
                           }}
+                          onTouchStart={(e) => {
+                            e.preventDefault();
+                            // Show the resize handle on touch
+                            e.currentTarget.style.opacity = '1';
+                            
+                            const touch = e.touches[0];
+                            const mouseEvent = new MouseEvent('mousedown', {
+                              clientX: touch.clientX,
+                              clientY: touch.clientY,
+                              bubbles: true,
+                              cancelable: true
+                            });
+                            handleResizeStart(column.key.toString(), mouseEvent as any);
+                          }}
                           title="Drag to resize column"
                         >
-                          {/* Visual resize indicator */}
+                          {/* Main resize line */}
                           <div className={cn(
-                            "absolute right-0 top-1/2 transform -translate-y-1/2 w-1 h-8 rounded-full transition-all duration-200",
-                            "bg-gradient-to-b from-blue-400 via-purple-500 to-blue-600 opacity-0 group-hover/resize:opacity-100",
-                            resizingColumn === column.key && "opacity-100 shadow-lg shadow-blue-500/30 animate-pulse"
+                            "absolute right-0 top-0 h-full w-1 transition-all duration-300",
+                            "bg-gradient-to-b from-blue-400 via-purple-500 to-blue-600",
+                            "hover:w-2 hover:shadow-lg hover:shadow-blue-500/30",
+                            "active:w-2 active:shadow-lg active:shadow-blue-500/30", // Mobile active state
+                            resizingColumn === column.key 
+                              ? "w-2 shadow-lg shadow-blue-500/50 animate-pulse" 
+                              : "group-hover/resize:shadow-md group-hover/resize:shadow-blue-400/20"
                           )} />
                           
-                          {/* Dotted pattern for better visibility */}
+                          {/* Hover/Touch indicator dots */}
                           <div className={cn(
-                            "absolute right-0 top-0 h-full w-1 transition-all duration-200",
-                            "bg-gradient-to-b from-transparent via-gray-400/30 to-transparent opacity-0",
-                            "group-hover/resize:opacity-100",
+                            "absolute right-0.5 top-1/2 transform -translate-y-1/2 transition-all duration-300",
+                            "opacity-0 group-hover/resize:opacity-100",
                             resizingColumn === column.key && "opacity-100"
-                          )}
-                          style={{
-                            backgroundImage: 'radial-gradient(circle, rgba(99, 102, 241, 0.6) 1px, transparent 1px)',
-                            backgroundSize: '2px 8px',
-                            backgroundRepeat: 'repeat-y'
-                          }} />
+                          )}>
+                            <div className="flex flex-col space-y-1">
+                              <div className="w-0.5 h-0.5 bg-white rounded-full shadow-sm" />
+                              <div className="w-0.5 h-0.5 bg-white rounded-full shadow-sm" />
+                              <div className="w-0.5 h-0.5 bg-white rounded-full shadow-sm" />
+                            </div>
+                          </div>
+                          
+                          {/* Mobile touch area - larger invisible touch target */}
+                          <div className="absolute -right-2 -left-2 top-0 h-full md:block lg:hidden" />
                         </div>
                       )}
                     </TableHead>
