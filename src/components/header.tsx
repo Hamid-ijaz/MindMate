@@ -239,6 +239,13 @@ export function Header() {
     
     // Admin and management
     { 
+      label: 'Bulk Manager', 
+      href: '/bulk', 
+      icon: CheckSquare, 
+      category: 'admin',
+      description: 'Manage multiple tasks at once'
+    },
+    { 
       label: 'Pending Tasks', 
       href: '/pending', 
       icon: Clock, 
