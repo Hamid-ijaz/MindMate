@@ -40,8 +40,16 @@ export const COLLECTIONS = {
 export const userService = {
   async createUser(userData: User): Promise<void> {
     const userRef = doc(db, COLLECTIONS.USERS, userData.email);
+    // Remove any undefined fields to avoid Firestore "Unsupported field value: undefined" errors
+    const sanitized: any = { ...userData };
+    Object.keys(sanitized).forEach(key => {
+      if (sanitized[key] === undefined) {
+        delete sanitized[key];
+      }
+    });
+
     await setDoc(userRef, {
-      ...userData,
+      ...sanitized,
       createdAt: Timestamp.now(),
       updatedAt: Timestamp.now()
     });
@@ -68,8 +76,16 @@ export const userService = {
 
   async updateUser(email: string, updates: Partial<User>): Promise<void> {
     const userRef = doc(db, COLLECTIONS.USERS, email);
+    // Remove undefined fields from updates to avoid Firestore errors
+    const updateData: any = { ...updates };
+    Object.keys(updateData).forEach(key => {
+      if (updateData[key] === undefined) {
+        delete updateData[key];
+      }
+    });
+
     await updateDoc(userRef, {
-      ...updates,
+      ...updateData,
       updatedAt: Timestamp.now()
     });
   },

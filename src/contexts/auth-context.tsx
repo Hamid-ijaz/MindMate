@@ -71,10 +71,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         return false; // User already exists
       }
       
-      const newUser: User = { ...userData };
-      await userService.createUser(newUser);
-      setUser(newUser);
-      Cookies.set(AUTH_COOKIE_KEY, newUser.email, { expires: 7, path: '/' });
+      // Sanitize to remove undefined optional fields before writing to Firestore
+      const newUser: User = { ...userData } as User;
+      const sanitized: any = { ...newUser };
+      Object.keys(sanitized).forEach(key => {
+        if (sanitized[key] === undefined) delete sanitized[key];
+      });
+
+  await userService.createUser(sanitized);
+  // Use the sanitized user object for client state
+  setUser(sanitized as User);
+  Cookies.set(AUTH_COOKIE_KEY, sanitized.email, { expires: 7, path: '/' });
       
       // Send welcome email
       try {
@@ -84,8 +91,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            userEmail: newUser.email,
-            userName: newUser.name,
+            userEmail: sanitized.email,
+            userName: `${sanitized.firstName || ''} ${sanitized.lastName || ''}`.trim(),
             action: 'welcome',
           }),
         });

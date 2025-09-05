@@ -395,17 +395,30 @@ export function NotificationSettings() {
         const registration = await navigator.serviceWorker.ready;
         const subscription = await registration.pushManager.getSubscription();
 
-        if (subscription) {
-          await fetch('/api/notifications/unsubscribe', {
+          if (subscription) {
+          // Tell server to deactivate this user's subscription(s)
+          const resp = await fetch('/api/notifications/unsubscribe', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
               'Authorization': `Bearer ${user?.email}`,
             },
-            body: JSON.stringify({ endpoint: subscription.endpoint }),
+            body: JSON.stringify({ userEmail: user?.email, endpoint: subscription.endpoint }),
           });
 
-          await subscription.unsubscribe();
+          if (!resp.ok) {
+            const err = await resp.json().catch(() => ({}));
+            throw new Error(err?.error || 'Failed to unsubscribe on server');
+          }
+
+          // Unsubscribe in the browser (best-effort)
+          try {
+            await subscription.unsubscribe();
+          } catch (e) {
+            // ignore; server-side deactivation is primary
+            console.warn('Browser unsubscribe failed:', e);
+          }
+
         }
 
         const newPreferences = { ...preferences, enabled: false };

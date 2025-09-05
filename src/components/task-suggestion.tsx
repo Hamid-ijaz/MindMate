@@ -249,9 +249,19 @@ export function TaskSuggestion() {
   }, [tasks]);
 
   // Reset carousel slide when possibleTasks change
+  // Reset carousel slide when possibleTasks length or current priority changes.
+  // Previously we only reset when the length changed; if two priorities have the same
+  // number of tasks switching priorities would keep the old index. Ensure we always
+  // reset to the first card and instruct the carousel API to scroll to index 0.
   useEffect(() => {
     setCurrentSlide(0);
-  }, [possibleTasks.length]);
+    if (api && possibleTasks.length > 0) {
+      // allow a short tick for re-render before asking the embla API to scroll
+      setTimeout(() => {
+        try { api.scrollTo(0); } catch (e) { /* ignore if api not ready */ }
+      }, 60);
+    }
+  }, [currentPriority, possibleTasks.length, api]);
 
 
   const otherVisibleTasks = useMemo(() => {
