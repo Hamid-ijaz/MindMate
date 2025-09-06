@@ -65,10 +65,40 @@ export async function POST(request: NextRequest) {
     // Send test notification to all user's devices
     for (const doc of subscriptionsSnapshot.docs) {
       const subscriptionData = doc.data();
-      
+
+      // normalize subscription object for web-push
+      const pushSubscription = subscriptionData.subscription
+        ? subscriptionData.subscription
+        : (subscriptionData.endpoint && subscriptionData.keys)
+          ? {
+            endpoint: subscriptionData.endpoint,
+            keys: subscriptionData.keys,
+          }
+          : null;
+
+      if (!pushSubscription || !pushSubscription.endpoint) {
+        console.warn(`Skipping subscription ${doc.id} - missing endpoint`, subscriptionData);
+        failureCount++;
+        errors.push(`Subscription ${doc.id}: missing endpoint`);
+
+        // Deactivate invalid subscription to avoid repeated failures
+        try {
+          await db.collection('pushSubscriptions').doc(doc.id).update({
+            isActive: false,
+            deactivatedAt: new Date(),
+            deactivationReason: 'missing_endpoint'
+          });
+          console.log(`Deactivated subscription ${doc.id} due to missing endpoint`);
+        } catch (updateErr) {
+          console.error(`Failed to deactivate invalid subscription ${doc.id}:`, updateErr);
+        }
+
+        continue;
+      }
+
       try {
         await webpush.sendNotification(
-          subscriptionData.subscription,
+          pushSubscription,
           JSON.stringify({
             title: message.title || 'Test Notification',
             body: message.body || 'This is a test notification from MindMate.',
@@ -82,12 +112,12 @@ export async function POST(request: NextRequest) {
             }
           })
         );
-        
+
         successCount++;
       } catch (error: any) {
         console.error(`Failed to send test notification to subscription ${doc.id}:`, error);
         failureCount++;
-        
+
         // If subscription is invalid (410 or 404), remove it
         if (error.statusCode === 410 || error.statusCode === 404) {
           try {
@@ -97,7 +127,7 @@ export async function POST(request: NextRequest) {
             console.error(`Failed to delete invalid subscription ${doc.id}:`, deleteError);
           }
         }
-        
+
         errors.push(`Subscription ${doc.id}: ${error.message}`);
       }
     }

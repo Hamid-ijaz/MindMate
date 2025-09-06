@@ -60,8 +60,12 @@ export async function POST(request: NextRequest) {
         },
         preferences,
       };
+      // also update canonical subscription object for compatibility
+      if (endpoint && keys) {
+        (updateData as any).subscription = { endpoint, keys } as any;
+      }
 
-      await db.collection('pushSubscriptions').doc(docId).update(updateData);
+      await db.collection('pushSubscriptions').doc(docId).update(updateData as any);
 
       return NextResponse.json({
         success: true,
@@ -71,7 +75,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Create new subscription
-    const subscriptionData: Omit<PushSubscriptionDocument, 'id'> = {
+    // Build subscription data (use any to allow extra compatibility fields)
+    const subscriptionData: any = {
       userId: userEmail, // Use email as consistent identifier
       userEmail,
       endpoint,
@@ -92,6 +97,9 @@ export async function POST(request: NextRequest) {
       },
       preferences,
     };
+
+    // canonical subscription object for web-push
+    subscriptionData.subscription = { endpoint, keys };
 
     const docRef = await db.collection('pushSubscriptions').add(subscriptionData);
 
@@ -115,8 +123,7 @@ export async function POST(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
-    await useFirebaseAdmin();
-    const db = getFirestore();
+  const db = getFirestore();
 
     const { searchParams } = new URL(request.url);
     const userEmail = searchParams.get('userEmail');
@@ -177,8 +184,7 @@ export async function DELETE(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   try {
-    await useFirebaseAdmin();
-    const db = getFirestore();
+  const db = getFirestore();
 
     const { searchParams } = new URL(request.url);
     const userEmail = searchParams.get('userEmail');

@@ -62,6 +62,8 @@ export async function POST(request: NextRequest) {
         deviceInfo: body.deviceInfo,
         updatedAt: serverTimestamp(),
         isActive: true,
+        // also keep canonical subscription object
+        subscription: { endpoint: body.endpoint, keys: body.keys },
       });
 
       return NextResponse.json({
@@ -77,6 +79,8 @@ export async function POST(request: NextRequest) {
         userId: userId,
         userEmail: body.userEmail,
         deviceInfo: body.deviceInfo,
+  // canonical subscription object
+  subscription: { endpoint: body.endpoint, keys: body.keys },
         subscribedAt: body.subscribedAt ? new Date(body.subscribedAt) : serverTimestamp(),
         createdAt: serverTimestamp(),
         isActive: true,
