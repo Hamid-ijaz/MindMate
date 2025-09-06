@@ -635,6 +635,232 @@ async function processPushNotifications(db: any, now: Date): Promise<any> {
         }
       }
 
+      // Process milestone notifications
+      try {
+        userDetail.logs.push('Checking milestone notifications...');
+        
+        // Get user's milestones
+        const milestonesSnapshot = await db
+          .collection(`users/${userEmail}/milestones`)
+          .where('isActive', '==', true)
+          .get();
+
+        if (!milestonesSnapshot.empty) {
+          userDetail.logs.push(`Found ${milestonesSnapshot.docs.length} active milestones`);
+          
+          for (const milestoneDoc of milestonesSnapshot.docs) {
+            const milestone = { id: milestoneDoc.id, ...milestoneDoc.data() };
+            
+            userDetail.logs.push(`Processing milestone: ${milestone.title} (isRecurring: ${milestone.isRecurring})`);
+            console.log(`🔍 Processing milestone:`, {
+              id: milestone.id,
+              title: milestone.title,
+              isRecurring: milestone.isRecurring,
+              originalDate: milestone.originalDate,
+              notificationSettings: milestone.notificationSettings
+            });
+            
+            // Calculate days until next anniversary
+            let daysUntil = null;
+            if (milestone.isRecurring) {
+              const originalDate = new Date(milestone.originalDate);
+              const currentYear = now.getFullYear();
+              
+              userDetail.logs.push(`Original date: ${originalDate.toDateString()}, Current year: ${currentYear}`);
+              
+              // Calculate this year's anniversary
+              let thisYearAnniversary = new Date(currentYear, originalDate.getMonth(), originalDate.getDate());
+              
+              // If this year's anniversary has passed, use next year's
+              if (thisYearAnniversary < now) {
+                thisYearAnniversary = new Date(currentYear + 1, originalDate.getMonth(), originalDate.getDate());
+              }
+              
+              daysUntil = Math.floor((thisYearAnniversary.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+              
+              userDetail.logs.push(`Next anniversary: ${thisYearAnniversary.toDateString()}, Days until: ${daysUntil}`);
+              console.log(`📅 Anniversary calculation:`, {
+                originalDate: originalDate.toISOString(),
+                thisYearAnniversary: thisYearAnniversary.toISOString(),
+                daysUntil,
+                now: now.toISOString()
+              });
+            }
+            
+            // Check if notification should be sent based on milestone settings
+            let shouldNotify = false;
+            let notificationType = '';
+            
+            userDetail.logs.push(`Checking notification rules for ${milestone.title}, daysUntil: ${daysUntil}`);
+            
+            if (daysUntil !== null) {
+              console.log(`📋 Notification settings for ${milestone.title}:`, milestone.notificationSettings);
+              
+              if (daysUntil === 0 && milestone.notificationSettings?.onTheDay) {
+                shouldNotify = true;
+                notificationType = 'on-the-day';
+                userDetail.logs.push(`✅ Should notify: On the day (${daysUntil} days)`);
+              } else if (daysUntil === 1 && milestone.notificationSettings?.oneDayBefore) {
+                shouldNotify = true;
+                notificationType = 'one-day-before';
+                userDetail.logs.push(`✅ Should notify: One day before (${daysUntil} days)`);
+              } else if (daysUntil === 3 && milestone.notificationSettings?.threeDaysBefore) {
+                shouldNotify = true;
+                notificationType = 'three-days-before';
+                userDetail.logs.push(`✅ Should notify: Three days before (${daysUntil} days)`);
+              } else if (daysUntil === 7 && milestone.notificationSettings?.oneWeekBefore) {
+                shouldNotify = true;
+                notificationType = 'one-week-before';
+                userDetail.logs.push(`✅ Should notify: One week before (${daysUntil} days)`);
+              } else if (daysUntil === 30 && milestone.notificationSettings?.oneMonthBefore) {
+                shouldNotify = true;
+                notificationType = 'one-month-before';
+                userDetail.logs.push(`✅ Should notify: One month before (${daysUntil} days)`);
+              } else {
+                userDetail.logs.push(`❌ No notification rule matches: daysUntil=${daysUntil}, settings enabled: onTheDay=${milestone.notificationSettings?.onTheDay}, oneDayBefore=${milestone.notificationSettings?.oneDayBefore}, threeDaysBefore=${milestone.notificationSettings?.threeDaysBefore}, oneWeekBefore=${milestone.notificationSettings?.oneWeekBefore}, oneMonthBefore=${milestone.notificationSettings?.oneMonthBefore}`);
+              }
+            } else {
+              userDetail.logs.push(`❌ daysUntil is null (non-recurring milestone)`);
+            }
+            
+            if (shouldNotify) {
+              // Check if we already sent a notification for this milestone today
+              const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+              const existingNotificationQuery = await db
+                .collection(`users/${userEmail}/notifications`)
+                .where('relatedMilestoneId', '==', milestone.id)
+                .where('data.type', '==', 'milestone-reminder')
+                .where('data.notificationType', '==', notificationType)
+                .where('createdAt', '>=', todayStart)
+                .limit(1)
+                .get();
+
+              if (existingNotificationQuery.empty) {
+                // Generate notification content
+                const typeInfoMap = {
+                  birthday: { label: 'Birthday', icon: '🎂' },
+                  anniversary: { label: 'Anniversary', icon: '💖' },
+                  work_anniversary: { label: 'Work Anniversary', icon: '💼' },
+                  graduation: { label: 'Graduation', icon: '🎓' },
+                  exam_passed: { label: 'Exam Passed', icon: '📚' },
+                  achievement: { label: 'Achievement', icon: '🏆' },
+                  milestone: { label: 'Milestone', icon: '🎯' },
+                  purchase: { label: 'Purchase', icon: '🛍️' },
+                  relationship: { label: 'Relationship', icon: '❤️' },
+                  travel: { label: 'Travel', icon: '✈️' },
+                  custom: { label: 'Custom', icon: '⭐' },
+                };
+                
+                const typeInfo = typeInfoMap[milestone.type as keyof typeof typeInfoMap] || { label: 'Milestone', icon: '⭐' };
+
+                let title = '';
+                let body = '';
+                
+                // Calculate years since original event
+                const yearsSince = Math.floor((now.getTime() - milestone.originalDate) / (1000 * 60 * 60 * 24 * 365.25));
+                
+                if (daysUntil === 0) {
+                  title = `${milestone.icon || typeInfo.icon} ${milestone.title}`;
+                  body = milestone.isRecurring 
+                    ? `Today marks ${yearsSince + 1} year${yearsSince + 1 !== 1 ? 's' : ''} since ${milestone.title}!`
+                    : `Anniversary of ${milestone.title} (${yearsSince} year${yearsSince !== 1 ? 's' : ''} ago)`;
+                } else {
+                  const timeText = daysUntil === 1 ? 'tomorrow' : 
+                                 daysUntil === 7 ? 'in 1 week' :
+                                 daysUntil === 30 ? 'in 1 month' :
+                                 `in ${daysUntil} days`;
+                  
+                  title = `${milestone.icon || typeInfo.icon} Upcoming ${typeInfo.label}`;
+                  body = milestone.isRecurring
+                    ? `${milestone.title} is ${timeText} (${yearsSince + 1} year${yearsSince + 1 !== 1 ? 's' : ''})`
+                    : `${milestone.title} anniversary is ${timeText}`;
+                }
+
+                // Generate notification ID
+                const notificationId = `notif_${userEmail.replace('@', '_').replace('.', '_')}_${Date.now()}_milestone`;
+                
+                // Save notification to Firestore
+                const notificationData = {
+                  id: notificationId,
+                  userEmail,
+                  title,
+                  body,
+                  type: 'push',
+                  relatedMilestoneId: milestone.id,
+                  isRead: false,
+                  createdAt: new Date(),
+                  data: {
+                    type: 'milestone-reminder',
+                    milestoneId: milestone.id,
+                    milestoneTitle: milestone.title,
+                    milestoneType: milestone.type,
+                    notificationType,
+                    daysUntil,
+                    yearsSince: yearsSince + (daysUntil === 0 ? 1 : 0),
+                    timestamp: now.toISOString()
+                  },
+                };
+                
+                await db.collection(`users/${userEmail}/notifications`).doc(notificationId).set(notificationData);
+                console.log(`💾 Saved milestone notification to Firestore: ${notificationId}`);
+                
+                const payload = {
+                  title,
+                  body,
+                  icon: '/icon-192.png',
+                  badge: '/icon-192.png',
+                  tag: `milestone-${milestone.id}-${notificationType}`,
+                  data: {
+                    type: 'milestone-reminder',
+                    milestoneId: milestone.id,
+                    notificationId,
+                    userEmail,
+                    url: `/milestones`,
+                    timestamp: now.toISOString()
+                  }
+                };
+
+                let successCount = 0;
+                // Send to all user's devices
+                for (const sub of subscriptions) {
+                  const result = await sendPushNotification(sub.data().subscription, payload);
+                  if (result.success) {
+                    results.totalNotificationsSent++;
+                    successCount++;
+                  } else if (result.error?.includes('410') || result.error?.includes('404')) {
+                    // Remove invalid subscription
+                    await db.collection('pushSubscriptions').doc(sub.id).delete();
+                  }
+                }
+
+                // Update notification with sent status if at least one was successful
+                if (successCount > 0) {
+                  await db.collection(`users/${userEmail}/notifications`).doc(notificationId).update({ 
+                    sentAt: new Date() 
+                  });
+                  console.log(`📝 Updated milestone notification sentAt for ${notificationId}`);
+                }
+
+                // Update milestone with last notified timestamp
+                await db.collection(`users/${userEmail}/milestones`).doc(milestone.id).update({ 
+                  lastNotifiedAt: now.getTime() 
+                });
+                
+                userDetail.logs.push(`Sent milestone notification: ${title}`);
+                console.log(`🎉 Sent milestone notification for ${milestone.title} (${daysUntil} days until)`);
+              } else {
+                userDetail.logs.push(`Skipped milestone ${milestone.title} - already notified today`);
+              }
+            }
+          }
+        } else {
+          userDetail.logs.push('No active milestones found');
+        }
+      } catch (milestoneError: any) {
+        console.error(`Error processing milestones for user ${userEmail}:`, milestoneError);
+        userDetail.errors.push(`Milestone processing error: ${milestoneError.message}`);
+      }
+
       userDetail.status = 'processed';
       userDetail.notifications.total = userDetail.notifications.overdue + userDetail.notifications.reminders;
       userDetail.logs.push(`Completed processing: ${userDetail.notifications.total} notifications sent`);

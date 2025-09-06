@@ -387,6 +387,60 @@ export interface Note {
     updatedAt: number;
 }
 
+// Milestone/Anniversary Event Types
+export type MilestoneType = 
+  | 'birthday'
+  | 'anniversary' 
+  | 'work_anniversary'
+  | 'graduation'
+  | 'exam_passed'
+  | 'achievement'
+  | 'milestone'
+  | 'purchase'
+  | 'relationship'
+  | 'travel'
+  | 'custom';
+
+export interface Milestone {
+  id: string;
+  userEmail: string;
+  title: string;
+  description?: string;
+  type: MilestoneType;
+  originalDate: number; // When the event originally happened (timestamp)
+  isRecurring: boolean; // For birthdays, anniversaries that recur yearly
+  recurringFrequency?: 'yearly' | 'monthly'; // How often it recurs
+  icon?: string; // Optional icon/emoji for the milestone
+  color?: string; // Optional color for the milestone
+  isActive: boolean; // Whether to send notifications for this milestone
+  notificationSettings: {
+    oneMonthBefore: boolean;
+    oneWeekBefore: boolean;
+    threeDaysBefore: boolean;
+    oneDayBefore: boolean;
+    onTheDay: boolean;
+  };
+  createdAt: number;
+  updatedAt: number;
+  lastNotifiedAt?: number; // Last time any notification was sent for this milestone
+  nextAnniversaryDate?: number; // Calculated next anniversary date (for recurring milestones)
+}
+
+export interface MilestoneNotificationPreferences {
+  enabled: boolean;
+  quietHours: {
+    start: string; // HH:MM format
+    end: string; // HH:MM format
+  };
+  defaultSettings: {
+    oneMonthBefore: boolean;
+    oneWeekBefore: boolean;
+    threeDaysBefore: boolean;
+    oneDayBefore: boolean;
+    onTheDay: boolean;
+  };
+}
+
 // Schema for the rewordTask AI flow
 export const RewordTaskInputSchema = z.object({
   title: z.string().describe('The original title of the task.'),

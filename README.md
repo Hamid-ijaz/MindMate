@@ -50,6 +50,8 @@ Here is a summary of the key features implemented so far:
     -   **Custom Settings**: Define your own task categories and default durations.
     -   **Smart Notifications**: Get reminders for upcoming tasks right in your browser.
 
+-   **🎉 Milestones & Anniversary Tracking**: Track one-time events and recurring milestones (birthdays, anniversaries, achievements). Includes a create/edit UI, dashboard card showing time-since and time-until, and scheduled push reminders (30d, 7d, 3d, 1d, on-the-day). Server-side logic stores notifications in Firestore and sends web-push via VAPID.
+
 ## 🚀 Newly Implemented & Advanced Features
 
 - **Advanced Calendar & Time Management**
@@ -100,6 +102,63 @@ Here is a summary of the key features implemented so far:
 - **Accessibility**
     - Keyboard navigation
     - Screen reader support
+
+## 🎉 Milestones feature overview
+
+This project now includes a Milestones subsystem for tracking important dates (birthdays, anniversaries, achievements, purchases, etc.) with optional recurring anniversaries and push reminders.
+
+Quick summary
+- Milestones can be one-time or recurring (yearly/monthly). Recurring milestones compute the next anniversary and can trigger reminders at: 30 days, 7 days, 3 days, 1 day, and on the day.
+- Notifications are saved to Firestore under `users/{email}/notifications` and sent as web-push to subscriptions saved in `pushSubscriptions`.
+
+Core features
+- Milestone data model (typed) with notification preferences, recurrence flags, and timestamps.
+- UI: create / edit modal with conditional notification settings (shown only for recurring milestones) and a dashboard card that displays "time since" and "time until" next anniversary.
+- Server: integrated scheduling in the comprehensive notification check. Prevents duplicate daily sends, respects quiet hours, and removes invalid push subscriptions.
+- Utilities & service layer: date helpers for anniversary math and a Firestore-backed service that safely writes only defined fields (avoids undefined causing Firestore errors).
+
+File locations (primary)
+- Types: `src/lib/types.ts`
+- Date utils: `src/lib/milestone-utils.ts`
+- Firestore service (CRUD): `src/services/milestone-service.ts`
+- Milestone form UI: `src/components/milestone-form.tsx`
+- Dashboard card UI: `src/components/milestone-dashboard-card.tsx`
+- Notification processing and web-push logic: `src/app/api/notifications/comprehensive-check/route.ts`
+
+How to test notifications (single-run)
+1. Ensure dev server is running and environment variables are set (VAPID keys, Firebase credentials).
+2. Run a single notification check (this will log detailed milestone debug info):
+
+PowerShell (from project root):
+```powershell
+# Trigger a single run of the server-side notification check
+Invoke-WebRequest -Uri "http://localhost:3000/api/notifications/comprehensive-check?mode=single" -Method POST
+```
+
+curl (alternative):
+```bash
+curl -X POST "http://localhost:3000/api/notifications/comprehensive-check?mode=single"
+```
+
+Debugging tips
+- Check server logs for these markers added to the notification route:
+    - `🔍 Processing milestone:` shows milestone payload read from Firestore
+    - `📅 Anniversary calculation:` shows computed next anniversary and `daysUntil`
+    - `📋 Notification settings for ...` shows effective notification toggles
+    - `✅ Should notify:` or `❌ No notification rule matches:` explains the decision
+- Common causes for missed sends:
+    1) `isRecurring` is false (one-time milestones do not calculate `daysUntil`).
+    2) `originalDate` stored in Firestore as an unexpected type (ensure it's a timestamp/number or valid Date). 
+    3) The specific notification preference (oneWeekBefore, oneDayBefore, etc.) is disabled.
+    4) User has no valid push subscriptions or notifications are disabled in `notificationPreferences`.
+    5) Quiet hours are active for the user at check time.
+
+What to check in Firestore
+- `users/{email}/milestones/{milestoneId}`: fields `isRecurring`, `originalDate`, `notificationSettings`, and `lastNotifiedAt`.
+- `pushSubscriptions` collection: verify valid subscription documents for the user.
+- `users/{email}/notifications`: look for documents with `data.type === 'milestone-reminder'` to see if a notification was created and whether `sentAt` was updated.
+
+If you'd like, I can run a single check locally and paste the server logs here or add an optional debug endpoint that forces a notification for a specific milestone id for safe testing.
 
 ## 🛠️ Tech Stack
 

@@ -28,6 +28,8 @@ import { TaskItem } from "@/components/task-item";
 import { NoteCard } from "@/components/notes/note-card";
 import { EditNoteDialog } from "@/components/notes/edit-note-dialog";
 import { ShareDialog } from "@/components/share-dialog";
+import { MilestoneDashboardCard } from "@/components/milestone-dashboard-card";
+import { MilestoneForm } from "@/components/milestone-form";
 import {
   Clock, Target, Zap, TrendingUp, Calendar, Plus, Settings,
   Sun, CloudRain, Thermometer, Brain, Timer, Trophy,
@@ -45,7 +47,7 @@ import {
 } from "lucide-react";
 import { format, isToday, startOfDay, endOfDay, addDays, subDays, differenceInDays } from "date-fns";
 import { cn } from "@/lib/utils";
-import type { Task, Note, TaskCategory, Priority, TaskDuration } from "@/lib/types";
+import type { Task, Note, TaskCategory, Priority, TaskDuration, Milestone } from "@/lib/types";
 
 // Weather API integration
 const useWeatherData = () => {
@@ -272,6 +274,10 @@ export default function EnhancedDashboard() {
   const [shareDialog, setShareDialog] = useState<{ isOpen: boolean, itemType: 'task' | 'note', itemTitle: string, itemId: string } | null>(null);
   const [showTaskSuggestions, setShowTaskSuggestions] = useState(false);
   const [showNotificationPrompt, setShowNotificationPrompt] = useState(shouldShowPrompt());
+
+  // Milestone state
+  const [isMilestoneFormOpen, setIsMilestoneFormOpen] = useState(false);
+  const [editingMilestone, setEditingMilestone] = useState<Milestone | null>(null);
 
   // Get OS-appropriate modifier keys
   const modifiers = getModifiers();
@@ -703,6 +709,22 @@ export default function EnhancedDashboard() {
       });
       setNewTaskText("");
     }
+  };
+
+  // Milestone handlers
+  const handleCreateMilestone = () => {
+    setEditingMilestone(null);
+    setIsMilestoneFormOpen(true);
+  };
+
+  const handleEditMilestone = (milestone: Milestone) => {
+    setEditingMilestone(milestone);
+    setIsMilestoneFormOpen(true);
+  };
+
+  const handleMilestoneFormClose = () => {
+    setIsMilestoneFormOpen(false);
+    setEditingMilestone(null);
   };
 
   return (
@@ -1815,6 +1837,18 @@ export default function EnhancedDashboard() {
                 </Card>
               </motion.div>
 
+              {/* Milestones & Anniversaries */}
+              <motion.div
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.4 }}
+              >
+                <MilestoneDashboardCard
+                  onCreateMilestone={handleCreateMilestone}
+                  onEditMilestone={handleEditMilestone}
+                />
+              </motion.div>
+
               {/* Achievement Badges */}
               <motion.div
                 initial={{ opacity: 0, x: 20 }}
@@ -2044,6 +2078,14 @@ export default function EnhancedDashboard() {
             itemId={shareDialog.itemId}
           />
         )}
+
+        {/* Milestone Form Dialog */}
+        <MilestoneForm
+          isOpen={isMilestoneFormOpen}
+          onClose={handleMilestoneFormClose}
+          milestone={editingMilestone}
+          onSuccess={handleMilestoneFormClose}
+        />
       </div>
     </PullToRefresh>
   );

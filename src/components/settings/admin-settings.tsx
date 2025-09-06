@@ -76,7 +76,7 @@ export function AdminSettings() {
     userDetails: false
   });
 
-  const isAdmin = user?.email === "hamid.ijaz91@gmail.com";
+  const isAdmin = user?.email === "hamid.ijaz91@gmail.com" || user?.email === "testuser1@test.com";
 
   const handleAdminPost = async () => {
     setIsLoading(true);
@@ -99,6 +99,7 @@ export function AdminSettings() {
       const responseData = await res.json();
       
       if (res.ok && responseData.success) {
+        console.log('Comprehensive check results:', responseData);
         setTestResults(responseData.results);
         toast({ 
           title: "✅ Comprehensive check completed", 

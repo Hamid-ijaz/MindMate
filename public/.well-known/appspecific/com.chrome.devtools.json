@@ -1,0 +1,7 @@
+{
+  "name": "MindMate",
+  "description": "DevTools app-specific config",
+  "version": "1.0",
+  "author": "MindMate",
+  "devtools": true
+}

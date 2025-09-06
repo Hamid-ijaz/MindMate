@@ -20,7 +20,7 @@ import {
   Notebook, Calendar, BarChart3, Menu, X,
   User, LogOut, Bell, Keyboard, ChevronDown, Plus,
   Zap, Search, Command as CommandIcon, Palette, BookOpen, Timer,
-  TrendingUp, Activity, CheckCircle2, Clock, Globe, CheckSquare, StickyNote
+  TrendingUp, Activity, CheckCircle2, Clock, Globe, CheckSquare, StickyNote, Gift
 } from 'lucide-react';
 import { ThemePicker } from './theme-picker';
 import { ThemePickerDialog } from './theme-picker-dialog';
@@ -214,6 +214,13 @@ export function Header() {
       description: 'Schedule and time management'
     },
     { 
+      label: 'Milestones', 
+      href: '/milestones', 
+      icon: Gift, 
+      category: 'secondary',
+      description: 'Track important dates and anniversaries'
+    },
+    { 
       label: 'Analytics', 
       href: '/analytics', 
       icon: BarChart3, 
@@ -290,6 +297,11 @@ export function Header() {
       icon: CheckCircle2
     },
     {
+      label: 'Go to Milestones',
+      action: () => window.location.href = '/milestones',
+      icon: Gift
+    },
+    {
       label: 'Open Settings',
       action: () => window.location.href = '/settings',
       icon: Settings
@@ -347,6 +359,12 @@ export function Header() {
       if (matchesShortcut(e, ['cmd'], 'c')) {
         e.preventDefault();
         window.location.href = '/calendar';
+        return;
+      }
+
+      if (matchesShortcut(e, ['cmd'], 'm')) {
+        e.preventDefault();
+        window.location.href = '/milestones';
         return;
       }
 
