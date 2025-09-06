@@ -257,10 +257,38 @@ export function ShareDialog({ isOpen, onClose, itemType, itemTitle, itemId }: Sh
   };
 
   const addCollaborator = async () => {
-    if (!collaboratorEmail.trim() || !currentShareToken) return;
-    
+    if (!collaboratorEmail.trim()) return;
+
     setIsAddingCollaborator(true);
     try {
+      // Ensure there's a share token. If not, create one automatically so collaborator can be added.
+      if (!currentShareToken) {
+        if (!user?.email) {
+          toast({ title: 'Sign in required', description: 'You must be signed in to share items', variant: 'destructive' });
+          setIsAddingCollaborator(false);
+          return;
+        }
+
+        try {
+          const result = await sharingService.createOrGetShareLink(
+            itemId,
+            itemType,
+            user.email,
+            permission
+          );
+          setShareLink(result.url);
+          setCurrentShareToken(result.shareToken);
+          toast({ title: result.isNew ? 'Share link created' : 'Using existing share link' });
+          // reload shared items to reflect new link
+          await loadSharedItems();
+        } catch (linkError) {
+          console.error('Failed to create share link before adding collaborator:', linkError);
+          toast({ title: 'Error', description: 'Failed to create share link', variant: 'destructive' });
+          setIsAddingCollaborator(false);
+          return;
+        }
+      }
+
       // Check if user exists
       const userExists = await userService.userExists?.(collaboratorEmail.trim());
       if (!userExists) {
@@ -271,7 +299,29 @@ export function ShareDialog({ isOpen, onClose, itemType, itemTitle, itemId }: Sh
         });
         return;
       }
-      
+
+      // If collaborator requires 'edit' but the share's base permission is 'view', upgrade the share permission
+      try {
+        const currentShare = sharedItems.find(item => item.shareToken === currentShareToken || item.isActive);
+        const currentBasePermission = currentShare?.permission || permission;
+        if (collaboratorPermission === 'edit' && currentBasePermission === 'view') {
+          await sharingService.updateSharePermission(currentShareToken, 'edit');
+          setPermission('edit');
+          // Update shareLink's permission query param if present
+          if (shareLink) {
+            try {
+              const baseUrl = shareLink.split('?')[0];
+              const newUrl = `${baseUrl}?token=${currentShareToken}&permission=edit`;
+              setShareLink(newUrl);
+            } catch (e) {
+              // ignore
+            }
+          }
+        }
+      } catch (permError) {
+        console.error('Failed to update share permission before adding collaborator:', permError);
+      }
+
       await sharingService.addCollaborator(
         currentShareToken,
         collaboratorEmail.trim(),
@@ -299,12 +349,36 @@ export function ShareDialog({ isOpen, onClose, itemType, itemTitle, itemId }: Sh
         // Don't fail the sharing if email fails
       }
       
+      const addedEmail = collaboratorEmail.trim();
       setCollaboratorEmail('');
       toast({
         title: "Collaborator added!",
-        description: `${collaboratorEmail.trim()} has been added with ${collaboratorPermission} permission. They'll receive an email notification.`
+        description: `${addedEmail} has been added with ${collaboratorPermission} permission. They'll receive an email notification.`
       });
-      
+
+      // Optimistically update local state for the matching share so collaborator appears immediately
+      setSharedItems(prev => {
+        // Try to find by currentShareToken first, then by itemId, then fallback to any active share
+        const idxByToken = currentShareToken ? prev.findIndex(item => item.shareToken === currentShareToken) : -1;
+        const idxByItem = prev.findIndex(item => item.itemId === itemId);
+        const idxActive = prev.findIndex(item => item.isActive);
+        const idx = idxByToken !== -1 ? idxByToken : (idxByItem !== -1 ? idxByItem : idxActive);
+        if (idx === -1) return prev;
+        const updated = [...prev];
+        const curr = { ...updated[idx] } as any;
+        const newCollab = {
+          email: addedEmail,
+          name: addedEmail.split('@')[0],
+          permission: collaboratorPermission,
+          addedAt: Date.now(),
+          addedBy: user?.email || ''
+        };
+        curr.collaborators = Array.isArray(curr.collaborators) ? [...curr.collaborators, newCollab] : [newCollab];
+        updated[idx] = curr;
+        return updated;
+      });
+
+      // Reload from server to ensure fresh state
       await loadSharedItems();
     } catch (error) {
       console.error('Error adding collaborator:', error);

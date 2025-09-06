@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { emailService } from '@/lib/email';
-import { userService } from '@/lib/firestore';
+import { userService, sharingService } from '@/lib/firestore';
 
 export async function POST(request: NextRequest) {
   try {
@@ -30,8 +30,22 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Generate share link
-    const shareLink = `${process.env.NEXT_PUBLIC_URL || 'http://localhost:3000'}/share/${sharedItemType}/${sharedItemId}`;
+    // Generate share link (include token & permission if an active share exists)
+    const baseUrl = process.env.NEXT_PUBLIC_URL || 'http://localhost:3000';
+    let shareLink = `${baseUrl}/share/${sharedItemType}/${sharedItemId}`;
+
+    try {
+      // Try to find an active share for this item (owner's shares)
+      const ownerShares = await sharingService.getSharedItemsByOwner(sharedByEmail);
+      const matching = ownerShares.find(s => s.itemId === sharedItemId && s.isActive);
+      if (matching && matching.shareToken) {
+        const tokenParam = `?token=${matching.shareToken}${matching.permission ? `&permission=${matching.permission}` : ''}`;
+        shareLink = `${baseUrl}/share/${sharedItemType}/${sharedItemId}${tokenParam}`;
+      }
+    } catch (err) {
+      // Non-fatal — fall back to basic link without token
+      console.error('Error resolving share token for email link:', err);
+    }
 
     const templateData = {
       sharedItemTitle,
