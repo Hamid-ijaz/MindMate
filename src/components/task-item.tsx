@@ -21,6 +21,7 @@ import { ItemActionsDropdown } from './item-actions-dropdown';
 import { ShareDialog } from './share-dialog';
 import { SharingHistory } from './sharing-history';
 import { safeDate, safeDateFormat, isTaskOverdue } from '@/lib/utils';
+import { useGoogleTasksSync } from '@/hooks/use-google-tasks-sync';
 
 
 interface TaskItemProps {
@@ -44,6 +45,16 @@ export function TaskItem({ task, extraActions, isSubtask = false, isHistoryView 
   const [swipeDirection, setSwipeDirection] = useState<'left' | 'right' | null>(null);
   const router = useRouter();
   const completeButtonRef = useRef<HTMLButtonElement>(null);
+
+  // Google Tasks sync hooks
+  const { syncTaskChange, syncTaskDeletion } = useGoogleTasksSync({
+    onSyncError: (error) => {
+      console.error('Google Tasks sync error:', error);
+    },
+    onSyncComplete: (result) => {
+      console.log('Google Tasks sync complete:', result);
+    }
+  });
 
   // Touch gesture handlers
   const gestureHandlers = useTouchGestures({
@@ -86,12 +97,29 @@ export function TaskItem({ task, extraActions, isSubtask = false, isHistoryView 
     await acceptTask(task.id, {
       onComplete: () => handleTaskCompletion(completeButtonRef.current)
     });
+    
+    // Sync completion status to Google Tasks
+    try {
+      await syncTaskChange(task.id);
+    } catch (syncError) {
+      console.error('Failed to sync task completion to Google Tasks:', syncError);
+    }
+    
     // Notification deletion is now handled in acceptTask
     setIsCompleting(false);
   };
 
   const handleDelete = async () => {
     setIsDeleting(true);
+    
+    // Sync deletion to Google Tasks before deleting from app
+    const googleTaskId = (task as any).googleTaskId; // Get Google Task ID if exists
+    try {
+      await syncTaskDeletion(task.id, googleTaskId);
+    } catch (syncError) {
+      console.error('Failed to sync task deletion to Google Tasks:', syncError);
+    }
+    
     await deleteTask(task.id);
     // Notification deletion is now handled in deleteTask
     setIsDeleting(false);
@@ -107,6 +135,14 @@ export function TaskItem({ task, extraActions, isSubtask = false, isHistoryView 
 
   const handleUncomplete = async () => {
     await uncompleteTask(task.id);
+    
+    // Sync uncompletion status to Google Tasks
+    try {
+      await syncTaskChange(task.id);
+    } catch (syncError) {
+      console.error('Failed to sync task uncompletion to Google Tasks:', syncError);
+    }
+    
     if (isHistoryView) {
       router.push(`/task/${task.id}`);
     }
@@ -327,49 +363,7 @@ export function TaskItem({ task, extraActions, isSubtask = false, isHistoryView 
               </TooltipProvider>
             )}
             
-            {/* Google Calendar sync status */}
-            {task.syncToGoogleCalendar && (
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Badge 
-                      variant={task.googleCalendarSyncStatus === 'synced' ? 'default' : 
-                               task.googleCalendarSyncStatus === 'error' ? 'destructive' : 'secondary'} 
-                      className="text-xs flex items-center gap-1 cursor-default"
-                    >
-                      <Calendar className="h-3 w-3" />
-                      {task.googleCalendarSyncStatus === 'synced' ? 'Synced' :
-                       task.googleCalendarSyncStatus === 'error' ? 'Sync Error' :
-                       task.googleCalendarSyncStatus === 'pending' ? 'Syncing...' : 'Google Cal'}
-                    </Badge>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <div className="text-xs">
-                      {task.googleCalendarSyncStatus === 'synced' && (
-                        <>
-                          <p>Synced with Google Calendar</p>
-                          {task.googleCalendarUrl && (
-                            <p className="text-blue-600 underline cursor-pointer mt-1"
-                               onClick={() => window.open(task.googleCalendarUrl, '_blank')}>
-                              Open in Google Calendar
-                            </p>
-                          )}
-                        </>
-                      )}
-                      {task.googleCalendarSyncStatus === 'error' && (
-                        <p>Failed to sync: {task.googleCalendarError || 'Unknown error'}</p>
-                      )}
-                      {task.googleCalendarSyncStatus === 'pending' && (
-                        <p>Syncing with Google Calendar...</p>
-                      )}
-                      {!task.googleCalendarSyncStatus && (
-                        <p>Scheduled for Google Calendar sync</p>
-                      )}
-                    </div>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            )}
+            {/* Task status and priority indicators */}
           </div>
         </div>
       )}
@@ -419,28 +413,6 @@ export function TaskItem({ task, extraActions, isSubtask = false, isHistoryView 
           {/* Action buttons */}
           <div className="flex items-center gap-1">
             {extraActions}
-            
-            {/* Google Calendar action button */}
-            {task.syncToGoogleCalendar && task.googleCalendarUrl && task.googleCalendarSyncStatus === 'synced' && (
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      onClick={() => window.open(task.googleCalendarUrl, '_blank')}
-                      size="sm"
-                      variant="ghost"
-                      className="h-8 w-8 p-0 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-                    >
-                      <Calendar className="h-4 w-4" />
-                      <span className="sr-only">Open in Google Calendar</span>
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Open in Google Calendar</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            )}
             
             {/* Complete button - prominent on mobile */}
             {!task.completedAt && !hasPendingSubtasks && (

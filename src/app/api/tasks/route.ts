@@ -20,17 +20,35 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    console.log('📝 POST /api/tasks - Task creation request received');
+
     const body = await request.json();
     const { userEmail, task } = body;
-    
+
+    console.log('📋 POST /api/tasks - Request data:', {
+      hasUserEmail: !!userEmail,
+      hasTask: !!task,
+      taskTitle: task?.title,
+      taskSyncToGoogleTasks: task?.syncToGoogleTasks
+    });
+
     if (!userEmail || !task) {
+      console.log('❌ POST /api/tasks - Missing required data');
       return NextResponse.json({ error: 'User email and task data are required' }, { status: 400 });
     }
-    
+
+    console.log(`👤 POST /api/tasks - Creating task for user: ${userEmail}`);
     const taskId = await taskService.addTask(userEmail, task);
+
+    console.log(`✅ POST /api/tasks - Task created successfully:`, {
+      taskId,
+      title: task.title,
+      syncToGoogleTasks: task.syncToGoogleTasks
+    });
+
     return NextResponse.json({ taskId });
   } catch (error) {
-    console.error('Error creating task:', error);
+    console.error('❌ POST /api/tasks - Error creating task:', error);
     return NextResponse.json({ error: 'Failed to create task' }, { status: 500 });
   }
 }

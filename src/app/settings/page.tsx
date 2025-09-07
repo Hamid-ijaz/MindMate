@@ -6,7 +6,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { NotificationProvider } from '@/contexts/notification-context';
-import { Settings, User, Palette, Bell, Smartphone, Shield, ArrowLeft, Mail } from 'lucide-react';
+import { Settings, User, Palette, Bell, Smartphone, Shield, ArrowLeft, Mail, Calendar } from 'lucide-react';
+import { CalendarIntegrations } from '@/components/settings/calendar-integrations';
 import { ProfileSettings } from '@/components/settings/profile-settings';
 import { ThemeSettings } from '@/components/settings/theme-settings';
 import { NotificationSettings } from '@/components/notification-settings';
@@ -56,6 +57,13 @@ const settingsItems = [
     description: 'Email notifications and settings',
     icon: Mail,
     component: EmailPreferencesSettings
+  },
+  {
+    id: 'calendar-connections',
+    title: 'Calendar & Integrations',
+    description: 'Connect Google Tasks and other calendar services',
+    icon: Calendar,
+    component: CalendarIntegrations
   },
   {
     id: 'tasks',

@@ -233,6 +233,7 @@ export interface Task {
   priority: Priority;
   duration: TaskDuration;
   createdAt: number;
+  updatedAt?: number; // Last update timestamp for sync purposes
   rejectionCount: number;
   lastRejectedAt?: number;
   isMuted: boolean;
@@ -264,13 +265,13 @@ export interface Task {
   attendees?: string[]; // Email addresses of attendees
   isRecurring?: boolean; // Whether this task repeats
   originalTaskId?: string; // For recurring tasks, reference to original
-  // Google Calendar Integration
-  syncToGoogleCalendar?: boolean; // Whether this task should sync to Google Calendar
-  googleCalendarEventId?: string; // Google Calendar event ID
-  googleCalendarSyncStatus?: 'pending' | 'synced' | 'error' | 'deleted';
-  googleCalendarLastSync?: number; // Timestamp of last sync
-  googleCalendarUrl?: string; // Direct link to Google Calendar event
-  googleCalendarError?: string; // Error message if sync failed
+  // Google Tasks Integration
+  syncToGoogleTasks?: boolean; // Whether this task should sync to Google Tasks
+  googleTaskId: string | null; // Google Tasks task ID
+  googleTaskSyncStatus?: 'pending' | 'synced' | 'error' | 'deleted';
+  googleTaskLastSync?: number; // Timestamp of last sync
+  googleTaskUrl?: string; // Direct link to Google Tasks
+  googleTaskError?: string; // Error message if sync failed
 }
 
 export interface User {
@@ -282,23 +283,27 @@ export interface User {
   password?: string; // In a real app, this would be a hash
   // Push Notification Settings
   notificationPreferences?: NotificationPreferences;
-  // Google Calendar Integration Settings
-  googleCalendarSettings?: GoogleCalendarSettings;
+  // Google Tasks Integration Settings
+  googleTasksSettings?: GoogleTasksSettings;
 }
 
-// Google Calendar Integration Types
-export interface GoogleCalendarSettings {
+// Google Tasks Integration Types
+export interface GoogleTasksSettings {
   isConnected: boolean;
   accessToken?: string;
   refreshToken?: string;
   tokenExpiresAt?: number;
   userEmail?: string;
-  defaultCalendarId?: string; // Which Google calendar to sync with
+  defaultTaskListId?: string; // Which Google task list to sync with
   syncEnabled: boolean; // Global sync toggle
   lastSyncAt?: number;
-  connectedAt?: number; // When the calendar was first connected
+  connectedAt?: number; // When Google Tasks was first connected
   syncStatus?: 'idle' | 'syncing' | 'success' | 'error';
+  syncDirection?: 'app-to-google' | 'google-to-app' | 'bidirectional';
+  autoSync?: boolean; // Whether to automatically sync changes
+  syncInterval?: number; // Sync interval in minutes
   lastError?: string;
+  onDeletedTasksAction?: 'skip' | 'recreate'; // What to do when Google Tasks are deleted
 }
 
 // Push Notification Types

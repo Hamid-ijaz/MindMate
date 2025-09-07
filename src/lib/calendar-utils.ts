@@ -95,10 +95,6 @@ export class CalendarUtils {
       if (task.reminderAt) {
         return isSameDay(new Date(task.reminderAt), date);
       }
-      // Show Google Calendar synced tasks that have their toggle on
-      if (task.syncToGoogleCalendar && task.googleCalendarSyncStatus === 'synced' && task.reminderAt) {
-        return isSameDay(new Date(task.reminderAt), date);
-      }
       return false;
     });
   }
@@ -112,11 +108,6 @@ export class CalendarUtils {
       }
       // Show tasks with reminderAt dates (scheduled/reminder tasks)
       if (task.reminderAt) {
-        const taskDate = new Date(task.reminderAt);
-        return taskDate >= startDate && taskDate <= endDate;
-      }
-      // Show Google Calendar synced tasks that have their toggle on
-      if (task.syncToGoogleCalendar && task.googleCalendarSyncStatus === 'synced' && task.reminderAt) {
         const taskDate = new Date(task.reminderAt);
         return taskDate >= startDate && taskDate <= endDate;
       }

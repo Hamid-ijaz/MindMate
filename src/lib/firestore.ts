@@ -18,10 +18,11 @@ import {
   startAfter,
   DocumentSnapshot,
   DocumentReference,
-  increment
+  increment,
+  deleteField
 } from 'firebase/firestore';
 import { db } from './firebase';
-import type { Task, User, Accomplishment, Note, SharedItem, ShareHistoryEntry, SharePermission, ShareCollaborator, ShareAnalytics, GoogleCalendarSettings, ChatMessage, ChatSession, ChatContext, NotificationDocument, NotificationData, NotificationStats } from './types';
+import type { Task, User, Accomplishment, Note, SharedItem, ShareHistoryEntry, SharePermission, ShareCollaborator, ShareAnalytics, GoogleTasksSettings, ChatMessage, ChatSession, ChatContext, NotificationDocument, NotificationData, NotificationStats } from './types';
 
 // Collection names
 export const COLLECTIONS = {
@@ -97,7 +98,7 @@ export const userService = {
   }
 };
 
-const serializeTaskForFirestore = (task: any) => {
+const serializeTaskForFirestore = (task: any, isUpdate: boolean = false) => {
     const data: any = { ...task };
     
     // Helper function to safely convert to Firestore Timestamp
@@ -125,15 +126,18 @@ const serializeTaskForFirestore = (task: any) => {
       data.recurrence.endDate = safeToTimestamp(data.recurrence.endDate);
     }
     
-    // Remove fields with undefined values to avoid Firestore errors
-    Object.keys(data).forEach(key => {
-      if (data[key] === undefined) {
-        delete data[key];
-      }
-      if (key === 'recurrence' && data.recurrence && data.recurrence.endDate === undefined) {
-        delete data.recurrence.endDate;
-      }
-    });
+    // For update operations, keep undefined values so they can be converted to deleteField
+    // For create operations, remove undefined values to avoid Firestore errors
+    if (!isUpdate) {
+      Object.keys(data).forEach(key => {
+        if (data[key] === undefined) {
+          delete data[key];
+        }
+        if (key === 'recurrence' && data.recurrence && data.recurrence.endDate === undefined) {
+          delete data.recurrence.endDate;
+        }
+      });
+    }
     return data;
 }
 
@@ -195,16 +199,33 @@ export const taskService = {
   },
 
   async addTask(userEmail: string, task: Omit<Task, 'id' | 'userEmail'>): Promise<string> {
+    console.log(`💾 addTask: Creating task for user ${userEmail}:`, {
+      title: task.title,
+      syncToGoogleTasks: task.syncToGoogleTasks,
+      hasReminderAt: !!task.reminderAt,
+      category: task.category
+    });
+
     const tasksRef = collection(db, COLLECTIONS.TASKS);
     // Build taskData, omitting undefined fields
     const taskData: any = {
       ...task,
       userEmail,
       createdAt: Timestamp.now(), // Use server timestamp
+      syncToGoogleTasks: task.syncToGoogleTasks ?? true, // Default to true for Google Tasks sync
     };
-    
+
+    console.log(`💾 addTask: Final task data to save:`, {
+      title: taskData.title,
+      syncToGoogleTasks: taskData.syncToGoogleTasks,
+      userEmail: taskData.userEmail,
+      hasCreatedAt: !!taskData.createdAt
+    });
+
     const docRef = doc(tasksRef);
     await setDoc(docRef, serializeTaskForFirestore(taskData));
+
+    console.log(`✅ addTask: Task saved successfully with ID: ${docRef.id}`);
     return docRef.id;
   },
 
@@ -250,12 +271,12 @@ export const taskService = {
     const taskRef = doc(db, COLLECTIONS.TASKS, taskId);
     
     // Use the same serialization logic for consistency
-    const updateData = serializeTaskForFirestore(updates);
+    const updateData = serializeTaskForFirestore(updates, true); // true for update operation
     
-    // Remove any undefined fields
-    Object.keys(updateData).forEach(key => {
-        if (updateData[key] === undefined) {
-            delete updateData[key];
+    // Handle undefined fields by using deleteField to properly clear them in Firestore
+    Object.keys(updates).forEach(key => {
+        if (updates[key] === undefined) {
+            updateData[key] = deleteField();
         }
     });
 
@@ -445,63 +466,76 @@ export const userSettingsService = {
   }
 };
 
-// Google Calendar settings operations
-export const googleCalendarService = {
-  async getGoogleCalendarSettings(userEmail: string): Promise<GoogleCalendarSettings | null> {
+// Google Tasks settings operations
+export const googleTasksService = {
+  async getGoogleTasksSettings(userEmail: string): Promise<GoogleTasksSettings | null> {
     try {
       const userRef = doc(db, COLLECTIONS.USERS, userEmail);
       const userSnap = await getDoc(userRef);
       
       if (userSnap.exists()) {
         const userData = userSnap.data();
-        return userData.googleCalendarSettings || null;
+        return userData.googleTasksSettings || null;
       }
       return null;
     } catch (error) {
-      console.error('Error getting Google Calendar settings:', error);
+      console.error('Error getting Google Tasks settings:', error);
       return null;
     }
   },
 
-  async updateGoogleCalendarSettings(userEmail: string, settings: Partial<GoogleCalendarSettings>): Promise<void> {
+  async updateGoogleTasksSettings(userEmail: string, settings: Partial<GoogleTasksSettings>): Promise<void> {
     try {
       const userRef = doc(db, COLLECTIONS.USERS, userEmail);
       
-      // Get existing settings to preserve connectedAt if it exists
+      // Get existing settings to preserve all existing data
       const existingDoc = await getDoc(userRef);
-      const existingSettings = existingDoc.exists() ? existingDoc.data()?.googleCalendarSettings : null;
+      const existingSettings = existingDoc.exists() ? existingDoc.data()?.googleTasksSettings : null;
       
-      const updateData = {
-        ...settings,
+      // Merge existing settings with new ones (new ones take precedence)
+      const mergedData = {
+        ...existingSettings, // Start with existing settings
+        ...settings,         // Override with new settings
         lastSyncAt: settings.lastSyncAt || Date.now()
       };
       
       // Only set connectedAt if it doesn't exist and we're connecting
       if (!existingSettings?.connectedAt && settings.isConnected) {
-        updateData.connectedAt = Date.now();
+        mergedData.connectedAt = Date.now();
       }
       
+      // Filter out undefined values (Firestore doesn't accept them)
+      const updateData = Object.fromEntries(
+        Object.entries(mergedData).filter(([, value]) => value !== undefined)
+      );
+      
+      console.log('💾 Updating Google Tasks settings:', {
+        ...updateData,
+        accessToken: (updateData.accessToken && typeof updateData.accessToken === 'string') ? `${updateData.accessToken.substring(0, 10)}...` : 'none',
+        refreshToken: (updateData.refreshToken && typeof updateData.refreshToken === 'string') ? `${updateData.refreshToken.substring(0, 10)}...` : 'none'
+      });
+      
       await updateDoc(userRef, {
-        [`googleCalendarSettings`]: updateData
+        [`googleTasksSettings`]: updateData
       });
     } catch (error) {
-      console.error('Error updating Google Calendar settings:', error);
+      console.error('Error updating Google Tasks settings:', error);
       throw error;
     }
   },
 
-  async disconnectGoogleCalendar(userEmail: string): Promise<void> {
+  async disconnectGoogleTasks(userEmail: string): Promise<void> {
     try {
       const userRef = doc(db, COLLECTIONS.USERS, userEmail);
       await updateDoc(userRef, {
-        [`googleCalendarSettings`]: {
+        [`googleTasksSettings`]: {
           isConnected: false,
           syncEnabled: false,
           accessToken: undefined,
           refreshToken: undefined,
           tokenExpiresAt: undefined,
           userEmail: undefined,
-          defaultCalendarId: undefined,
+          defaultTaskListId: undefined,
           syncStatus: 'idle',
           lastError: undefined,
           connectedAt: undefined,
@@ -509,29 +543,48 @@ export const googleCalendarService = {
         }
       });
     } catch (error) {
-      console.error('Error disconnecting Google Calendar:', error);
+      console.error('Error disconnecting Google Tasks:', error);
       throw error;
     }
   },
 
-  async syncTaskToGoogleCalendar(userEmail: string, taskId: string, syncData: {
-    googleCalendarEventId?: string;
+  async syncTaskToGoogleTasks(userEmail: string, taskId: string, syncData: {
+    googleTaskId?: string;
     syncStatus: 'pending' | 'synced' | 'error' | 'deleted';
     lastSync?: number;
-    googleCalendarUrl?: string;
+    googleTaskUrl?: string;
     error?: string;
   }): Promise<void> {
     try {
       const taskRef = doc(db, COLLECTIONS.TASKS, taskId);
-      await updateDoc(taskRef, {
-        googleCalendarEventId: syncData.googleCalendarEventId || null,
-        googleCalendarSyncStatus: syncData.syncStatus,
-        googleCalendarLastSync: syncData.lastSync || Date.now(),
-        googleCalendarUrl: syncData.googleCalendarUrl || null,
-        ...(syncData.error && { googleCalendarError: syncData.error })
-      });
+      
+      // Build update object, filtering out undefined values
+      const updateData: any = {
+        googleTaskSyncStatus: syncData.syncStatus,
+        googleTaskLastSync: syncData.lastSync || Date.now()
+      };
+      
+      // Only add fields that are not undefined
+      if (syncData.googleTaskId !== undefined) {
+        updateData.googleTaskId = syncData.googleTaskId;
+      }
+      
+      if (syncData.googleTaskUrl !== undefined) {
+        updateData.googleTaskUrl = syncData.googleTaskUrl;
+      }
+      
+      if (syncData.error !== undefined) {
+        updateData.googleTaskError = syncData.error;
+      }
+      
+      // Remove any undefined values to prevent Firestore errors
+      const sanitizedData = Object.fromEntries(
+        Object.entries(updateData).filter(([, value]) => value !== undefined)
+      );
+      
+      await updateDoc(taskRef, sanitizedData);
     } catch (error) {
-      console.error('Error updating task Google Calendar sync status:', error);
+      console.error('Error updating task Google Tasks sync status:', error);
       throw error;
     }
   }

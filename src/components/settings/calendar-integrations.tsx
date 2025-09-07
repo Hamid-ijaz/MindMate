@@ -2,7 +2,7 @@
 
 import { motion } from 'framer-motion';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { CalendarConnections } from '@/components/calendar-connections';
+import { GoogleTasksConnections } from '@/components/google-tasks-connections';
 import { Separator } from '@/components/ui/separator';
 import { Calendar, ExternalLink, Shield, RefreshCw, CheckCircle } from 'lucide-react';
 
@@ -16,9 +16,9 @@ export function CalendarIntegrations() {
     >
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold">Calendar Sync</h1>
+        <h1 className="text-2xl font-bold">Google Tasks Integration</h1>
         <p className="text-muted-foreground mt-1">
-          Connect your external calendars to sync tasks and events seamlessly.
+          Connect your Google Tasks to sync tasks seamlessly across all your devices.
         </p>
       </div>
 
@@ -27,14 +27,14 @@ export function CalendarIntegrations() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Calendar className="h-5 w-5" />
-            Connected Calendars
+            Google Tasks Connection
           </CardTitle>
           <CardDescription>
-            Manage your calendar integrations and sync settings.
+            Manage your Google Tasks integration and sync settings.
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <CalendarConnections />
+          <GoogleTasksConnections />
         </CardContent>
       </Card>
 

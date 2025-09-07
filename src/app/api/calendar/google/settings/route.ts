@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { googleCalendarService } from '@/lib/firestore';
+import { googleTasksService } from '@/lib/firestore';
 import { cookies } from 'next/headers';
 
 export async function GET(request: NextRequest) {
@@ -7,7 +7,7 @@ export async function GET(request: NextRequest) {
     const cookieStore = await cookies();
     const userEmail = cookieStore.get('mindmate-auth')?.value;
     
-    console.log('Google Calendar settings request for user:', userEmail);
+    console.log('Google Tasks settings request for user:', userEmail);
     
     if (!userEmail) {
       console.log('No user authentication found');
@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const settings = await googleCalendarService.getGoogleCalendarSettings(userEmail);
+    const settings = await googleTasksService.getGoogleTasksSettings(userEmail);
     
     console.log('Raw settings from database:', settings);
     
@@ -25,11 +25,12 @@ export async function GET(request: NextRequest) {
     if (settings) {
       const transformedSettings = {
         connected: settings.isConnected || false,
-        email: settings.userEmail || null,
+        email: settings.userEmail || userEmail,
         accessToken: settings.accessToken || null,
         refreshToken: settings.refreshToken || null,
         connectedAt: settings.connectedAt ? { seconds: Math.floor(settings.connectedAt / 1000) } : null,
-        lastSync: settings.lastSyncAt ? { seconds: Math.floor(settings.lastSyncAt / 1000) } : null
+        lastSync: settings.lastSyncAt ? { seconds: Math.floor(settings.lastSyncAt / 1000) } : null,
+        defaultTaskListId: settings.defaultTaskListId || null
       };
       console.log('Transformed settings:', transformedSettings);
       return NextResponse.json(transformedSettings);
@@ -42,10 +43,11 @@ export async function GET(request: NextRequest) {
       accessToken: null,
       refreshToken: null,
       connectedAt: null,
-      lastSync: null
+      lastSync: null,
+      defaultTaskListId: null
     });
   } catch (error) {
-    console.error('Error fetching Google Calendar settings:', error);
+    console.error('Error fetching Google Tasks settings:', error);
     return NextResponse.json(
       { error: 'Failed to fetch settings' },
       { status: 500 }

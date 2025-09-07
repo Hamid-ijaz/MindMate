@@ -168,6 +168,8 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
         priority: 'Low', // Default to low priority
         duration: 15, // Default to 15 mins
         userEmail: user.email, // Add missing userEmail
+        googleTaskId: null, // Add missing googleTaskId
+        syncToGoogleTasks: taskData.syncToGoogleTasks ?? true
       }));
     }
 
@@ -192,6 +194,56 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
         await pushNotifications.scheduleTaskReminder(parentTask as Task);
       }
 
+      // Auto-sync to Google Tasks if sync is enabled
+      if (parentTask.syncToGoogleTasks) {
+        console.log(`🔄 Auto-sync triggered for new task: ${parentTask.title}`);
+        console.log(`📋 Task details:`, {
+          id: parentTask.id,
+          title: parentTask.title,
+          syncToGoogleTasks: parentTask.syncToGoogleTasks,
+          userEmail: user.email,
+          hasReminderAt: !!parentTask.reminderAt,
+          category: parentTask.category
+        });
+
+        try {
+          // Trigger async sync without blocking the UI
+          fetch('/api/google/sync', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ taskId: parentTask.id, action: 'syncTask' })
+          }).then(async (response) => {
+            console.log(`🔍 Sync response status: ${response.status} for task: ${parentTask.title}`);
+            if (response.ok) {
+              const responseData = await response.json();
+              console.log(`✅ Auto-sync successful for task: ${parentTask.title}`, responseData);
+            } else {
+              const errorText = await response.text();
+              console.error(`❌ Auto-sync failed for task: ${parentTask.title}`, {
+                status: response.status,
+                statusText: response.statusText,
+                error: errorText
+              });
+            }
+          }).catch(async (syncError) => {
+            console.error('Background sync failed for parent task:', syncError);
+            // Add to retry queue
+            const { syncRetryManager } = await import('@/lib/sync-retry');
+            syncRetryManager.addToRetryQueue({
+              operation: 'syncTask',
+              taskId: parentTask.id,
+              maxRetries: 3,
+              baseDelay: 2000
+            });
+          });
+        } catch (syncError) {
+          console.error('Failed to trigger background sync for parent task:', syncError);
+        }
+      } else {
+        console.log(`⏭️ Auto-sync skipped for task: ${parentTask.title} (syncToGoogleTasks: ${parentTask.syncToGoogleTasks})`);
+      }
+
       if (subtasksToCreate.length > 0) {
         const newSubtasks = subtasksToCreate.map((sub, index) => ({
           ...sub,
@@ -207,6 +259,31 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
         for (const subtask of newSubtasks) {
           if (subtask.reminderAt) {
             await pushNotifications.scheduleTaskReminder(subtask as Task);
+          }
+
+          // Auto-sync subtasks to Google Tasks if sync is enabled
+          if (subtask.syncToGoogleTasks) {
+            try {
+              // Trigger async sync without blocking the UI
+              fetch('/api/google/sync', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ taskId: subtask.id, action: 'syncTask' })
+              }).catch(async (syncError) => {
+                console.error(`Background sync failed for subtask ${subtask.id}:`, syncError);
+                // Add to retry queue
+                const { syncRetryManager } = await import('@/lib/sync-retry');
+                syncRetryManager.addToRetryQueue({
+                  operation: 'syncTask',
+                  taskId: subtask.id,
+                  maxRetries: 3,
+                  baseDelay: 2000
+                });
+              });
+            } catch (syncError) {
+              console.error(`Failed to trigger background sync for subtask ${subtask.id}:`, syncError);
+            }
           }
         }
         
@@ -230,6 +307,43 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
     try {
       await taskService.updateTask(id, updates);
       setTasks(prev => prev.map(t => (t.id === id ? { ...t, ...updates } as Task : t)));
+      
+      // Auto-sync to Google Tasks if the task has sync enabled
+      const task = tasks.find(t => t.id === id);
+      if (task?.syncToGoogleTasks) {
+        console.log(`🔄 Auto-sync triggered for task update: ${task.title}`);
+        console.log(`📋 Update details: completedAt=${updates.completedAt}, syncToGoogleTasks=${task.syncToGoogleTasks}`);
+        try {
+          // Trigger async sync without blocking the UI
+          fetch('/api/google/sync', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ taskId: id, action: 'syncTask' })
+          }).then(async (response) => {
+            if (response.ok) {
+              console.log(`✅ Auto-sync successful for task update: ${task.title}`);
+            } else {
+              const errorText = await response.text();
+              console.error(`❌ Auto-sync failed for task update: ${task.title}`, errorText);
+            }
+          }).catch(async (syncError) => {
+            console.error('Background sync failed:', syncError);
+            // Add to retry queue
+            const { syncRetryManager } = await import('@/lib/sync-retry');
+            syncRetryManager.addToRetryQueue({
+              operation: 'syncTask',
+              taskId: id,
+              maxRetries: 3,
+              baseDelay: 2000
+            });
+          });
+        } catch (syncError) {
+          console.error('Failed to trigger background sync:', syncError);
+        }
+      } else {
+        console.log(`⏭️ Auto-sync skipped for task update: ${task?.title || id} (syncToGoogleTasks: ${task?.syncToGoogleTasks})`);
+      }
     } catch (error) {
       console.error('Error updating task:', error);
       toast({
@@ -238,9 +352,11 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
         variant: "destructive",
       });
     }
-  }, [toast]);
+  }, [toast, tasks]);
 
   const deleteTask = useCallback(async (id: string) => {
+    const taskToDelete = tasks.find(t => t.id === id);
+    
     try {
       // Delete the task and its subtasks
       await taskService.deleteTask(id);
@@ -253,6 +369,31 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
       
       // Update UI state
       setTasks(prev => prev.filter(t => t.id !== id && t.parentId !== id));
+      
+      // Auto-sync deletion to Google Tasks if the task had sync enabled
+      if (taskToDelete?.syncToGoogleTasks) {
+        try {
+          // Trigger async sync without blocking the UI
+          fetch('/api/google/sync', {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ taskId: id, action: 'deleteTask' })
+          }).catch(async (syncError) => {
+            console.error('Background delete sync failed:', syncError);
+            // Add to retry queue
+            const { syncRetryManager } = await import('@/lib/sync-retry');
+            syncRetryManager.addToRetryQueue({
+              operation: 'deleteTask',
+              taskId: id,
+              maxRetries: 3,
+              baseDelay: 2000
+            });
+          });
+        } catch (syncError) {
+          console.error('Failed to trigger background delete sync:', syncError);
+        }
+      }
     } catch (error) {
       console.error('Error deleting task:', error);
       toast({
@@ -261,7 +402,7 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
         variant: "destructive",
       });
     }
-  }, [toast, user?.email]);
+  }, [toast, user?.email, tasks]);
   
   const acceptTask = useCallback(async (id: string, options?: { showNotification?: boolean; onComplete?: () => void }) => {
     const task = tasks.find(t => t.id === id);
@@ -374,19 +515,26 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
   const uncompleteTask = useCallback(async (id: string) => {
     const task = tasks.find(t => t.id === id);
     if (task) {
+      console.log(`🔄 Uncompleting task: ${task.title} (ID: ${id})`);
+      console.log(`📋 Task sync status: syncToGoogleTasks=${task.syncToGoogleTasks}, googleTaskId=${task.googleTaskId}`);
+
       const childrenIds = tasks.filter(t => t.parentId === id).map(t => t.id);
       const updates = { 
-        completedAt: null, 
-        lastRejectedAt: null,
-        notifiedAt: null,
+        completedAt: undefined, 
+        lastRejectedAt: undefined,
+        notifiedAt: undefined,
         rejectionCount: 0,
       };
 
+      console.log(`👶 Found ${childrenIds.length} child tasks to uncomplete`);
+
       // Update parent task
+      console.log(`🔄 Updating parent task ${id} with completedAt: undefined`);
       await updateTask(id, updates);
       
       // Update children tasks
       for (const childId of childrenIds) {
+        console.log(`🔄 Updating child task ${childId} with completedAt: undefined`);
         await updateTask(childId, updates);
       }
       
@@ -397,6 +545,10 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
         }
         return t;
       }));
+
+      console.log(`✅ Task uncompletion completed for: ${task.title}`);
+    } else {
+      console.log(`❌ Task not found for uncompletion: ${id}`);
     }
   }, [tasks, updateTask]);
 

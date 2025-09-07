@@ -6,39 +6,45 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Separator } from '@/components/ui/separator';
+import { Switch } from '@/components/ui/switch';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { 
-  Calendar, 
+  CheckSquare, 
   CheckCircle, 
   AlertTriangle,
   RotateCw,
   Link,
-  XCircle
+  XCircle,
+  ArrowLeftRight,
+  ArrowRight,
+  ArrowLeft
 } from 'lucide-react';
-import { useGoogleCalendar } from '@/hooks/use-google-calendar';
 import { useAuth } from '@/contexts/auth-context';
 import { Skeleton } from '@/components/ui/skeleton';
 
-interface CalendarConnectionsProps {
+interface GoogleTasksConnectionsProps {
   onConnectionChange?: (provider: string, connected: boolean) => void;
 }
 
-interface GoogleCalendarSettings {
-  connected: boolean;
-  email?: string;
-  accessToken?: string;
-  refreshToken?: string;
-  connectedAt?: any;
-  lastSync?: any;
+interface GoogleTasksSettings {
+  isConnected: boolean;
+  syncEnabled: boolean;
+  syncStatus: 'idle' | 'syncing' | 'success' | 'error';
+  lastSyncAt?: number;
+  defaultTaskListId?: string;
+  syncDirection: 'app-to-google' | 'google-to-app' | 'bidirectional';
+  autoSync: boolean;
+  lastError?: string;
 }
 
-export function CalendarConnections({ onConnectionChange }: CalendarConnectionsProps) {
-  const [settings, setSettings] = useState<GoogleCalendarSettings | null>(null);
+export function GoogleTasksConnections({ onConnectionChange }: GoogleTasksConnectionsProps) {
+  const [settings, setSettings] = useState<GoogleTasksSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [syncing, setSyncing] = useState(false);
   const { user } = useAuth();
-  const { connect, disconnect, loading: googleCalendarLoading } = useGoogleCalendar();
 
-  // Load Google Calendar settings
+  // Load Google Tasks settings
   const loadSettings = async () => {
     if (!user?.email) return;
 
@@ -46,31 +52,79 @@ export function CalendarConnections({ onConnectionChange }: CalendarConnectionsP
       setLoading(true);
       setError(null);
       
-      console.log('Loading Google Calendar settings for:', user.email);
-
-      const response = await fetch('/api/calendar/google/settings');
-      
-      console.log('API response status:', response.status);
-      
+      const response = await fetch('/api/google/sync');
       if (!response.ok) {
-        if (response.status === 404) {
-          console.log('No Google Calendar settings found, setting connected: false');
-          setSettings({ connected: false });
-          return;
-        }
-        throw new Error('Failed to load Google Calendar settings');
+        throw new Error(`Failed to load settings: ${response.statusText}`);
       }
-
+      
       const data = await response.json();
-      console.log('Received Google Calendar settings:', data);
       setSettings(data);
-      onConnectionChange?.('google', data.connected);
     } catch (err) {
-      console.error('Error loading Google Calendar settings:', err);
+      console.error('Error loading Google Tasks settings:', err);
       setError(err instanceof Error ? err.message : 'Failed to load settings');
-      setSettings({ connected: false });
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Connect to Google Tasks
+  const connectGoogleTasks = async () => {
+    try {
+      setError(null);
+      window.location.href = '/api/google/oauth';
+    } catch (err) {
+      console.error('Error connecting to Google Tasks:', err);
+      setError(err instanceof Error ? err.message : 'Failed to connect');
+    }
+  };
+
+  // Disconnect from Google Tasks
+  const disconnectGoogleTasks = async () => {
+    try {
+      setError(null);
+      
+      const response = await fetch('/api/google/sync', {
+        method: 'DELETE'
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Failed to disconnect: ${response.statusText}`);
+      }
+      
+      await loadSettings();
+      onConnectionChange?.('google-tasks', false);
+    } catch (err) {
+      console.error('Error disconnecting Google Tasks:', err);
+      setError(err instanceof Error ? err.message : 'Failed to disconnect');
+    }
+  };
+
+  // Trigger manual sync
+  const triggerSync = async () => {
+    try {
+      setSyncing(true);
+      setError(null);
+      
+      const response = await fetch('/api/google/sync', {
+        method: 'POST'
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Failed to sync: ${response.statusText}`);
+      }
+      
+      const result = await response.json();
+      
+      if (!result.success && result.errors?.length > 0) {
+        setError(`Sync completed with errors: ${result.errors.join(', ')}`);
+      }
+      
+      await loadSettings();
+    } catch (err) {
+      console.error('Error syncing tasks:', err);
+      setError(err instanceof Error ? err.message : 'Failed to sync');
+    } finally {
+      setSyncing(false);
     }
   };
 
@@ -78,287 +132,220 @@ export function CalendarConnections({ onConnectionChange }: CalendarConnectionsP
     loadSettings();
   }, [user?.email]);
 
-  // Check URL parameters for success/error and reload settings accordingly
+  // Handle URL parameters (success/error from OAuth callback)
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const urlParams = new URLSearchParams(window.location.search);
-      const success = urlParams.get('success');
-      const error = urlParams.get('error');
-      
-      if (success === 'google_calendar_connected') {
-        console.log('Google Calendar connection success detected, reloading settings');
-        setTimeout(() => {
-          loadSettings();
-          // Clean URL without the success parameter to remove clutter from URL
-          const newUrl = new URL(window.location.href);
-          newUrl.searchParams.delete('success');
-          window.history.replaceState({}, '', newUrl.toString());
-        }, 1000);
-      } else if (success && success.includes('google_calendar')) {
-        console.log('Google Calendar connection success variant detected:', success);
-        setTimeout(() => {
-          loadSettings();
-          // Clean URL without the success parameter to remove clutter from URL
-          const newUrl = new URL(window.location.href);
-          newUrl.searchParams.delete('success');
-          window.history.replaceState({}, '', newUrl.toString());
-        }, 1000);
-      } else if (error && error.includes('google_calendar')) {
-        console.log('Google Calendar connection error detected:', error);
-        let errorMessage = 'Failed to connect to Google Calendar.';
-        
-        if (error.includes('api_disabled')) {
-          errorMessage = 'Google Calendar API is not enabled. The administrator needs to enable the Google Calendar API in the Google Cloud Console for this application to work properly.';
-        } else if (error.includes('permission_denied')) {
-          errorMessage = 'Permission denied by Google Calendar API. Please ensure the application has the necessary permissions and try again.';
-        } else if (error.includes('token_expired')) {
-          errorMessage = 'Authentication expired. Please disconnect and reconnect your Google Calendar.';
-        } else if (error.includes('connection_failed')) {
-          errorMessage = 'Google Calendar API configuration issue. Please ensure that the Google Calendar API is properly configured in the backend. Contact your administrator if this issue persists.';
-        } else if (error.includes('denied')) {
-          errorMessage = 'Google Calendar connection was denied. Please try again and grant the necessary permissions when prompted.';
-        } else if (error.includes('auth_required')) {
-          errorMessage = 'Authentication required. Please try connecting to Google Calendar again.';
-        } else if (error.includes('invalid_grant')) {
-          errorMessage = 'Authentication expired. Please disconnect and reconnect your Google Calendar.';
-        }
-        
-        setError(errorMessage);
-        // Clean URL without the error parameter to prevent showing error in URL
-        const newUrl = new URL(window.location.href);
-        newUrl.searchParams.delete('error');
-        window.history.replaceState({}, '', newUrl.toString());
-      }
+    const params = new URLSearchParams(window.location.search);
+    const success = params.get('success');
+    const error = params.get('error');
+    
+    if (success === 'google_tasks_connected') {
+      loadSettings();
+      onConnectionChange?.('google-tasks', true);
+      // Clean up URL
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+    
+    if (error) {
+      const message = params.get('message') || 'Connection failed';
+      setError(decodeURIComponent(message));
+      // Clean up URL
+      window.history.replaceState({}, '', window.location.pathname);
     }
   }, []);
 
-  // Force reload when component receives new key prop (calendarRefreshTrigger)
-  useEffect(() => {
-    if (user?.email) {
-      console.log('CalendarConnections: Forced reload triggered');
-      loadSettings();
-    }
-  }, []);  // This will run on every new component mount due to key prop
-
-  // Also reload settings when the window comes back into focus (after OAuth redirect)
-  useEffect(() => {
-    // const handleFocus = () => {
-    //   if (user?.email) {
-    //     console.log('Window focus detected - checking for calendar connection updates');
-    //     setTimeout(() => loadSettings(), 1000); // Small delay to ensure backend has processed
-    //   }
-    // };
-    
-    const handleVisibilityChange = () => {
-      if (!document.hidden && user?.email) {
-        console.log('Visibility change detected - checking for calendar connection updates');
-        setTimeout(() => loadSettings(), 1000);
-      }
-    };
-    
-    // window.addEventListener('focus', handleFocus);
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    
-    return () => {
-      // window.removeEventListener('focus', handleFocus);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
-  }, [user?.email]);
-
-  const handleConnect = async () => {
-    try {
-      setError(null); // Clear any previous errors
-      await connect();
-      // After successful connection, wait a bit and reload settings
-      setTimeout(() => {
-        loadSettings();
-      }, 2000);
-    } catch (err) {
-      console.error('Failed to connect to Google Calendar:', err);
-      setError(err instanceof Error ? err.message : 'Failed to connect to Google Calendar. Please try again.');
-    }
-  };
-
-  const handleDisconnect = async () => {
-    try {
-      await disconnect();
-      setSettings({ connected: false });
-      onConnectionChange?.('google', false);
-    } catch (err) {
-      console.error('Failed to disconnect from Google Calendar:', err);
-    }
-  };
-
   if (loading) {
     return (
-      <div className="space-y-6">
-        <Card>
-          <CardHeader>
-            <div className="flex items-center space-x-2">
-              <Calendar className="h-5 w-5 text-blue-600" />
-              <CardTitle>Google Calendar</CardTitle>
-            </div>
-            <CardDescription>
-              Sync your tasks with Google Calendar
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Skeleton className="h-4 w-32" />
-              <Skeleton className="h-10 w-full" />
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <CheckSquare className="h-5 w-5" />
+            Google Tasks Integration
+          </CardTitle>
+          <CardDescription>
+            Sync your tasks with Google Tasks for seamless cross-platform access
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <Skeleton className="h-4 w-3/4" />
+          <Skeleton className="h-10 w-32" />
+        </CardContent>
+      </Card>
     );
   }
 
-  return (
-    <div className="space-y-6">
-      {error && (
-        <Alert variant="destructive">
-          <AlertTriangle className="h-4 w-4" />
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
-      )}
+  const getSyncDirectionIcon = (direction: string) => {
+    switch (direction) {
+      case 'app-to-google': return <ArrowRight className="h-4 w-4" />;
+      case 'google-to-app': return <ArrowLeft className="h-4 w-4" />;
+      case 'bidirectional': return <ArrowLeftRight className="h-4 w-4" />;
+      default: return <ArrowLeftRight className="h-4 w-4" />;
+    }
+  };
 
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-2">
-              <Calendar className="h-5 w-5 text-blue-600" />
-              <div>
-                <CardTitle>Google Calendar</CardTitle>
-                <CardDescription>
-                  Sync your tasks with Google Calendar automatically
-                </CardDescription>
-              </div>
-            </div>
-            <div className="flex items-center space-x-2">
-              {settings?.connected ? (
-                <Badge variant="default" className="bg-green-100 text-green-800 border-green-200">
-                  <CheckCircle className="h-3 w-3 mr-1" />
-                  Connected
-                </Badge>
-              ) : (
-                <Badge variant="secondary">
-                  <XCircle className="h-3 w-3 mr-1" />
-                  Not Connected
-                </Badge>
-              )}
+  const getSyncDirectionLabel = (direction: string) => {
+    switch (direction) {
+      case 'app-to-google': return 'App → Google Tasks';
+      case 'google-to-app': return 'Google Tasks → App';
+      case 'bidirectional': return 'Two-way sync';
+      default: return 'Two-way sync';
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <CheckSquare className="h-5 w-5" />
+          Google Tasks Integration
+        </CardTitle>
+        <CardDescription>
+          Sync your tasks with Google Tasks for seamless cross-platform access
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        {error && (
+          <Alert variant="destructive">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
+
+        {/* Connection Status */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <CheckSquare className="h-8 w-8 text-blue-600" />
+            <div>
+              <h3 className="font-medium">Google Tasks</h3>
+              <p className="text-sm text-muted-foreground">
+                {settings?.isConnected ? 'Connected and ready to sync' : 'Not connected'}
+              </p>
             </div>
           </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {error && (
-            <Alert variant="destructive">
-              <AlertTriangle className="h-4 w-4" />
-              <AlertDescription>
-                {error}
-                {error.includes('Google Calendar API is not enabled') && (
-                  <div className="mt-2">
-                    <p className="text-sm">This is a configuration issue that needs to be resolved by the application administrator.</p>
-                  </div>
-                )}
-              </AlertDescription>
-            </Alert>
-          )}
           
-          {settings?.connected ? (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg border border-green-200">
-                <div>
-                  <p className="text-sm font-medium text-green-900">Connected Account</p>
-                  <p className="text-sm text-green-700">{settings.email}</p>
-                  {settings.connectedAt && (
-                    <p className="text-xs text-green-600 mt-1">
-                      Connected {new Date(settings.connectedAt.seconds * 1000).toLocaleDateString()}
-                    </p>
-                  )}
-                  {settings.lastSync && (
-                    <p className="text-xs text-green-600">
-                      Last sync: {new Date(settings.lastSync.seconds * 1000).toLocaleString()}
-                    </p>
-                  )}
-                </div>
-              </div>
+          <div className="flex items-center gap-2">
+            {settings?.isConnected && (
+              <Badge 
+                variant={
+                  settings.syncStatus === 'success' ? 'default' :
+                  settings.syncStatus === 'error' ? 'destructive' :
+                  settings.syncStatus === 'syncing' ? 'secondary' : 'outline'
+                }
+                className="flex items-center gap-1"
+              >
+                {settings.syncStatus === 'syncing' ? (
+                  <RotateCw className="h-3 w-3 animate-spin" />
+                ) : settings.syncStatus === 'success' ? (
+                  <CheckCircle className="h-3 w-3" />
+                ) : settings.syncStatus === 'error' ? (
+                  <XCircle className="h-3 w-3" />
+                ) : null}
+                {settings.syncStatus}
+              </Badge>
+            )}
+            
+            {settings?.isConnected ? (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={disconnectGoogleTasks}
+              >
+                Disconnect
+              </Button>
+            ) : (
+              <Button
+                onClick={connectGoogleTasks}
+                className="flex items-center gap-2"
+              >
+                <Link className="h-4 w-4" />
+                Connect
+              </Button>
+            )}
+          </div>
+        </div>
 
+        {settings?.isConnected && (
+          <>
+            <Separator />
+            
+            {/* Sync Settings */}
+            <div className="space-y-4">
+              <h4 className="font-medium">Sync Settings</h4>
+              
+              {/* Sync Direction */}
               <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium">Calendar Sync</p>
-                  <p className="text-sm text-muted-foreground">
-                    Tasks with calendar sync enabled will be automatically synced
+                <div className="space-y-1">
+                  <label className="text-sm font-medium">Sync Direction</label>
+                  <p className="text-xs text-muted-foreground">
+                    Choose how tasks are synchronized
                   </p>
                 </div>
+                <div className="flex items-center gap-2">
+                  {getSyncDirectionIcon(settings.syncDirection)}
+                  <span className="text-sm">{getSyncDirectionLabel(settings.syncDirection)}</span>
+                </div>
               </div>
 
-              <Separator />
+              {/* Auto Sync Toggle */}
+              <div className="flex items-center justify-between">
+                <div className="space-y-1">
+                  <label className="text-sm font-medium">Auto Sync</label>
+                  <p className="text-xs text-muted-foreground">
+                    Automatically sync changes in real-time
+                  </p>
+                </div>
+                <Switch
+                  checked={settings.autoSync}
+                  disabled // TODO: Implement auto sync toggle
+                />
+              </div>
 
-              <div className="flex justify-between items-center">
+              {/* Manual Sync */}
+              <div className="flex items-center justify-between">
+                <div className="space-y-1">
+                  <label className="text-sm font-medium">Manual Sync</label>
+                  <p className="text-xs text-muted-foreground">
+                    {settings.lastSyncAt 
+                      ? `Last synced: ${new Date(settings.lastSyncAt).toLocaleDateString()}`
+                      : 'Never synced'
+                    }
+                  </p>
+                </div>
                 <Button
                   variant="outline"
-                  onClick={handleDisconnect}
-                  disabled={googleCalendarLoading}
-                  className="text-red-600 border-red-200 hover:bg-red-50"
+                  size="sm"
+                  onClick={triggerSync}
+                  disabled={syncing || settings.syncStatus === 'syncing'}
+                  className="flex items-center gap-2"
                 >
-                  {googleCalendarLoading ? (
-                    <>
-                      <RotateCw className="h-4 w-4 mr-2 animate-spin" />
-                      Disconnecting...
-                    </>
-                  ) : (
-                    <>
-                      <XCircle className="h-4 w-4 mr-2" />
-                      Disconnect
-                    </>
-                  )}
+                  <RotateCw className={`h-4 w-4 ${syncing ? 'animate-spin' : ''}`} />
+                  {syncing ? 'Syncing...' : 'Sync Now'}
                 </Button>
               </div>
             </div>
-          ) : (
-            <div className="space-y-4">
-              <div className="text-center py-6">
-                <Calendar className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                <h3 className="text-lg font-medium mb-2">Connect Google Calendar</h3>
-                <p className="text-sm text-muted-foreground mb-4">
-                  Sync your tasks with Google Calendar to keep everything in one place. 
-                  Tasks with reminder dates will automatically appear in your calendar.
-                </p>
-                <Button
-                  onClick={handleConnect}
-                  disabled={googleCalendarLoading}
-                  className="bg-blue-600 hover:bg-blue-700"
-                >
-                  {googleCalendarLoading ? (
-                    <>
-                      <RotateCw className="h-4 w-4 mr-2 animate-spin" />
-                      Connecting...
-                    </>
-                  ) : (
-                    <>
-                      <Link className="h-4 w-4 mr-2" />
-                      Connect Google Calendar
-                    </>
-                  )}
-                </Button>
-              </div>
 
-              <Alert>
-                <AlertTriangle className="h-4 w-4" />
-                <AlertDescription>
-                  <strong>What happens when you connect:</strong>
-                  <ul className="list-disc list-inside mt-2 text-sm">
-                    <li>Tasks with "Sync to Google Calendar" enabled will be added to your calendar</li>
-                    <li>Reminder dates and times will be synced automatically</li>
-                    <li>You can open tasks directly in Google Calendar</li>
-                    <li>Your calendar data is stored securely</li>
-                  </ul>
-                </AlertDescription>
-              </Alert>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-    </div>
+            {settings.lastError && (
+              <>
+                <Separator />
+                <Alert variant="destructive">
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertDescription>
+                    <strong>Last Error:</strong> {settings.lastError}
+                  </AlertDescription>
+                </Alert>
+              </>
+            )}
+          </>
+        )}
+
+        {/* Info */}
+        <div className="rounded-lg bg-muted p-3">
+          <p className="text-sm text-muted-foreground">
+            <strong>What this does:</strong> Connects your app with Google Tasks to keep your tasks 
+            synchronized across all your devices. Changes made in either place will be reflected in both.
+          </p>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
+

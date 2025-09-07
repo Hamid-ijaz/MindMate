@@ -110,6 +110,117 @@ async function setLoopRunningState(isRunning: boolean) {
 
 let loopStartTime: Date | null = null;
 
+// Helper function to process Google Tasks sync for all eligible users
+async function processGoogleTasksSync(db: any, now: Date): Promise<any> {
+  console.log('🔄 Starting Google Tasks sync process...');
+  
+  const results = {
+    usersProcessed: 0,
+    totalSynced: 0,
+    errors: [] as string[],
+    successLogs: [] as string[],
+    summary: {
+      totalUsers: 0,
+      usersWithAutoSync: 0,
+      usersWithSyncInterval: 0,
+      lastSyncThreshold: Date.now() - (30 * 60 * 1000) // 30 minutes ago
+    }
+  };
+
+  try {
+    // Get all Google Tasks settings where sync is enabled
+    const googleTasksSettingsSnapshot = await db.collection('googleTasksSettings').get();
+    const totalUsers = googleTasksSettingsSnapshot.size;
+    results.summary.totalUsers = totalUsers;
+
+    console.log(`🔍 Found ${totalUsers} users with Google Tasks settings`);
+
+    for (const settingsDoc of googleTasksSettingsSnapshot.docs) {
+      const userEmail = settingsDoc.id;
+      const settings = settingsDoc.data();
+
+      try {
+        // Check if user has sync enabled and is connected
+        if (!settings.isConnected || !settings.syncEnabled) {
+          console.log(`⏭️ Skipping user ${userEmail}: not connected or sync disabled`);
+          continue;
+        }
+
+        // Check sync direction - only process if bidirectional or google-to-app
+        const syncDirection = settings.syncDirection || 'bidirectional';
+        if (syncDirection === 'app-to-google') {
+          console.log(`⏭️ Skipping user ${userEmail}: app-to-google only sync`);
+          continue;
+        }
+
+        // Check if auto sync is enabled or if enough time has passed since last sync
+        const lastSyncAt = settings.lastSyncAt || 0;
+        const timeSinceLastSync = Date.now() - lastSyncAt;
+        const syncIntervalMs = 30 * 60 * 1000; // 30 minutes
+
+        const shouldSync = settings.autoSync || timeSinceLastSync > syncIntervalMs;
+
+        if (!shouldSync) {
+          console.log(`⏭️ Skipping user ${userEmail}: sync not due (last sync: ${new Date(lastSyncAt).toISOString()})`);
+          continue;
+        }
+
+        if (settings.autoSync) {
+          results.summary.usersWithAutoSync++;
+        } else {
+          results.summary.usersWithSyncInterval++;
+        }
+
+        console.log(`🔄 Processing Google Tasks sync for user: ${userEmail}`);
+        results.usersProcessed++;
+
+        // Call the sync API using the new interval sync method
+        const baseUrl = process.env.NEXT_PUBLIC_URL || 'https://mindmate.hamidijaz.dev';
+        const syncResponse = await fetch(`${baseUrl}/api/google/sync`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-user-email': userEmail // Pass user email in header for internal requests
+          },
+          body: JSON.stringify({ 
+            action: 'intervalSync',
+            userEmail: userEmail 
+          })
+        });
+
+        if (syncResponse.ok) {
+          const syncResult = await syncResponse.json();
+          results.totalSynced += syncResult.synced || 0;
+          results.successLogs.push(`User ${userEmail}: synced ${syncResult.synced || 0} tasks`);
+          console.log(`✅ Google Tasks sync completed for ${userEmail}: ${syncResult.synced || 0} tasks synced`);
+        } else {
+          const errorText = await syncResponse.text();
+          const errorMsg = `Sync failed for ${userEmail}: ${syncResponse.status} ${errorText}`;
+          results.errors.push(errorMsg);
+          console.error(`❌ ${errorMsg}`);
+        }
+
+      } catch (userError) {
+        const errorMsg = `Error processing Google Tasks sync for ${userEmail}: ${userError instanceof Error ? userError.message : 'Unknown error'}`;
+        results.errors.push(errorMsg);
+        console.error(`❌ ${errorMsg}`, userError);
+      }
+
+      // Small delay to prevent rate limiting
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+
+    console.log(`🔄 Google Tasks sync process completed: ${results.usersProcessed} users processed, ${results.totalSynced} tasks synced, ${results.errors.length} errors`);
+
+  } catch (error) {
+    const errorMsg = `Error in processGoogleTasksSync: ${error instanceof Error ? error.message : 'Unknown error'}`;
+    results.errors.push(errorMsg);
+    console.error(`❌ ${errorMsg}`, error);
+  }
+
+  return results;
+}
+
 // Helper function to send daily digest email
 async function sendDailyDigestForUser(userEmail: string): Promise<{ success: boolean; error?: string }> {
   try {
@@ -1076,16 +1187,17 @@ async function processEmailDigests(db: any, now: Date): Promise<any> {
 
 // Main function that orchestrates both push notifications and email digests
 async function executeNotificationCheck(): Promise<any> {
-  console.log('🚀 Executing comprehensive notification and email digest check...');
+  console.log('🚀 Executing comprehensive notification, email digest, and Google Tasks sync check...');
   
   const db = getFirestore();
   const now = new Date();
   const startTime = now.getTime();
   
-  // Run push notifications and email digests independently
-  const [pushResults, emailResults] = await Promise.all([
+  // Run push notifications, email digests, and Google Tasks sync independently
+  const [pushResults, emailResults, syncResults] = await Promise.all([
     processPushNotifications(db, now),
-    processEmailDigests(db, now)
+    processEmailDigests(db, now),
+    processGoogleTasksSync(db, now)
   ]);
 
   const endTime = new Date();
@@ -1099,9 +1211,9 @@ async function executeNotificationCheck(): Promise<any> {
     
     // Overall summary
     overall: {
-      totalUsersChecked: (pushResults.summary?.totalUsers || 0) + (emailResults.summary?.totalUsers || 0),
-      totalUsersProcessed: pushResults.usersProcessed + emailResults.usersProcessed,
-      totalErrors: pushResults.errors.length + emailResults.errors.length,
+      totalUsersChecked: (pushResults.summary?.totalUsers || 0) + (emailResults.summary?.totalUsers || 0) + (syncResults.summary?.totalUsers || 0),
+      totalUsersProcessed: pushResults.usersProcessed + emailResults.usersProcessed + syncResults.usersProcessed,
+      totalErrors: pushResults.errors.length + emailResults.errors.length + syncResults.errors.length,
       executionTime: totalExecutionTime
     },
 
@@ -1117,25 +1229,35 @@ async function executeNotificationCheck(): Promise<any> {
       description: 'Email digest processing results with detailed user information'
     },
 
+    // Google Tasks sync detailed results
+    googleTasksSync: {
+      ...syncResults,
+      description: 'Google Tasks sync processing results with detailed user information'
+    },
+
     // Legacy compatibility (for existing integrations)
-    usersProcessed: pushResults.usersProcessed + emailResults.usersProcessed,
+    usersProcessed: pushResults.usersProcessed + emailResults.usersProcessed + syncResults.usersProcessed,
     overdueNotifications: pushResults.overdueNotifications,
     reminderNotifications: pushResults.reminderNotifications,
     totalNotificationsSent: pushResults.totalNotificationsSent,
     dailyDigestsSent: emailResults.dailyDigestsSent,
     weeklyDigestsSent: emailResults.weeklyDigestsSent,
+    googleTasksSynced: syncResults.totalSynced,
     emailErrors: emailResults.emailErrors,
-    errors: [...pushResults.errors, ...emailResults.errors],
+    syncErrors: syncResults.errors,
+    errors: [...pushResults.errors, ...emailResults.errors, ...syncResults.errors],
 
     // Comprehensive logs
     logs: {
-      success: [...pushResults.successLogs, ...emailResults.successLogs],
-      errors: [...pushResults.errors, ...emailResults.errors],
+      success: [...pushResults.successLogs, ...emailResults.successLogs, ...syncResults.successLogs],
+      errors: [...pushResults.errors, ...emailResults.errors, ...syncResults.errors],
       combined: [
         ...pushResults.successLogs.map((log: string) => `[PUSH] ${log}`),
         ...emailResults.successLogs.map((log: string) => `[EMAIL] ${log}`),
+        ...syncResults.successLogs.map((log: string) => `[SYNC] ${log}`),
         ...pushResults.errors.map((error: string) => `[PUSH ERROR] ${error}`),
-        ...emailResults.errors.map((error: string) => `[EMAIL ERROR] ${error}`)
+        ...emailResults.errors.map((error: string) => `[EMAIL ERROR] ${error}`),
+        ...syncResults.errors.map((error: string) => `[SYNC ERROR] ${error}`)
       ]
     }
   };
@@ -1163,7 +1285,9 @@ async function startNotificationLoop() {
     totalNotificationsSent: 0,
     totalDailyDigestsSent: 0,
     totalWeeklyDigestsSent: 0,
+    totalGoogleTasksSynced: 0,
     totalEmailErrors: 0,
+    totalSyncErrors: 0,
     allErrors: [] as string[],
     startTime: loopStartTime.toISOString(),
     endTime: ''
@@ -1189,7 +1313,9 @@ async function startNotificationLoop() {
         totalResults.totalNotificationsSent += cycleResults.totalNotificationsSent;
         totalResults.totalDailyDigestsSent += cycleResults.dailyDigestsSent;
         totalResults.totalWeeklyDigestsSent += cycleResults.weeklyDigestsSent;
+        totalResults.totalGoogleTasksSynced += cycleResults.googleTasksSynced || 0;
         totalResults.totalEmailErrors += cycleResults.emailErrors;
+        totalResults.totalSyncErrors += cycleResults.syncErrors?.length || 0;
         totalResults.allErrors.push(...cycleResults.errors);
         
         const cycleDuration = Date.now() - cycleStart.getTime();
