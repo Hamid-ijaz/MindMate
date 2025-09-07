@@ -132,7 +132,7 @@ export const settingsConfig: Record<string, SettingsCategory> = {
         label: 'Calendar Sync',
         description: 'Connect your Google Calendar and other services',
         icon: Calendar,
-        component: 'CalendarIntegrations',
+        component: 'GoogleTasksIntegrations',
         keywords: ['calendar', 'google', 'sync', 'integration', 'external']
       }
     ]

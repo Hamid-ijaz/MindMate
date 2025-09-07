@@ -7,6 +7,6 @@ export { ThemeSettings } from './theme-settings';
 export { NotificationPermissions } from './notification-permissions';
 export { TaskCategorySettings } from './task-category-settings';
 export { TaskDurationSettings } from './task-duration-settings';
-export { CalendarIntegrations } from './calendar-integrations';
+export { GoogleTasksIntegrations } from './google-tasks-integrations';
 export { PWASettings } from './pwa-settings';
 export { AdminSettings } from './admin-settings';

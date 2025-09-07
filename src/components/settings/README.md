@@ -43,7 +43,7 @@ Each setting is implemented as a separate component:
 - **NotificationPermissions** - Browser notification permissions
 - **TaskCategorySettings** - Task category management
 - **TaskDurationSettings** - Time estimate options
-- **CalendarIntegrations** - External calendar connections
+- **GoogleTasksIntegrations** - External task service connections
 - **PWASettings** - Progressive Web App features
 - **AdminSettings** - Developer tools and admin functions
 

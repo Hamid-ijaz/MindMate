@@ -8,7 +8,7 @@ import { NotificationSettings } from '@/components/notification-settings';
 import { NotificationPermissions } from './notification-permissions';
 import { TaskCategorySettings } from './task-category-settings';
 import { TaskDurationSettings } from './task-duration-settings';
-import { CalendarIntegrations } from './calendar-integrations';
+import { GoogleTasksIntegrations } from './google-tasks-integrations';
 import { PWASettings } from './pwa-settings';
 import { AdminSettings } from './admin-settings';
 
@@ -41,7 +41,7 @@ export function SettingsContent({ currentSetting, onNavigateToSetting }: Setting
       case 'task-durations':
         return <TaskDurationSettings />;
       case 'calendar-connections':
-        return <CalendarIntegrations />;
+        return <GoogleTasksIntegrations />;
       case 'pwa-settings':
         return <PWASettings />;
       case 'admin-tools':
