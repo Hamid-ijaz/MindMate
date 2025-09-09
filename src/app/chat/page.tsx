@@ -14,7 +14,6 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { chat } from '@/ai/flows/chat-flow';
-import { chatService } from '@/lib/firestore';
 import type { Task, ChatMessage, ChatSession, ChatContext, QuickAction, TaskReference, SuggestedTask } from '@/lib/types';
 import { 
   Send, 

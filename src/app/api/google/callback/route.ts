@@ -142,7 +142,11 @@ export async function GET(request: NextRequest) {
       syncStatus: 'success' as const,
       connectedAt: Date.now(),
       lastSyncAt: Date.now(),
-      onDeletedTasksAction: 'skip' as const // Default to skip when first connecting
+      onDeletedTasksAction: 'skip' as const, // Default to skip when first connecting
+      syncMode: 'single-list' as const, // Default to single list mode
+      taskListPrefix: 'MindMate_', // Default prefix
+      categoryTaskLists: {}, // Empty initially
+      archivedTaskListId: undefined // Will be created when needed
     };
     
     console.log('📄 Settings to save:', {

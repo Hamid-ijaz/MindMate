@@ -15,12 +15,7 @@ export function GoogleTasksIntegrations() {
       className="space-y-6"
     >
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold">Google Tasks Integration</h1>
-        <p className="text-muted-foreground mt-1">
-          Connect your Google Tasks to sync tasks seamlessly across all your devices.
-        </p>
-      </div>
+     
 
       {/* Google Tasks Connections */}
       <Card>

@@ -66,23 +66,9 @@ class GoogleTasksService {
    * Get authenticated Google Tasks API client
    */
   private async getTasksApi(userEmail: string): Promise<tasks_v1.Tasks> {
-    console.log('🔧 getTasksApi: Getting authenticated API client for', userEmail);
-    
     const settings = await googleTasksService.getGoogleTasksSettings(userEmail);
-    console.log('⚙️ Retrieved settings:', {
-      isConnected: settings?.isConnected || false,
-      hasAccessToken: !!(settings?.accessToken),
-      hasRefreshToken: !!(settings?.refreshToken),
-      tokenExpiresAt: settings?.tokenExpiresAt ? new Date(settings.tokenExpiresAt).toISOString() : 'none'
-    });
     
     if (!settings || !settings.isConnected || !settings.refreshToken) {
-      console.error('❌ Google Tasks not connected for this user:', userEmail);
-      console.error('Settings state:', { 
-        settingsExists: !!settings, 
-        isConnected: settings?.isConnected, 
-        hasRefreshToken: !!settings?.refreshToken 
-      });
       throw new Error('Google Tasks not connected for this user');
     }
 
@@ -91,35 +77,23 @@ class GoogleTasksService {
     const tokenExpiry = settings.tokenExpiresAt || 0;
     const isTokenExpired = now >= tokenExpiry;
     
-    console.log('� Token expiry check:', {
-      now: new Date(now).toISOString(),
-      tokenExpiry: new Date(tokenExpiry).toISOString(),
-      isExpired: isTokenExpired
-    });
+    
 
     if (isTokenExpired) {
-      console.log('🔄 Token expired, refreshing...');
-      try {
-        await this.refreshAccessToken(userEmail);
-        console.log('✅ Token refreshed successfully');
+      await this.refreshAccessToken(userEmail);
         
-        // Get updated settings after refresh
-        const updatedSettings = await googleTasksService.getGoogleTasksSettings(userEmail);
-        if (!updatedSettings?.accessToken) {
-          throw new Error('Failed to get updated token after refresh');
-        }
-        
-        this.setCredentials({
-          accessToken: updatedSettings.accessToken,
-          refreshToken: updatedSettings.refreshToken!,
-          expiryDate: updatedSettings.tokenExpiresAt
-        });
-      } catch (refreshError) {
-        console.error('❌ Failed to refresh token:', refreshError);
-        throw new Error('Failed to refresh expired token');
+      // Get updated settings after refresh
+      const updatedSettings = await googleTasksService.getGoogleTasksSettings(userEmail);
+      if (!updatedSettings?.accessToken) {
+        throw new Error('Failed to get updated token after refresh');
       }
+        
+      this.setCredentials({
+        accessToken: updatedSettings.accessToken,
+        refreshToken: updatedSettings.refreshToken!,
+        expiryDate: updatedSettings.tokenExpiresAt
+      });
     } else {
-      console.log('✅ Token is still valid, using existing credentials');
       this.setCredentials({
         accessToken: settings.accessToken!,
         refreshToken: settings.refreshToken,
@@ -127,7 +101,6 @@ class GoogleTasksService {
       });
     }
 
-    console.log('✅ Google Tasks API client ready');
     return google.tasks({ version: 'v1', auth: this.oauth2Client });
   }
 
@@ -171,6 +144,8 @@ class GoogleTasksService {
       const settings = await googleTasksService.getGoogleTasksSettings(userEmail);
       const listId = taskListId || settings?.defaultTaskListId || '@default';
 
+      console.log(`📋 getTasks: Fetching tasks from list "${listId}" for user: ${userEmail}`);
+
       const response = await tasksApi.tasks.list({
         tasklist: listId,
         showCompleted: true,
@@ -178,9 +153,20 @@ class GoogleTasksService {
         showHidden: true
       });
 
-      return response.data.items || [];
+      const tasks = response.data.items || [];
+      console.log(`✅ getTasks: Retrieved ${tasks.length} tasks from list "${listId}"`);
+      
+      return tasks;
     } catch (error) {
-      console.error('Error fetching Google tasks:', error);
+      const settings = await googleTasksService.getGoogleTasksSettings(userEmail);
+      const listId = taskListId || settings?.defaultTaskListId || '@default';
+      console.error(`❌ Error fetching Google tasks from list "${listId}":`, error);
+      
+      // Add status information to the error for better handling upstream
+      if (error && typeof error === 'object' && 'status' in error) {
+        (error as any).taskListId = listId;
+      }
+      
       throw error;
     }
   }
@@ -195,51 +181,31 @@ class GoogleTasksService {
     parentGoogleTaskId?: string
   ): Promise<tasks_v1.Schema$Task> {
     try {
-      console.log(`🆕 createTask: Starting creation for task: ${task.title}`);
-
       const tasksApi = await this.getTasksApi(userEmail);
-      console.log(`🔗 createTask: Tasks API client obtained for user: ${userEmail}`);
-
       const settings = await googleTasksService.getGoogleTasksSettings(userEmail);
       const listId = taskListId || settings?.defaultTaskListId || '@default';
-
-      console.log(`📋 createTask: Using task list: ${listId}`, {
-        providedTaskListId: taskListId,
-        defaultFromSettings: settings?.defaultTaskListId,
-        fallbackToDefault: !taskListId && !settings?.defaultTaskListId
-      });
 
       const googleTask: tasks_v1.Schema$Task = {
         title: task.title,
         notes: task.description || undefined,
         due: task.reminderAt ? new Date(task.reminderAt).toISOString() : undefined,
-        status: task.completedAt ? 'completed' : 'needsAction',
-        parent: parentGoogleTaskId || undefined
+        status: task.completedAt ? 'completed' : 'needsAction'
+        // Note: Do NOT include 'parent' in the requestBody - it's passed as a separate parameter
       };
 
-      console.log(`📝 createTask: Google task data to create:`, {
-        title: googleTask.title,
-        hasNotes: !!googleTask.notes,
-        hasDue: !!googleTask.due,
-        status: googleTask.status,
-        hasParent: !!googleTask.parent,
-        parentId: googleTask.parent
-      });
-
-      console.log(`📤 createTask: Calling Google Tasks API insert...`);
-      const response = await tasksApi.tasks.insert({
+      const requestParams: any = {
         tasklist: listId,
-        requestBody: googleTask,
-        parent: parentGoogleTaskId || undefined
-      });
+        requestBody: googleTask
+      };
 
-      console.log(`✅ createTask: Google task created successfully:`, {
-        id: response.data.id,
-        title: response.data.title,
-        selfLink: response.data.selfLink
-      });
+      // Add parent parameter if provided (this is how Google Tasks API expects it)
+      if (parentGoogleTaskId) {
+        requestParams.parent = parentGoogleTaskId;
+      }
 
-      console.log(`✅ Created Google task: ${task.title}${parentGoogleTaskId ? ' (as subtask)' : ''}`);
+      const response = await tasksApi.tasks.insert(requestParams);
+
+      console.log(`Created Google task: ${task.title}${parentGoogleTaskId ? ` (subtask of ${parentGoogleTaskId})` : ''}`);
       return response.data;
     } catch (error) {
       console.error('❌ createTask: Error creating Google task:', {
@@ -272,15 +238,16 @@ class GoogleTasksService {
         title: task.title,
         notes: task.description || undefined,
         due: task.reminderAt ? new Date(task.reminderAt).toISOString() : undefined,
-        status: task.completedAt ? 'completed' : 'needsAction',
-        parent: parentGoogleTaskId || undefined
+        status: task.completedAt ? 'completed' : 'needsAction'
+        // Note: For updates, we handle parent relationship separately using the move API
       };
 
       console.log(`🔄 Updating Google task ${googleTaskId}:`, {
         title: task.title,
         status: googleTask.status,
         completedAt: task.completedAt,
-        isUncompleting: !task.completedAt
+        isUncompleting: !task.completedAt,
+        parentGoogleTaskId: parentGoogleTaskId || 'none'
       });
 
       const response = await tasksApi.tasks.update({
@@ -288,6 +255,17 @@ class GoogleTasksService {
         task: googleTaskId,
         requestBody: googleTask
       });
+
+      // If parent relationship needs to be updated, use the move API
+      if (parentGoogleTaskId) {
+        console.log(`🔗 updateTask: Moving task under parent: ${parentGoogleTaskId}`);
+        await tasksApi.tasks.move({
+          tasklist: listId,
+          task: googleTaskId,
+          parent: parentGoogleTaskId
+        });
+        console.log(`✅ updateTask: Task moved under parent successfully`);
+      }
 
       console.log(`✅ Updated Google task: ${task.title}${parentGoogleTaskId ? ' (subtask)' : ''}`);
       return response.data;
@@ -343,6 +321,36 @@ class GoogleTasksService {
       category: 'Uncategorized' as TaskCategory,
       duration: 30
     };
+  }
+
+  /**
+   * Create a new task list
+   */
+  async createTaskList(userEmail: string, title: string): Promise<{ id: string; title: string } | null> {
+    try {
+      const tasksApi = await this.getTasksApi(userEmail);
+      
+      const response = await tasksApi.tasklists.insert({
+        requestBody: {
+          title: title
+        }
+      });
+      
+      const taskList = response.data;
+      if (!taskList.id || !taskList.title) {
+        throw new Error('Created task list is missing required fields');
+      }
+      
+      console.log(`Created task list: ${title}`);
+      
+      return {
+        id: taskList.id,
+        title: taskList.title
+      };
+    } catch (error) {
+      console.error(`❌ createTaskList: Failed to create task list "${title}":`, error);
+      throw error;
+    }
   }
 
   /**

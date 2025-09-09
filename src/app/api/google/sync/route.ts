@@ -21,7 +21,12 @@ export async function GET(request: NextRequest) {
       defaultTaskListId: settings?.defaultTaskListId,
       syncDirection: settings?.syncDirection || 'bidirectional',
       autoSync: settings?.autoSync || false,
-      lastError: settings?.lastError
+      lastError: settings?.lastError,
+      onDeletedTasksAction: settings?.onDeletedTasksAction || 'skip',
+      syncMode: settings?.syncMode || 'single-list',
+      taskListPrefix: settings?.taskListPrefix || '',
+      categoryTaskLists: settings?.categoryTaskLists || {},
+      archivedTaskListId: settings?.archivedTaskListId
     });
   } catch (error) {
     console.error('Error getting Google Tasks status:', error);
@@ -137,7 +142,7 @@ export async function PATCH(request: NextRequest) {
     console.log(`👤 PATCH /api/google/sync - Authenticated user: ${userEmail}`);
 
     const body = await request.json();
-    const { action, taskId, defaultTaskListId, onDeletedTasksAction, syncDirection, autoSync } = body;
+    const { action, taskId, defaultTaskListId, onDeletedTasksAction, syncDirection, autoSync, syncMode, taskListPrefix } = body;
 
     console.log('📋 PATCH /api/google/sync - Request body:', {
       action,
@@ -145,7 +150,9 @@ export async function PATCH(request: NextRequest) {
       hasDefaultTaskListId: !!defaultTaskListId,
       hasOnDeletedTasksAction: !!onDeletedTasksAction,
       hasSyncDirection: !!syncDirection,
-      hasAutoSync: autoSync !== undefined
+      hasAutoSync: autoSync !== undefined,
+      hasSyncMode: !!syncMode,
+      hasTaskListPrefix: !!taskListPrefix
     });
 
     // Handle task sync action
@@ -178,6 +185,12 @@ export async function PATCH(request: NextRequest) {
     }
     if (autoSync !== undefined) {
       settingsUpdate.autoSync = autoSync;
+    }
+    if (syncMode) {
+      settingsUpdate.syncMode = syncMode;
+    }
+    if (taskListPrefix !== undefined) {
+      settingsUpdate.taskListPrefix = taskListPrefix;
     }
 
     if (Object.keys(settingsUpdate).length > 0) {

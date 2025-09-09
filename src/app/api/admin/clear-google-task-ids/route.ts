@@ -27,11 +27,13 @@ export async function POST(request: NextRequest) {
     for (const task of incompleteTasks) {
       try {
         // Only clear if it has a googleTaskId
-        if (task.googleTaskId) {
+        if (task.googleTaskId || task.googleTaskListId) {
           await taskService.updateTask(task.id, {
             googleTaskId: null,
-            googleTaskSyncStatus: 'pending',
-            googleTaskLastSync: Date.now()
+            googleTaskLastSync: null as any,
+            googleTaskListId: null as any,
+            googleTaskSyncStatus: null as any,
+            googleTaskUrl: null as any
           });
           clearedCount++;
           console.log(`✅ Cleared googleTaskId for task: ${task.title}`);

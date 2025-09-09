@@ -128,16 +128,24 @@ async function processGoogleTasksSync(db: any, now: Date): Promise<any> {
   };
 
   try {
-    // Get all Google Tasks settings where sync is enabled
-    const googleTasksSettingsSnapshot = await db.collection('googleTasksSettings').get();
-    const totalUsers = googleTasksSettingsSnapshot.size;
+    // Get all users and check their Google Tasks settings
+    const usersSnapshot = await db.collection('users').get();
+    const totalUsers = usersSnapshot.size;
     results.summary.totalUsers = totalUsers;
 
-    console.log(`🔍 Found ${totalUsers} users with Google Tasks settings`);
+    console.log(`🔍 Found ${totalUsers} users`);
 
-    for (const settingsDoc of googleTasksSettingsSnapshot.docs) {
-      const userEmail = settingsDoc.id;
-      const settings = settingsDoc.data();
+    for (const userDoc of usersSnapshot.docs) {
+      const userEmail = userDoc.id;
+
+      // Get the googleTasksSettings field from the user document
+      const userData = userDoc.data();
+      const settings = userData?.googleTasksSettings;
+
+      if (!settings) {
+        console.log(`⏭️ Skipping user ${userEmail}: no Google Tasks settings found`);
+        continue;
+      }
 
       try {
         // Check if user has sync enabled and is connected

@@ -36,6 +36,10 @@ interface GoogleTasksSettings {
   autoSync: boolean;
   lastError?: string;
   onDeletedTasksAction?: 'skip' | 'recreate';
+  syncMode?: 'single-list' | 'category-based';
+  taskListPrefix?: string;
+  categoryTaskLists?: Record<string, string>;
+  archivedTaskListId?: string;
 }
 
 export function GoogleTasksConnections({ onConnectionChange }: GoogleTasksConnectionsProps) {
@@ -44,6 +48,7 @@ export function GoogleTasksConnections({ onConnectionChange }: GoogleTasksConnec
   const [error, setError] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [bulkSyncing, setBulkSyncing] = useState(false);
+  const [localTaskListPrefix, setLocalTaskListPrefix] = useState<string>('');
   const [bulkSyncResult, setBulkSyncResult] = useState<string | null>(null);
   const [taskLists, setTaskLists] = useState<{ id: string; title: string }[]>([]);
   const [savingDefault, setSavingDefault] = useState(false);
@@ -216,6 +221,50 @@ export function GoogleTasksConnections({ onConnectionChange }: GoogleTasksConnec
     }
   };
 
+  const handleSyncModeChange = async (mode: 'single-list' | 'category-based') => {
+    if (!user?.email) return;
+    try {
+      const res = await fetch('/api/google/sync', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ syncMode: mode })
+      });
+      if (!res.ok) throw new Error(`Failed to save sync mode: ${res.statusText}`);
+      const json = await res.json();
+      setSettings(prev => prev ? { ...prev, syncMode: json.syncMode } : prev);
+    } catch (err) {
+      console.error('Error saving sync mode:', err);
+      setError(err instanceof Error ? err.message : 'Failed to save sync mode');
+    }
+  };
+
+  const handleTaskListPrefixChange = (prefix: string) => {
+    setLocalTaskListPrefix(prefix);
+  };
+
+  const saveTaskListPrefix = async () => {
+    if (!user?.email || !settings) return;
+    
+    // Only save if value has actually changed
+    if (localTaskListPrefix === (settings.taskListPrefix ?? '')) return;
+    
+    try {
+      const res = await fetch('/api/google/sync', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ taskListPrefix: localTaskListPrefix })
+      });
+      if (!res.ok) throw new Error(`Failed to save task list prefix: ${res.statusText}`);
+      const json = await res.json();
+      setSettings(prev => prev ? { ...prev, taskListPrefix: json.taskListPrefix } : prev);
+    } catch (err) {
+      console.error('Error saving task list prefix:', err);
+      setError(err instanceof Error ? err.message : 'Failed to save task list prefix');
+      // Revert local state on error
+      setLocalTaskListPrefix(settings.taskListPrefix ?? '');
+    }
+  };
+
   // Trigger manual sync
   const triggerSync = async () => {
     try {
@@ -294,6 +343,13 @@ export function GoogleTasksConnections({ onConnectionChange }: GoogleTasksConnec
   useEffect(() => {
     loadSettings();
   }, [user?.email]);
+
+  // Sync local task list prefix with settings
+  useEffect(() => {
+    if (settings) {
+      setLocalTaskListPrefix(settings.taskListPrefix ?? '');
+    }
+  }, [settings]);
 
   // Handle URL parameters (success/error from OAuth callback)
   useEffect(() => {
@@ -472,6 +528,55 @@ export function GoogleTasksConnections({ onConnectionChange }: GoogleTasksConnec
                 </Select>
               </div>
 
+              {/* Sync Mode */}
+              <div className="flex items-center justify-between">
+                <div className="space-y-1">
+                  <label className="text-sm font-medium">Sync Mode</label>
+                  <p className="text-xs text-muted-foreground">
+                    Choose between single list or category-based organization
+                  </p>
+                </div>
+                <Select
+                  value={settings.syncMode ?? 'single-list'}
+                  onValueChange={handleSyncModeChange}
+                >
+                  <SelectTrigger className="w-48">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="single-list">Single Task List</SelectItem>
+                    <SelectItem value="category-based">Category-Based Lists</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Task List Prefix (only for category-based) */}
+              {settings.syncMode === 'category-based' && (
+                <div className="flex items-center justify-between">
+                  <div className="space-y-1">
+                    <label className="text-sm font-medium">Task List Prefix</label>
+                    <p className="text-xs text-muted-foreground">
+                      Prefix for category-based task lists (e.g., "MyApp_")
+                    </p>
+                  </div>
+                  <div className="w-48">
+                    <input
+                      type="text"
+                      value={localTaskListPrefix}
+                      onChange={(e) => handleTaskListPrefixChange(e.target.value)}
+                      onBlur={saveTaskListPrefix}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.currentTarget.blur(); // Trigger onBlur to save
+                        }
+                      }}
+                      placeholder="Enter prefix..."
+                      className="w-full px-3 py-2 border border-input bg-background text-sm rounded-md focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent"
+                    />
+                  </div>
+                </div>
+              )}
+
               {/* Auto Sync Toggle */}
               <div className="flex items-center justify-between">
                 <div className="space-y-1">
@@ -539,26 +644,27 @@ export function GoogleTasksConnections({ onConnectionChange }: GoogleTasksConnec
                 </Alert>
               )}
 
-              {/* Default Task List Selector */}
-              <div className="flex items-center justify-between">
-                <div className="space-y-1">
-                  <label className="text-sm font-medium">Default Task List</label>
-                  <p className="text-xs text-muted-foreground">Select which Google Tasks list new tasks are created in by default.</p>
+              {/* Default Task List Selector - Only show for single-list mode */}
+              {settings.syncMode === 'single-list' && (
+                <div className="flex items-center justify-between">
+                  <div className="space-y-1">
+                    <label className="text-sm font-medium">Default Task List</label>
+                    <p className="text-xs text-muted-foreground">Select which Google Tasks list new tasks are created in by default.</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Select onValueChange={(val) => handleDefaultListChange(val)} value={settings.defaultTaskListId ?? ''}>
+                      <SelectTrigger className="w-64">
+                        <SelectValue placeholder="Select default list" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {taskLists.map((list) => (
+                          <SelectItem key={list.id} value={list.id}>{list.title}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <Select onValueChange={(val) => handleDefaultListChange(val)} value={settings.defaultTaskListId ?? ''}>
-                    <SelectTrigger className="w-64">
-                      <SelectValue placeholder="Select default list" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {taskLists.map((list) => (
-                        <SelectItem key={list.id} value={list.id}>{list.title}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Button size="sm" variant="outline" disabled={savingDefault}>{savingDefault ? 'Saving...' : 'Save'}</Button>
-                </div>
-              </div>
+              )}
 
               {/* Deleted Tasks Action */}
               <div className="flex items-center justify-between">

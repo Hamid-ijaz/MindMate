@@ -46,7 +46,6 @@ import {
   TrendingUp
 } from 'lucide-react';
 import { useAuth } from '@/contexts/auth-context';
-import { sharingService, userService } from '@/lib/firestore';
 import type { SharedItem, SharePermission, ShareHistoryEntry, ShareAnalytics, ShareCollaborator } from '@/lib/types';
 import { motion, AnimatePresence } from 'framer-motion';
 import { format, formatDistanceToNow } from 'date-fns';

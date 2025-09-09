@@ -25,7 +25,6 @@ import {
   PlusCircle
 } from 'lucide-react';
 import { useAuth } from '@/contexts/auth-context';
-import { sharingService, taskService, noteService } from '@/lib/firestore';
 import type { SharedItem, Task, Note, SharePermission } from '@/lib/types';
 import { motion } from 'framer-motion';
 import { format, formatDistanceToNow } from 'date-fns';

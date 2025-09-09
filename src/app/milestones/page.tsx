@@ -317,7 +317,7 @@ export default function MilestonesPage() {
 
               {milestone.isRecurring && timeUntil && (
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-muted-foreground">Next Anniversary:</span>
+                  <span className="text-muted-foreground">Next:</span>
                   <span className={cn(
                     "font-medium",
                     timeUntil.isToday && "text-primary",

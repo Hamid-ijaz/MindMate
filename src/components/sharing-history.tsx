@@ -23,7 +23,6 @@ import {
   Link2,
   Trash2
 } from 'lucide-react';
-import { sharingService } from '@/lib/firestore';
 import { useAuth } from '@/contexts/auth-context';
 import type { SharedItem, ShareHistoryEntry } from '@/lib/types';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -55,6 +54,7 @@ export function SharingHistory({ isOpen, onClose, itemId, itemType, itemTitle }:
     
     setIsLoading(true);
     try {
+      const { sharingService } = await import('@/lib/firestore');
       const items = await sharingService.getSharedItemsByOwner(user.email);
       const itemShares = items.filter(item => item.itemId === itemId);
       setSharedItems(itemShares);

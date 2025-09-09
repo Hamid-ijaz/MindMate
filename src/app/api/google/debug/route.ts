@@ -40,7 +40,15 @@ export async function GET(request: NextRequest) {
         hasRefreshToken: !!settings?.refreshToken,
         tokenExpiresAt: settings?.tokenExpiresAt ? new Date(settings.tokenExpiresAt).toISOString() : null,
         defaultTaskListId: settings?.defaultTaskListId,
-        onDeletedTasksAction: settings?.onDeletedTasksAction
+        onDeletedTasksAction: settings?.onDeletedTasksAction,
+        syncMode: settings?.syncMode,
+        taskListPrefix: settings?.taskListPrefix,
+        categoryTaskLists: settings?.categoryTaskLists,
+        archivedTaskListId: settings?.archivedTaskListId,
+        syncDirection: settings?.syncDirection,
+        autoSync: settings?.autoSync,
+        lastSyncAt: settings?.lastSyncAt,
+        lastError: settings?.lastError
       },
       connectivityTest: null as any,
       taskLists: null as any,

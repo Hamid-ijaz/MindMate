@@ -54,10 +54,21 @@ export class MilestoneUtils {
     const originalDate = new Date(milestone.originalDate);
     const now = new Date();
     
-    const years = differenceInYears(now, originalDate);
-    const months = differenceInMonths(now, originalDate) % 12;
-    const days = differenceInDays(now, new Date(now.getFullYear(), now.getMonth() - months, originalDate.getDate()));
     const totalDays = differenceInDays(now, originalDate);
+
+    // If original date is in the future, return zeros (no time since)
+    if (totalDays < 0) {
+      return { years: 0, months: 0, days: 0, totalDays, formatted: '0 days' };
+    }
+
+    // Compute full years since the original date
+    const years = differenceInYears(now, originalDate);
+
+    // Compute remaining months after removing full years
+    const months = differenceInMonths(now, addYears(originalDate, years));
+
+    // Compute remaining days after removing full years and months
+    const days = differenceInDays(now, addMonths(addYears(originalDate, years), months));
     
     let formatted = '';
     if (years > 0) {

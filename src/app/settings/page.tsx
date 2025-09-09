@@ -60,7 +60,7 @@ const settingsItems = [
   },
   {
     id: 'calendar-connections',
-    title: 'Calendar & Integrations',
+    title: 'Integrations',
     description: 'Connect Google Tasks and other calendar services',
     icon: Calendar,
     component: GoogleTasksIntegrations

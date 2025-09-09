@@ -22,6 +22,49 @@ const nextConfig: NextConfig = {
     // Reduce hydration warnings
     optimizePackageImports: ['lucide-react'],
   },
+  // Configure Turbopack (stable configuration)
+  turbopack: {
+    resolveExtensions: ['.ts', '.tsx', '.js', '.jsx'],
+  },
+  // Webpack configuration for non-Turbopack builds
+  webpack: (config, { isServer }) => {
+    if (!isServer) {
+      // Exclude Node.js modules from client-side bundle
+      config.resolve.fallback = {
+        ...config.resolve.fallback,
+        fs: false,
+        net: false,
+        tls: false,
+        crypto: false,
+        path: false,
+        os: false,
+        child_process: false,
+        http2: false,
+        zlib: false,
+        stream: false,
+        util: false,
+        url: false,
+        querystring: false,
+        http: false,
+        https: false,
+        assert: false,
+        buffer: false,
+        events: false,
+      };
+      
+      // Exclude googleapis and related packages from client bundle
+      config.externals = config.externals || [];
+      config.externals.push({
+        'googleapis': 'commonjs googleapis',
+        'google-auth-library': 'commonjs google-auth-library',
+        'gaxios': 'commonjs gaxios',
+        'gtoken': 'commonjs gtoken',
+        'jws': 'commonjs jws',
+        'gcp-metadata': 'commonjs gcp-metadata',
+      });
+    }
+    return config;
+  },
   // PWA Configuration
   headers: async () => {
     return [

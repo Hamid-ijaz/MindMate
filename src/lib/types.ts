@@ -268,6 +268,7 @@ export interface Task {
   // Google Tasks Integration
   syncToGoogleTasks?: boolean; // Whether this task should sync to Google Tasks
   googleTaskId: string | null; // Google Tasks task ID
+  googleTaskListId?: string; // Google Task List ID where this task is synced
   googleTaskSyncStatus?: 'pending' | 'synced' | 'error' | 'deleted';
   googleTaskLastSync?: number; // Timestamp of last sync
   googleTaskUrl?: string; // Direct link to Google Tasks
@@ -294,7 +295,7 @@ export interface GoogleTasksSettings {
   refreshToken?: string;
   tokenExpiresAt?: number;
   userEmail?: string;
-  defaultTaskListId?: string; // Which Google task list to sync with
+  defaultTaskListId?: string; // Which Google task list to sync with (for single list mode)
   syncEnabled: boolean; // Global sync toggle
   lastSyncAt?: number;
   connectedAt?: number; // When Google Tasks was first connected
@@ -304,6 +305,12 @@ export interface GoogleTasksSettings {
   syncInterval?: number; // Sync interval in minutes
   lastError?: string;
   onDeletedTasksAction?: 'skip' | 'recreate'; // What to do when Google Tasks are deleted
+  
+  // New category-based sync settings
+  syncMode?: 'single-list' | 'category-based'; // Choose between single list or category-based sync
+  taskListPrefix?: string; // Prefix for category-based task lists (e.g., "MyApp_")
+  categoryTaskLists?: Record<string, string>; // Map category names to Google task list IDs
+  archivedTaskListId?: string; // Task list ID for archived tasks
 }
 
 // Push Notification Types
