@@ -584,19 +584,17 @@ export const googleTasksService = {
     try {
       const userRef = doc(db, COLLECTIONS.USERS, userEmail);
       await updateDoc(userRef, {
-        [`googleTasksSettings`]: {
-          isConnected: false,
-          syncEnabled: false,
-          accessToken: undefined,
-          refreshToken: undefined,
-          tokenExpiresAt: undefined,
-          userEmail: undefined,
-          defaultTaskListId: undefined,
-          syncStatus: 'idle',
-          lastError: undefined,
-          connectedAt: undefined,
-          lastSyncAt: undefined
-        }
+        [`googleTasksSettings.isConnected`]: false,
+        [`googleTasksSettings.syncEnabled`]: false,
+        [`googleTasksSettings.accessToken`]: deleteField(),
+        [`googleTasksSettings.refreshToken`]: deleteField(),
+        [`googleTasksSettings.tokenExpiresAt`]: deleteField(),
+        [`googleTasksSettings.userEmail`]: deleteField(),
+        [`googleTasksSettings.defaultTaskListId`]: deleteField(),
+        [`googleTasksSettings.syncStatus`]: 'idle',
+        [`googleTasksSettings.lastError`]: deleteField(),
+        [`googleTasksSettings.connectedAt`]: deleteField(),
+        [`googleTasksSettings.lastSyncAt`]: deleteField()
       });
     } catch (error) {
       console.error('Error disconnecting Google Tasks:', error);
