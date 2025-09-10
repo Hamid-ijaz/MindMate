@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthenticatedUserEmail } from '@/lib/auth-utils';
 import { taskService } from '@/lib/firestore';
+import { db } from '@/lib/firebase';
+import { doc, updateDoc, deleteField } from 'firebase/firestore';
 
 export async function POST(request: NextRequest) {
   try {
@@ -28,12 +30,13 @@ export async function POST(request: NextRequest) {
       try {
         // Only clear if it has a googleTaskId
         if (task.googleTaskId || task.googleTaskListId) {
-          await taskService.updateTask(task.id, {
-            googleTaskId: null,
-            googleTaskLastSync: null as any,
-            googleTaskListId: null as any,
-            googleTaskSyncStatus: null as any,
-            googleTaskUrl: null as any
+          const taskRef = doc(db, 'tasks', task.id);
+          await updateDoc(taskRef, {
+            googleTaskId: deleteField(),
+            googleTaskLastSync: deleteField(),
+            googleTaskListId: deleteField(),
+            googleTaskSyncStatus: deleteField(),
+            googleTaskUrl: deleteField()
           });
           clearedCount++;
           console.log(`✅ Cleared googleTaskId for task: ${task.title}`);
