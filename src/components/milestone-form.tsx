@@ -138,6 +138,8 @@ export function MilestoneForm({ isOpen, onClose, milestone, onSuccess }: Milesto
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date>();
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
+  const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
+  const [selectedMonth, setSelectedMonth] = useState<number>(new Date().getMonth());
 
   // Form state
   const [formData, setFormData] = useState({
@@ -162,11 +164,12 @@ export function MilestoneForm({ isOpen, onClose, milestone, onSuccess }: Milesto
   // Initialize form with milestone data if editing
   useEffect(() => {
     if (milestone) {
+      const milestoneDate = new Date(milestone.originalDate);
       setFormData({
         title: milestone.title,
         description: milestone.description || '',
         type: milestone.type,
-        originalDate: new Date(milestone.originalDate),
+        originalDate: milestoneDate,
         isRecurring: milestone.isRecurring,
         recurringFrequency: milestone.recurringFrequency || 'yearly',
         icon: milestone.icon || '',
@@ -174,15 +177,18 @@ export function MilestoneForm({ isOpen, onClose, milestone, onSuccess }: Milesto
         isActive: milestone.isActive,
         notificationSettings: milestone.notificationSettings,
       });
-      setSelectedDate(new Date(milestone.originalDate));
+      setSelectedDate(milestoneDate);
+      setSelectedYear(milestoneDate.getFullYear());
+      setSelectedMonth(milestoneDate.getMonth());
     } else {
       // Reset form for new milestone
+      const now = new Date();
       const defaultType = milestoneTypes[0];
       setFormData({
         title: '',
         description: '',
         type: 'custom',
-        originalDate: new Date(),
+        originalDate: now,
         isRecurring: false,
         recurringFrequency: 'yearly',
         icon: '',
@@ -196,7 +202,9 @@ export function MilestoneForm({ isOpen, onClose, milestone, onSuccess }: Milesto
           onTheDay: true,
         },
       });
-      setSelectedDate(new Date());
+      setSelectedDate(now);
+      setSelectedYear(now.getFullYear());
+      setSelectedMonth(now.getMonth());
     }
   }, [milestone, isOpen]);
 
@@ -216,6 +224,28 @@ export function MilestoneForm({ isOpen, onClose, milestone, onSuccess }: Milesto
       setSelectedDate(date);
       setFormData(prev => ({ ...prev, originalDate: date }));
       setIsCalendarOpen(false);
+    }
+  };
+
+  const handleYearChange = (year: string) => {
+    const newYear = parseInt(year);
+    setSelectedYear(newYear);
+    if (selectedDate) {
+      const newDate = new Date(selectedDate);
+      newDate.setFullYear(newYear);
+      setSelectedDate(newDate);
+      setFormData(prev => ({ ...prev, originalDate: newDate }));
+    }
+  };
+
+  const handleMonthChange = (month: string) => {
+    const newMonth = parseInt(month);
+    setSelectedMonth(newMonth);
+    if (selectedDate) {
+      const newDate = new Date(selectedDate);
+      newDate.setMonth(newMonth);
+      setSelectedDate(newDate);
+      setFormData(prev => ({ ...prev, originalDate: newDate }));
     }
   };
 
@@ -345,7 +375,46 @@ export function MilestoneForm({ isOpen, onClose, milestone, onSuccess }: Milesto
           {/* Date Selection */}
           <div>
             <Label>Original Date *</Label>
-            <div className="mt-1">
+            <div className="mt-1 space-y-2">
+              {/* Year and Month Selectors */}
+              <div className="flex gap-2">
+                <div className="flex-1">
+                  <Select value={selectedYear.toString()} onValueChange={handleYearChange}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select year" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Array.from({ length: 100 }, (_, i) => {
+                        const year = new Date().getFullYear() - 50 + i;
+                        return (
+                          <SelectItem key={year} value={year.toString()}>
+                            {year}
+                          </SelectItem>
+                        );
+                      })}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex-1">
+                  <Select value={selectedMonth.toString()} onValueChange={handleMonthChange}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select month" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {[
+                        'January', 'February', 'March', 'April', 'May', 'June',
+                        'July', 'August', 'September', 'October', 'November', 'December'
+                      ].map((month, index) => (
+                        <SelectItem key={index} value={index.toString()}>
+                          {month}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              {/* Date Picker */}
               <Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
                 <PopoverTrigger asChild>
                   <Button
@@ -364,6 +433,11 @@ export function MilestoneForm({ isOpen, onClose, milestone, onSuccess }: Milesto
                     mode="single"
                     selected={selectedDate}
                     onSelect={handleDateSelect}
+                    month={new Date(selectedYear, selectedMonth)}
+                    onMonthChange={(month) => {
+                      setSelectedYear(month.getFullYear());
+                      setSelectedMonth(month.getMonth());
+                    }}
                     initialFocus
                   />
                 </PopoverContent>
@@ -417,7 +491,7 @@ export function MilestoneForm({ isOpen, onClose, milestone, onSuccess }: Milesto
                 id="icon"
                 value={formData.icon}
                 onChange={(e) => setFormData(prev => ({ ...prev, icon: e.target.value }))}
-                placeholder={selectedTypeInfo?.icon || '🎯'}
+                placeholder="🎯"
                 className="mt-1"
                 maxLength={2}
               />
