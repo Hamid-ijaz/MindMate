@@ -179,7 +179,7 @@ src/
 │   ├── notification-permissions.tsx # Notification permissions
 │   ├── task-category-settings.tsx  # Task categories
 │   ├── task-duration-settings.tsx  # Time estimates
-│   ├── calendar-integrations.tsx   # Calendar sync
+│   ├── google-tasks-integrations.tsx # Google Tasks sync
 │   ├── pwa-settings.tsx           # PWA features
 │   └── admin-settings.tsx         # Admin tools
 └── lib/

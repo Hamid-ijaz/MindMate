@@ -30,7 +30,7 @@ import { getDefaultPriority } from "@/lib/utils";
 import { useState, useTransition, useEffect } from "react";
 import { summarizeUrl } from "@/ai/flows/summarize-url-flow";
 import { enhanceTask } from "@/ai/flows/enhance-task-flow";
-import { Loader2, Wand2, Calendar as CalendarIcon2 } from "lucide-react";
+import { Loader2, Wand2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useGoogleTasksSync } from "@/hooks/use-google-tasks-sync";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
