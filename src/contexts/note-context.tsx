@@ -82,10 +82,15 @@ export const NoteProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const deleteNote = async (id: string) => {
+    // Optimistic update - remove immediately for instant UI feedback
+    const previousNotes = notes;
+    setNotes(prev => prev.filter(n => n.id !== id));
+    
     try {
       await noteService.deleteNote(id);
-      setNotes(prev => prev.filter(n => n.id !== id));
     } catch (error) {
+      // Rollback on error
+      setNotes(previousNotes);
       console.error('Error deleting note:', error);
       toast({ title: "Error", description: "Failed to delete note.", variant: "destructive" });
     }

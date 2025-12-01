@@ -432,21 +432,33 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
             return;
         }
 
+        // For recurring tasks, calculate next occurrence from current date (not the past due date)
+        // This prevents overdue daily tasks from accumulating - they just reschedule from today
+        const baseDate = new Date();
+        
+        // Preserve the original time of day from the task's reminder
         const reminderDate = task.reminderAt ? new Date(task.reminderAt) : new Date();
+        baseDate.setHours(reminderDate.getHours(), reminderDate.getMinutes(), 0, 0);
+        
         let nextReminderDate;
 
         switch (task.recurrence.frequency) {
             case 'daily':
-                nextReminderDate = addDays(reminderDate, 1);
+                // If the base time has already passed today, schedule for tomorrow
+                if (baseDate.getTime() <= Date.now()) {
+                    nextReminderDate = addDays(baseDate, 1);
+                } else {
+                    nextReminderDate = baseDate;
+                }
                 break;
             case 'weekly':
-                nextReminderDate = addWeeks(reminderDate, 1);
+                nextReminderDate = addWeeks(baseDate, 1);
                 break;
             case 'monthly':
-                nextReminderDate = addMonths(reminderDate, 1);
+                nextReminderDate = addMonths(baseDate, 1);
                 break;
             default:
-                nextReminderDate = reminderDate;
+                nextReminderDate = addDays(baseDate, 1);
         }
         
         // If next date is past the end date, complete without rescheduling

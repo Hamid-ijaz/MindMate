@@ -630,7 +630,7 @@ export function TaskSuggestion() {
                             <Sparkles className="w-3 h-3 text-primary" />
                           </div>
                           <CardDescription className="text-sm font-medium text-primary">
-                            Task {index + 1} of {possibleTasks.length}
+                            {currentPriority} Task {index + 1} of {possibleTasks.length}
                           </CardDescription>
                         </div>
                         

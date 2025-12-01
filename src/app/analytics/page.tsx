@@ -212,15 +212,23 @@ export default function AnalyticsPage() {
             <CardDescription>Tasks completed over the last 7 days</CardDescription>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={300}>
-              <AreaChart data={analytics.dailyTrend}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="date" />
-                <YAxis />
-                <Tooltip />
-                <Area type="monotone" dataKey="completed" stroke="#8884d8" fill="#8884d8" fillOpacity={0.3} />
-              </AreaChart>
-            </ResponsiveContainer>
+            {analytics.dailyTrend.some(d => d.completed > 0) ? (
+              <ResponsiveContainer width="100%" height={300}>
+                <AreaChart data={analytics.dailyTrend}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="date" />
+                  <YAxis allowDecimals={false} />
+                  <Tooltip />
+                  <Area type="monotone" dataKey="completed" stroke="#8884d8" fill="#8884d8" fillOpacity={0.3} />
+                </AreaChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-[300px] flex flex-col items-center justify-center text-muted-foreground">
+                <CheckSquare className="h-12 w-12 mb-4 opacity-20" />
+                <p>No completed tasks in the last 7 days</p>
+                <p className="text-sm">Complete some tasks to see your progress!</p>
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -231,15 +239,23 @@ export default function AnalyticsPage() {
             <CardDescription>Completion rates by task category</CardDescription>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={analytics.categoryData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="category" />
-                <YAxis />
-                <Tooltip />
-                <Bar dataKey="rate" fill="#82ca9d" />
-              </BarChart>
-            </ResponsiveContainer>
+            {analytics.categoryData.length > 0 ? (
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={analytics.categoryData}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="category" />
+                  <YAxis domain={[0, 100]} />
+                  <Tooltip formatter={(value) => `${value}%`} />
+                  <Bar dataKey="rate" fill="#82ca9d" name="Completion Rate" />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-[300px] flex flex-col items-center justify-center text-muted-foreground">
+                <Target className="h-12 w-12 mb-4 opacity-20" />
+                <p>No tasks found in this time range</p>
+                <p className="text-sm">Add some tasks to see category stats!</p>
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -250,25 +266,33 @@ export default function AnalyticsPage() {
             <CardDescription>How your tasks are prioritized</CardDescription>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={300}>
-              <PieChart>
-                <Pie
-                  data={analytics.priorityData}
-                  cx="50%"
-                  cy="50%"
-                  labelLine={false}
-                  label={({ priority, percentage }) => `${priority} (${percentage}%)`}
-                  outerRadius={80}
-                  fill="#8884d8"
-                  dataKey="count"
-                >
-                  {analytics.priorityData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip />
-              </PieChart>
-            </ResponsiveContainer>
+            {analytics.priorityData.length > 0 ? (
+              <ResponsiveContainer width="100%" height={300}>
+                <PieChart>
+                  <Pie
+                    data={analytics.priorityData}
+                    cx="50%"
+                    cy="50%"
+                    labelLine={false}
+                    label={({ priority, percentage }) => `${priority} (${percentage}%)`}
+                    outerRadius={80}
+                    fill="#8884d8"
+                    dataKey="count"
+                  >
+                    {analytics.priorityData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip />
+                </PieChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-[300px] flex flex-col items-center justify-center text-muted-foreground">
+                <Zap className="h-12 w-12 mb-4 opacity-20" />
+                <p>No tasks found in this time range</p>
+                <p className="text-sm">Add some tasks to see priority distribution!</p>
+              </div>
+            )}
           </CardContent>
         </Card>
 
