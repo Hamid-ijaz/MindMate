@@ -241,11 +241,9 @@ export function usePushNotifications() {
         icon: options.icon || '/icon-192.png',
         badge: options.badge || '/icon-192.png',
         data: options.data,
-        actions: options.actions,
         tag: options.tag,
         requireInteraction: options.requireInteraction !== false,
         silent: options.silent || false,
-        timestamp: Date.now(),
       });
 
       return true;

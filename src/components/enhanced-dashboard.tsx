@@ -351,16 +351,13 @@ export default function EnhancedDashboard() {
   const convertNoteToTask = async (note: Note) => {
     try {
       const newTask = {
-        id: Date.now().toString(),
         userEmail: note.userEmail,
         title: note.title || "Task from Note",
         description: note.content.replace(/<[^>]*>/g, ''), // Strip HTML tags
         category: (taskCategories[0] || "Personal") as TaskCategory,
         priority: "Medium" as Priority,
         duration: 30 as TaskDuration,
-        createdAt: Date.now(),
-        rejectionCount: 0,
-        isMuted: false,
+        googleTaskId: null,
       };
 
       await addTask(newTask);
@@ -735,6 +732,7 @@ export default function EnhancedDashboard() {
         category: 'Work',
         priority: 'Medium',
         duration: 30,
+        googleTaskId: null,
       });
       setNewTaskText("");
     }
@@ -775,7 +773,7 @@ export default function EnhancedDashboard() {
                 </div>
                 <div className="flex items-center gap-1">
                   <Clock className="w-4 h-4 text-orange-600" />
-                  <span>{filteredTasks.filter(t => !t.completedAt && !t.isMuted && isToday(new Date(t.reminderAt))).length} due today</span>
+                  <span>{filteredTasks.filter(t => !t.completedAt && !t.isMuted && t.reminderAt && isToday(new Date(t.reminderAt))).length} due today</span>
                 </div>
               </div>
 

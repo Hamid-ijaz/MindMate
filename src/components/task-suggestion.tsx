@@ -369,6 +369,7 @@ export function TaskSuggestion() {
             priority: 'Low',
             duration: 15,
             userEmail: user?.email || '', // Add missing userEmail
+            googleTaskId: null,
         });
     });
 

@@ -16,7 +16,7 @@ export async function POST(request: NextRequest) {
 
     // Get task and user information
     const [task, user] = await Promise.all([
-      taskService.getTask(userEmail, taskId),
+      taskService.getTask(taskId),
       userService.getUser(userEmail)
     ]);
 
@@ -41,7 +41,7 @@ export async function POST(request: NextRequest) {
       userName: user.firstName || 'there',
       taskTitle: task.title,
       taskDescription: task.description,
-      dueDate: task.dueDate,
+      dueDate: task.reminderAt,
       priority: task.priority,
       taskLink,
       customMessage,
@@ -54,9 +54,8 @@ export async function POST(request: NextRequest) {
 
     if (success) {
       // Update task with reminder sent timestamp
-      await taskService.updateTask(userEmail, taskId, {
-        lastReminderSent: new Date(),
-        reminderCount: (task.reminderCount || 0) + 1,
+      await taskService.updateTask(taskId, {
+        notifiedAt: Date.now(),
       });
 
       return NextResponse.json({ 
@@ -100,7 +99,7 @@ export async function GET(request: NextRequest) {
           userName: user.firstName || 'there',
           taskTitle: task.title,
           taskDescription: task.description,
-          dueDate: task.dueDate,
+          dueDate: task.reminderAt,
           priority: task.priority,
           taskLink,
           companyName: process.env.EMAIL_COMPANY_NAME || 'MindMate',
@@ -111,9 +110,8 @@ export async function GET(request: NextRequest) {
         const success = await emailService.sendTaskReminderEmail(userEmail, templateData);
 
         if (success) {
-          await taskService.updateTask(userEmail, task.id, {
-            lastReminderSent: new Date(),
-            reminderCount: (task.reminderCount || 0) + 1,
+          await taskService.updateTask(task.id, {
+            notifiedAt: Date.now(),
           });
         }
 

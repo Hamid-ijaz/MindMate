@@ -35,6 +35,7 @@ import { SubtaskList } from '@/components/subtask-list';
 import { useTasks } from '@/contexts/task-context';
 import { useNotes } from '@/contexts/note-context';
 import { safeDateFormat, isTaskOverdue } from '@/lib/utils';
+import { sharingService, taskService, noteService } from '@/lib/firestore';
 
 interface SharedContentPageProps {
   params: {
@@ -392,7 +393,7 @@ function SharedContentContent() {
       
       // Reopen the subtask
       await taskService.updateTask(subtaskId, { 
-        completedAt: null 
+        completedAt: undefined 
       });
 
       // Record the action

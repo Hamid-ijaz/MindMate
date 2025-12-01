@@ -40,16 +40,13 @@ export function NoteCard({ note, onClick, className = "" }: NoteCardProps & { cl
     const handleConvertToTask = async () => {
         try {
             const newTask = {
-                id: Date.now().toString(),
                 userEmail: note.userEmail,
                 title: note.title || "Task from Note",
                 description: note.content.replace(/<[^>]*>/g, ''), // Strip HTML tags
                 category: "Personal" as TaskCategory,
                 priority: "Medium" as Priority,
                 duration: 30 as TaskDuration,
-                createdAt: Date.now(),
-                rejectionCount: 0,
-                isMuted: false,
+                googleTaskId: null,
             };
             
             await addTask(newTask);

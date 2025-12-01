@@ -97,7 +97,7 @@ export function CalendarSettings({
     setSettings(prev => ({
       ...prev,
       [key]: {
-        ...prev[key],
+        ...(prev[key] as object),
         [nestedKey]: value,
       },
     }));
