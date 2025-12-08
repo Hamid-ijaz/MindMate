@@ -149,7 +149,7 @@ export default function FocusTimerPage() {
           </div>
           
           <PomodoroTimer
-            task={selectedTask}
+            task={selectedTask || undefined}
             onSessionComplete={handleSessionComplete}
             onTaskUpdate={handleTaskUpdate}
             className="w-full"
@@ -285,7 +285,7 @@ export default function FocusTimerPage() {
                 </CardHeader>
                 <CardContent>
                   <PomodoroTimer
-                    task={selectedTask}
+                    task={selectedTask || undefined}
                     onSessionComplete={handleSessionComplete}
                     onTaskUpdate={handleTaskUpdate}
                   />

@@ -105,16 +105,17 @@ export async function POST(request: NextRequest) {
         await webpush.sendNotification(subscription, JSON.stringify(payload));
         console.log(`Task reminder sent successfully for task ${taskId} to user ${userEmail}`);
         return { success: true, subscriptionId: subDoc.id };
-      } catch (error) {
+      } catch (error: unknown) {
         console.error(`Failed to send task reminder for task ${taskId}:`, error);
         
         // If subscription is invalid, remove it
-        if (error.statusCode === 410 || error.statusCode === 404) {
+        const webPushError = error as { statusCode?: number; message?: string };
+        if (webPushError.statusCode === 410 || webPushError.statusCode === 404) {
           await subDoc.ref.delete();
           console.log(`Removed invalid subscription ${subDoc.id} for user ${userEmail}`);
         }
         
-        return { success: false, error: error.message, subscriptionId: subDoc.id };
+        return { success: false, error: webPushError.message || 'Unknown error', subscriptionId: subDoc.id };
       }
     });
 
@@ -152,7 +153,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Error in send-task-reminder:', error);
     return NextResponse.json(
-      { error: 'Internal server error', details: error.message },
+      { error: 'Internal server error', details: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
     );
   }

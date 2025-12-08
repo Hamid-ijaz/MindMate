@@ -357,7 +357,8 @@ function calculateLongestStreak(tasks: any[]): number {
       currentStreak = 1;
     }
   }
-
+  
+  return maxStreak;
 }
 
 function generateWeeklyDigestTemplate(data: any): string {
@@ -530,114 +531,6 @@ function generateWeeklyDigestTemplate(data: any): string {
         <div class="footer">
             <p>© 2025 ${companyName}. All rights reserved.</p>
             <p><a href="${companyUrl}/settings">Manage preferences</a> | <a href="mailto:${data.supportEmail}">Contact Support</a></p>
-        </div>
-    </div>
-</body>
-</html>
-  `;
-}
-
-function generateWeeklyDigestTextTemplate(data: any): string {
-  return `
-📊 WEEKLY SUMMARY - ${data.weekPeriod}
-
-Hello ${data.userName}! 👋
-
-Here's how you performed this week:
-
-📈 THIS WEEK'S ACTIVITY:
-                <div class="stat-row">
-                    <span>Tasks Created</span>
-                    <span class="stat-number">${data.thisWeekTasks}</span>
-                </div>
-                <div class="stat-row">
-                    <span>Tasks Completed</span>
-                    <span class="stat-number">${data.thisWeekCompleted}</span>
-                </div>
-                <div class="stat-row">
-                    <span>Overall Completion Rate</span>
-                    <span class="stat-number">${data.completionRate}%</span>
-                </div>
-            </div>
-
-            <div class="stat-box">
-                <h3>📋 Current Status</h3>
-                <div class="stat-row">
-                    <span>Total Tasks</span>
-                    <span class="stat-number">${data.totalTasks}</span>
-                </div>
-                <div class="stat-row">
-                    <span>Completed Tasks</span>
-                    <span class="stat-number">${data.completedTasks}</span>
-                </div>
-                ${data.overdueTasks > 0 ? `
-                <div class="stat-row">
-                    <span>⚠️ Overdue Tasks</span>
-                    <span class="stat-number" style="color: #ef4444;">${data.overdueTasks}</span>
-                </div>
-                ` : ''}
-            </div>
-
-            ${data.upcomingTasks.length > 0 ? `
-            <div class="stat-box">
-                <h3>📅 Upcoming Tasks</h3>
-                <ul>${upcomingTasksList}</ul>
-            </div>
-            ` : ''}
-
-            <div class="stat-box">
-                <h3>🎯 Priority Breakdown</h3>
-                <div style="margin: 15px 0;">
-                    <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
-                        <span>High Priority</span>
-                        <span>${data.priorityBreakdown.high}</span>
-                    </div>
-                    <div class="priority-bar"><div class="priority-fill high" style="width: ${data.totalTasks > 0 ? (data.priorityBreakdown.high / data.totalTasks) * 100 : 0}%;"></div></div>
-                </div>
-                <div style="margin: 15px 0;">
-                    <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
-                        <span>Medium Priority</span>
-                        <span>${data.priorityBreakdown.medium}</span>
-                    </div>
-                    <div class="priority-bar"><div class="priority-fill medium" style="width: ${data.totalTasks > 0 ? (data.priorityBreakdown.medium / data.totalTasks) * 100 : 0}%;"></div></div>
-                </div>
-                <div style="margin: 15px 0;">
-                    <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
-                        <span>Low Priority</span>
-                        <span>${data.priorityBreakdown.low}</span>
-                    </div>
-                    <div class="priority-bar"><div class="priority-fill low" style="width: ${data.totalTasks > 0 ? (data.priorityBreakdown.low / data.totalTasks) * 100 : 0}%;"></div></div>
-                </div>
-            </div>
-
-            ${data.completionRate >= 80 ? `
-            <div class="stat-box" style="border-left-color: #10b981; background: #f0fdf4;">
-                <h3>🎉 Great Job!</h3>
-                <p>You're doing amazing with a ${data.completionRate}% completion rate! Keep up the excellent work!</p>
-            </div>
-            ` : data.completionRate >= 50 ? `
-            <div class="stat-box" style="border-left-color: #f59e0b; background: #fffbeb;">
-                <h3>👍 Good Progress!</h3>
-                <p>You're making good progress! Consider focusing on completing those overdue tasks to boost your productivity.</p>
-            </div>
-            ` : `
-            <div class="stat-box" style="border-left-color: #ef4444; background: #fef2f2;">
-                <h3>💪 Let's Improve!</h3>
-                <p>There's room for improvement! Try breaking down large tasks into smaller, manageable pieces.</p>
-            </div>
-            `}
-
-            <p style="text-align: center; margin-top: 30px;">
-                <a href="${data.companyUrl}" style="display: inline-block; padding: 12px 24px; background: #3b82f6; color: white; text-decoration: none; border-radius: 6px;">Open ${companyName}</a>
-            </p>
-            
-            <p>Keep up the great work!<br>
-            The ${companyName} Team</p>
-        </div>
-        <div class="footer">
-            <p>This weekly summary was generated automatically from your ${companyName} activity.</p>
-            <p><a href="${data.companyUrl}/settings">Manage Email Preferences</a></p>
-            <p>© 2025 ${companyName}. All rights reserved.</p>
         </div>
     </div>
 </body>

@@ -49,6 +49,7 @@ import { useAuth } from '@/contexts/auth-context';
 import type { SharedItem, SharePermission, ShareHistoryEntry, ShareAnalytics, ShareCollaborator } from '@/lib/types';
 import { motion, AnimatePresence } from 'framer-motion';
 import { format, formatDistanceToNow } from 'date-fns';
+import { sharingService, userService } from '@/lib/firestore';
 
 interface ShareDialogProps {
   isOpen: boolean;

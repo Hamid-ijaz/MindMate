@@ -84,7 +84,7 @@ export function SettingsSearch({ onSettingSelect, currentSetting, settings }: Se
                 <Button variant="outline" className="h-12 px-4 bg-white/80 backdrop-blur-sm border-white/50">
                   <Filter className="h-4 w-4 mr-2" />
                   {selectedCategory ? 
-                    Object.values(settings).find((cat: any, index) => Object.keys(settings)[index] === selectedCategory)?.title || 'Category'
+                    (Object.values(settings).find((cat: any, index) => Object.keys(settings)[index] === selectedCategory) as any)?.title || 'Category'
                     : 'All Categories'
                   }
                   <ChevronDown className="h-4 w-4 ml-2" />
@@ -161,7 +161,7 @@ export function SettingsSearch({ onSettingSelect, currentSetting, settings }: Se
                     {filteredSettings.length > 0 && (
                       <Badge variant="secondary" className="text-xs">
                         {searchQuery && `"${searchQuery}"`}
-                        {selectedCategory && Object.values(settings).find((cat: any, index) => Object.keys(settings)[index] === selectedCategory)?.title}
+                        {selectedCategory && (Object.values(settings).find((cat: any, index) => Object.keys(settings)[index] === selectedCategory) as any)?.title}
                       </Badge>
                     )}
                   </div>

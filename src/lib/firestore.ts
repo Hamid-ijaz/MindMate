@@ -639,9 +639,9 @@ export const googleTasksService = {
       // Remove any undefined values to prevent Firestore errors
       const sanitizedData = Object.fromEntries(
         Object.entries(updateData).filter(([, value]) => value !== undefined)
-      );
+      ) as { [key: string]: unknown };
       
-      await updateDoc(taskRef, sanitizedData);
+      await updateDoc(taskRef, sanitizedData as Partial<Task>);
     } catch (error) {
       console.error('Error updating task Google Tasks sync status:', error);
       throw error;

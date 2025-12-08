@@ -73,7 +73,7 @@ export function KeyboardNavigation({ isEnabled = true }: KeyboardNavigationProps
             // Quick add task
             event.preventDefault();
             // Trigger add task modal
-            document.querySelector('[data-add-task-trigger]')?.click();
+            (document.querySelector('[data-add-task-trigger]') as HTMLElement)?.click();
             break;
         }
       }

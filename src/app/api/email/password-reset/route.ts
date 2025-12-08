@@ -32,7 +32,7 @@ export async function POST(request: NextRequest) {
     await storePasswordResetToken(email, resetToken);
 
     const templateData = {
-      userName: user.name,
+      userName: user.firstName || 'User',
       userEmail: email,
       resetLink,
       companyName: process.env.EMAIL_COMPANY_NAME || 'MindMate',

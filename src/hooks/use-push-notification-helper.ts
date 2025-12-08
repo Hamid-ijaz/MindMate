@@ -46,7 +46,7 @@ export function usePushNotificationHelper(): PushNotificationHelper {
 
     // Use client-side notifications
     const now = new Date();
-    const dueDate = task.dueDate ? new Date(task.dueDate) : null;
+    const dueDate = task.reminderAt ? new Date(task.reminderAt) : null;
     const isOverdue = dueDate && dueDate <= now;
     
     let title: string;
@@ -125,7 +125,7 @@ export function usePushNotificationHelper(): PushNotificationHelper {
     }
 
     const taskCount = tasks.length;
-    const urgentTasks = tasks.filter(task => task.priority === 'high');
+    const urgentTasks = tasks.filter(task => task.priority === 'High');
     
     let title: string;
     let body: string;
@@ -133,7 +133,7 @@ export function usePushNotificationHelper(): PushNotificationHelper {
     if (taskCount === 1) {
       const task = tasks[0];
       const now = new Date();
-      const dueDate = task.dueDate ? new Date(task.dueDate) : now;
+      const dueDate = task.reminderAt ? new Date(task.reminderAt) : now;
       const daysSinceDue = Math.floor((now.getTime() - dueDate.getTime()) / (24 * 60 * 60 * 1000));
       
       title = `📋 Overdue Task Reminder`;

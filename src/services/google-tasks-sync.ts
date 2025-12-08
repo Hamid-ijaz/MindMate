@@ -1178,9 +1178,6 @@ class GoogleTasksSyncService {
                 // Google task was deleted - handle based on user preference
                 const onDeletedAction = settings.onDeletedTasksAction || 'skip';
                 console.log(`🗑️ Google task ${appTask.googleTaskId} was deleted`);
-                console.log(`🔍 DEBUG - settings.onDeletedTasksAction raw value:`, settings.onDeletedTasksAction);
-                console.log(`🔍 DEBUG - onDeletedAction final value:`, onDeletedAction);
-                console.log(`🔍 DEBUG - full settings object:`, JSON.stringify(settings, null, 2));
                 
                 if (onDeletedAction === 'recreate') {
                   console.log(`🔄 Recreating deleted Google task for app task ${appTask.id}: ${appTask.title}`);
