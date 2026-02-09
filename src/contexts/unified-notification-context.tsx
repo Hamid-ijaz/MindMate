@@ -47,6 +47,7 @@ export const UnifiedNotificationProvider = ({ children }: NotificationProviderPr
   const [permission, setPermission] = useState<NotificationPermission>('default');
   const displayedNotificationsRef = useRef<Set<string>>(new Set());
   const dismissedNotificationsRef = useRef<Set<string>>(new Set());
+  const isInitialLoadRef = useRef(true);
   const getDismissedKey = (email?: string) => `mindmate-dismissed-toasts:${email ?? 'anon'}`;
   const unsubscribeRef = useRef<(() => void) | null>(null);
 
@@ -59,6 +60,8 @@ export const UnifiedNotificationProvider = ({ children }: NotificationProviderPr
 
   // Set up real-time subscription when user is available
   useEffect(() => {
+    isInitialLoadRef.current = true;
+
     // initialize dismissed set from localStorage (scoped per user)
     if (typeof window !== 'undefined') {
       try {
@@ -87,6 +90,19 @@ export const UnifiedNotificationProvider = ({ children }: NotificationProviderPr
         setNotifications(newNotifications);
         setUnreadCount(newNotifications.filter(n => !n.isRead).length);
         setIsLoading(false);
+
+        const isMobileViewport =
+          typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches;
+
+        if (isMobileViewport && isInitialLoadRef.current) {
+          newNotifications.forEach(notif => {
+            if (!notif.isRead) {
+              displayedNotificationsRef.current.add(notif.id);
+            }
+          });
+          isInitialLoadRef.current = false;
+          return;
+        }
         
         // Show toast notifications for new unread notifications
         newNotifications.forEach(notif => {
@@ -122,6 +138,8 @@ export const UnifiedNotificationProvider = ({ children }: NotificationProviderPr
             });
           }
         });
+
+        isInitialLoadRef.current = false;
       }
     );
 
