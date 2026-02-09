@@ -25,16 +25,26 @@ export default function LoginPage() {
     e.preventDefault();
     setIsLoading(true);
     
+    // Detect if mobile device
+    const isMobile = typeof window !== 'undefined' && (
+      /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini|mobile|phone/i.test(navigator.userAgent.toLowerCase()) ||
+      (window.matchMedia('(max-width: 768px)').matches && 'ontouchstart' in window)
+    );
+    
     try {
       const success = await login(email, password);
       if (success) {
-        toast({
-          title: "Welcome back!",
-          description: "You have been successfully logged in.",
-        });
+        // Only show success toast on web, not on mobile
+        if (!isMobile) {
+          toast({
+            title: "Welcome back!",
+            description: "You have been successfully logged in.",
+          });
+        }
         router.push('/');
         router.refresh(); // Ensures middleware is re-evaluated
       } else {
+        // Show error toast on both web and mobile
         toast({
           title: "Login Failed",
           description: "Invalid email or password.",
@@ -42,6 +52,7 @@ export default function LoginPage() {
         });
       }
     } catch (error) {
+      // Show error toast on both web and mobile
       toast({
         title: "Login Error",
         description: "An error occurred during login. Please try again.",

@@ -32,6 +32,45 @@ try {
   console.error('VAPID configuration error:', error);
 }
 
+// Helper function to get current date in a specific timezone (returns date at midnight in that timezone)
+function getCurrentDateInTimezone(timeZone: string = 'Asia/Karachi'): Date {
+  const now = new Date();
+  
+  // Get the date string in the specified timezone
+  const dateString = now.toLocaleString('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }); // Format: YYYY-MM-DD
+  
+  const [year, month, day] = dateString.split('-').map(Number);
+  return new Date(year, month - 1, day, 0, 0, 0, 0); // Return midnight in UTC
+}
+
+// Helper function to get current time in a specific timezone
+function getCurrentTimeInTimezone(timeZone: string = 'Asia/Karachi'): Date {
+  const now = new Date();
+  
+  // Get the date and time string in the specified timezone
+  const dateString = now.toLocaleString('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false
+  }); // Format: YYYY-MM-DD HH:mm:ss
+  
+  const [datePart, timePart] = dateString.split(', ');
+  const [year, month, day] = datePart.split('-').map(Number);
+  const [hour, minute, second] = timePart.split(':').map(Number);
+  
+  return new Date(year, month - 1, day, hour, minute, second, 0);
+}
+
 // Helper function to check if current time is within quiet hours
 function isInQuietHours(quietHours: any): boolean {
   if (!quietHours?.enabled) return false;
@@ -779,30 +818,41 @@ async function processPushNotifications(db: any, now: Date): Promise<any> {
               notificationSettings: milestone.notificationSettings
             });
             
-            // Calculate days until next anniversary
+            // Calculate days until next anniversary (TIMEZONE-AWARE)
             let daysUntil = null;
             if (milestone.isRecurring) {
               const originalDate = new Date(milestone.originalDate);
-              const currentYear = now.getFullYear();
               
-              userDetail.logs.push(`Original date: ${originalDate.toDateString()}, Current year: ${currentYear}`);
+              // Get the current date in the user's timezone (Asia/Karachi for Pakistan timezone)
+              const nowInUserTZ = getCurrentDateInTimezone('Asia/Karachi');
+              const currentYear = nowInUserTZ.getFullYear();
               
-              // Calculate this year's anniversary
-              let thisYearAnniversary = new Date(currentYear, originalDate.getMonth(), originalDate.getDate());
+              userDetail.logs.push(`Original date: ${originalDate.toDateString()}, Current year: ${currentYear}, Now in TZ: ${nowInUserTZ.toDateString()}`);
+              
+              // Calculate this year's anniversary at midnight in UTC (equivalent to midnight in Pakistan timezone)
+              let thisYearAnniversary = new Date(currentYear, originalDate.getMonth(), originalDate.getDate(), 0, 0, 0, 0);
               
               // If this year's anniversary has passed, use next year's
-              if (thisYearAnniversary < now) {
-                thisYearAnniversary = new Date(currentYear + 1, originalDate.getMonth(), originalDate.getDate());
+              if (thisYearAnniversary < nowInUserTZ) {
+                thisYearAnniversary = new Date(currentYear + 1, originalDate.getMonth(), originalDate.getDate(), 0, 0, 0, 0);
               }
               
-              daysUntil = Math.floor((thisYearAnniversary.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+              // Calculate days between two dates at midnight (this gives correct day count)
+              const timeDiffMs = thisYearAnniversary.getTime() - nowInUserTZ.getTime();
+              daysUntil = Math.ceil(timeDiffMs / (1000 * 60 * 60 * 24));
               
-              userDetail.logs.push(`Next anniversary: ${thisYearAnniversary.toDateString()}, Days until: ${daysUntil}`);
-              console.log(`📅 Anniversary calculation:`, {
+              // If daysUntil is slightly negative due to rounding, set to 0 (same day)
+              if (daysUntil < 0 && daysUntil > -1) {
+                daysUntil = 0;
+              }
+              
+              userDetail.logs.push(`Next anniversary: ${thisYearAnniversary.toDateString()}, Days until: ${daysUntil} (currentDayInTZ: ${nowInUserTZ.toDateString()})`);
+              console.log(`📅 Anniversary calculation (TIMEZONE-AWARE):`, {
                 originalDate: originalDate.toISOString(),
                 thisYearAnniversary: thisYearAnniversary.toISOString(),
+                nowInUserTimezone: nowInUserTZ.toISOString(),
                 daysUntil,
-                now: now.toISOString()
+                nowServerTime: now.toISOString()
               });
             }
             
