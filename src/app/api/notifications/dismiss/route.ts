@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { getAuthenticatedUserEmail } from '@/lib/auth-utils';
 
 const normalizeUserEmail = (value: unknown): string | null => {
   if (typeof value !== 'string') {
@@ -12,10 +13,19 @@ const normalizeUserEmail = (value: unknown): string | null => {
 
 export async function POST(request: NextRequest) {
   try {
+    const authenticatedUserEmail = await getAuthenticatedUserEmail(request);
+    if (!authenticatedUserEmail) {
+      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+    }
 
     const body = await request.json().catch(() => ({}));
     const { notificationId, taskId } = body || {};
-    const userEmail = normalizeUserEmail(body?.userEmail);
+    const requestedUserEmail = normalizeUserEmail(body?.userEmail);
+    const userEmail = requestedUserEmail || authenticatedUserEmail;
+
+    if (requestedUserEmail && requestedUserEmail !== authenticatedUserEmail) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
 
     // Prefer direct update by userEmail + notificationId to avoid collectionGroup queries
     if (!notificationId && !taskId) {
@@ -24,10 +34,6 @@ export async function POST(request: NextRequest) {
 
     // If specific notificationId provided, require userEmail to update a direct notification row
     if (notificationId) {
-      if (!userEmail) {
-        return NextResponse.json({ error: 'notificationId operations require userEmail in body' }, { status: 400 });
-      }
-
       const existingNotification = await prisma.notification.findFirst({
         where: {
           id: notificationId,
@@ -56,10 +62,6 @@ export async function POST(request: NextRequest) {
 
     // If taskId provided, mark all unread notifications related to that task as read
     if (taskId) {
-      if (!userEmail) {
-        return NextResponse.json({ error: 'taskId operations require userEmail in body' }, { status: 400 });
-      }
-
       const result = await prisma.notification.updateMany({
         where: {
           userEmail,

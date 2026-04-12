@@ -605,12 +605,11 @@ function TaskPageInner() {
     );
 }
 
-export default function TaskPageWrapper(props: any) {
+export default function TaskPageWrapper() {
   return (
     <NotificationProvider>
-      <TaskPageInner {...props} />
+      <TaskPageInner />
     </NotificationProvider>
   );
 }
-
 

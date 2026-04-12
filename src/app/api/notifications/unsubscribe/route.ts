@@ -1,18 +1,28 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { getAuthenticatedUserEmail } from '@/lib/auth-utils';
 
 export async function POST(request: NextRequest) {
   try {
+    const authenticatedUserEmail = await getAuthenticatedUserEmail(request);
+    if (!authenticatedUserEmail) {
+      return NextResponse.json(
+        { error: 'Not authenticated' },
+        { status: 401 }
+      );
+    }
+
     const body = await request.json();
     const rawUserEmail = typeof body.userEmail === 'string' ? body.userEmail : '';
-    const userEmail = rawUserEmail.trim().toLowerCase();
+    const requestedUserEmail = rawUserEmail.trim().toLowerCase();
+    const userEmail = requestedUserEmail || authenticatedUserEmail;
     const subscriptionId = typeof body.subscriptionId === 'string' ? body.subscriptionId : undefined;
     const endpoint = typeof body.endpoint === 'string' ? body.endpoint : undefined;
 
-    if (!userEmail) {
+    if (requestedUserEmail && requestedUserEmail !== authenticatedUserEmail) {
       return NextResponse.json(
-        { error: 'Missing required field: userEmail' },
-        { status: 400 }
+        { error: 'Forbidden' },
+        { status: 403 }
       );
     }
 

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
+import { getAuthenticatedUserEmail } from '@/lib/auth-utils';
 
 type PreferencesRecord = Record<string, unknown>;
 
@@ -90,15 +91,6 @@ const getStoredQuietHours = (value: unknown): { quietHours: QuietHours; extended
   return { quietHours, extended };
 };
 
-const normalizeUserEmail = (value: string | null | undefined): string | null => {
-  if (!value) {
-    return null;
-  }
-
-  const normalized = value.trim().toLowerCase();
-  return normalized.length > 0 ? normalized : null;
-};
-
 const sanitizePreferencesResponse = (preferences: PreferencesRecord): PreferencesRecord => {
   const sanitized = { ...preferences };
 
@@ -121,21 +113,11 @@ const sanitizePreferencesResponse = (preferences: PreferencesRecord): Preference
 export async function GET(request: NextRequest) {
 
   try {
-    let userEmail: string | null = null;
-    const authHeader = request.headers.get('authorization');
-    if (authHeader && authHeader.startsWith('Bearer ')) {
-      userEmail = normalizeUserEmail(authHeader.replace('Bearer ', ''));
-    }
-
-    if (!userEmail) {
-      const { searchParams } = new URL(request.url);
-      userEmail = normalizeUserEmail(searchParams.get('userEmail'));
-    }
-
+    const userEmail = await getAuthenticatedUserEmail(request);
     if (!userEmail) {
       return NextResponse.json(
-        { error: 'Missing required parameter: userEmail' },
-        { status: 400 }
+        { error: 'Not authenticated' },
+        { status: 401 }
       );
     }
 
@@ -183,22 +165,30 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
 
   try {
-    let userEmail: string | null = null;
-    const authHeader = request.headers.get('authorization');
-    if (authHeader && authHeader.startsWith('Bearer ')) {
-      userEmail = normalizeUserEmail(authHeader.replace('Bearer ', ''));
+    const userEmail = await getAuthenticatedUserEmail(request);
+    const body = await request.json();
+    const requestedUserEmail =
+      typeof body.userEmail === 'string' ? body.userEmail.trim().toLowerCase() : null;
+
+    if (!userEmail) {
+      return NextResponse.json(
+        { error: 'Not authenticated' },
+        { status: 401 }
+      );
     }
 
-    const body = await request.json();
-    if (!userEmail) {
-      userEmail = normalizeUserEmail(typeof body.userEmail === 'string' ? body.userEmail : null);
+    if (requestedUserEmail && requestedUserEmail !== userEmail) {
+      return NextResponse.json(
+        { error: 'Forbidden' },
+        { status: 403 }
+      );
     }
 
     const preferences = isRecord(body.preferences) ? body.preferences : null;
 
-    if (!userEmail || !preferences) {
+    if (!preferences) {
       return NextResponse.json(
-        { error: 'Missing required fields: userEmail, preferences' },
+        { error: 'Missing required field: preferences' },
         { status: 400 }
       );
     }

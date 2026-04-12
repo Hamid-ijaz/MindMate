@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import webpush from 'web-push';
+import { getAuthenticatedUserEmail } from '@/lib/auth-utils';
 
 // Configure VAPID keys for web push
 try {
@@ -41,14 +42,30 @@ const toPushSubscription = (subscription: {
 
 export async function POST(request: NextRequest) {
   try {
+    const authenticatedUserEmail = await getAuthenticatedUserEmail(request);
+    if (!authenticatedUserEmail) {
+      return NextResponse.json(
+        { error: 'Not authenticated' },
+        { status: 401 }
+      );
+    }
+
     const body = await request.json();
     const rawUserEmail = typeof body.userEmail === 'string' ? body.userEmail : '';
-    const userEmail = rawUserEmail.trim().toLowerCase();
+    const requestedUserEmail = rawUserEmail.trim().toLowerCase();
+    const userEmail = requestedUserEmail || authenticatedUserEmail;
     const { message } = body;
 
-    if (!userEmail || !message) {
+    if (requestedUserEmail && requestedUserEmail !== authenticatedUserEmail) {
       return NextResponse.json(
-        { error: 'Missing userEmail or message' },
+        { error: 'Forbidden' },
+        { status: 403 }
+      );
+    }
+
+    if (!message) {
+      return NextResponse.json(
+        { error: 'Missing required field: message' },
         { status: 400 }
       );
     }

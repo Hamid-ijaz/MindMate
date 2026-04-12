@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
+import { getAuthenticatedUserEmail } from '@/lib/auth-utils';
 
 const toJson = (value: unknown): Prisma.InputJsonValue => {
   if (value === undefined || value === null) {
@@ -17,15 +18,31 @@ const toJson = (value: unknown): Prisma.InputJsonValue => {
 
 export async function POST(request: NextRequest) {
   try {
+    const authenticatedUserEmail = await getAuthenticatedUserEmail(request);
+    if (!authenticatedUserEmail) {
+      return NextResponse.json(
+        { error: 'Not authenticated' },
+        { status: 401 }
+      );
+    }
+
     const body = await request.json();
     const rawUserEmail = typeof body.userEmail === 'string' ? body.userEmail : '';
-    const userEmail = rawUserEmail.trim().toLowerCase();
+    const requestedUserEmail = rawUserEmail.trim().toLowerCase();
+    const userEmail = requestedUserEmail || authenticatedUserEmail;
     const title = typeof body.title === 'string' ? body.title : '';
     const messageBody = typeof body.body === 'string' ? body.body : '';
 
-    if (!userEmail || !title || !messageBody) {
+    if (requestedUserEmail && requestedUserEmail !== authenticatedUserEmail) {
       return NextResponse.json(
-        { error: 'Missing required fields: userEmail, title, body' },
+        { error: 'Forbidden' },
+        { status: 403 }
+      );
+    }
+
+    if (!title || !messageBody) {
+      return NextResponse.json(
+        { error: 'Missing required fields: title, body' },
         { status: 400 }
       );
     }

@@ -215,11 +215,11 @@ function SettingsPageContent() {
   );
 }
 
-export default function SettingsPageWrapper(props: any) {
+export default function SettingsPageWrapper() {
   return (
     <NotificationProvider>
       <Suspense fallback={<SettingsSkeleton />}>
-        <SettingsPageContent {...props} />
+        <SettingsPageContent />
       </Suspense>
     </NotificationProvider>
   );

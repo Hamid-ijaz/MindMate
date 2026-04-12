@@ -1,27 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { getAuthenticatedUserEmail } from '@/lib/auth-utils';
 
 const isRecord = (value: unknown): value is Record<string, unknown> => {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 };
 
-const normalizeUserEmail = (authorizationHeader: string | null): string | null => {
-  if (!authorizationHeader) {
-    return null;
-  }
-
-  const withoutBearer = authorizationHeader.replace('Bearer ', '').trim().toLowerCase();
-  return withoutBearer.length > 0 ? withoutBearer : null;
-};
-
 // GET - Get all devices for a user
 export async function GET(request: NextRequest) {
   try {
-    const authHeader = request.headers.get('authorization');
-    const userEmail = normalizeUserEmail(authHeader);
+    const userEmail = await getAuthenticatedUserEmail(request);
 
     if (!userEmail) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
     }
 
     const subscriptions = await prisma.pushSubscription.findMany({
@@ -63,11 +54,10 @@ export async function GET(request: NextRequest) {
 // DELETE - Remove a specific device subscription
 export async function DELETE(request: NextRequest) {
   try {
-    const authHeader = request.headers.get('authorization');
-    const userEmail = normalizeUserEmail(authHeader);
+    const userEmail = await getAuthenticatedUserEmail(request);
 
     if (!userEmail) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
     }
 
     const body = await request.json();

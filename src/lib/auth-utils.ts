@@ -21,8 +21,6 @@ const getAuthCookieSecret = (): string => {
   return (
     process.env.AUTH_COOKIE_SECRET ||
     process.env.NEXTAUTH_SECRET ||
-    process.env.INTERNAL_API_KEY ||
-    process.env.CRON_AUTH_TOKEN ||
     ''
   );
 };

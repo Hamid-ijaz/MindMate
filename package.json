@@ -80,7 +80,7 @@
     "@types/react": "^18",
     "@types/react-dom": "^18",
     "eslint": "9.39.4",
-    "eslint-config-next": "16.2.3",
+    "eslint-config-next": "15.3.6",
     "genkit-cli": "^1.13.0",
     "postcss": "^8",
     "prisma": "^6.9.0",

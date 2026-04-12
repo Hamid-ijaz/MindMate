@@ -89,9 +89,6 @@ export function NotificationSettings() {
     try {
       const response = await fetch('/api/notifications/preferences', {
         method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${user.email}`,
-        },
       });
 
       if (response.ok) {
@@ -114,9 +111,6 @@ export function NotificationSettings() {
     try {
       const response = await fetch('/api/notifications/devices', {
         method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${user.email}`,
-        },
       });
 
       if (response.ok) {
@@ -142,7 +136,6 @@ export function NotificationSettings() {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${user?.email}`,
         },
         body: JSON.stringify({ deviceId }),
       });
@@ -267,7 +260,6 @@ export function NotificationSettings() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${user.email}`,
         },
         body: JSON.stringify({ preferences: newPreferences }),
       });
@@ -334,7 +326,6 @@ export function NotificationSettings() {
             applicationServerKey: convertedKey,
           });
           const body = {
-            userEmail: user?.email,
             subscription,
             deviceInfo: {
               userAgent: navigator.userAgent,
@@ -347,7 +338,6 @@ export function NotificationSettings() {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              'Authorization': `Bearer ${user?.email}`,
             },
             body: JSON.stringify(body),
           });
@@ -401,9 +391,8 @@ export function NotificationSettings() {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              'Authorization': `Bearer ${user?.email}`,
             },
-            body: JSON.stringify({ userEmail: user?.email, endpoint: subscription.endpoint }),
+            body: JSON.stringify({ endpoint: subscription.endpoint }),
           });
 
           if (!resp.ok) {
@@ -467,10 +456,8 @@ export function NotificationSettings() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${user?.email}`,
         },
         body: JSON.stringify({
-          userEmail: user?.email,
           message: {
             title: 'Test Notification',
             body: 'This is a test notification from MindMate. Your notifications are working correctly!',
