@@ -11,6 +11,10 @@ WORKDIR /app
 
 COPY . .
 
+# Build-time placeholder URL so Next.js can evaluate server imports during build.
+ARG DATABASE_URL=postgresql://postgres:postgres@localhost:5432/mindmate_build
+ENV DATABASE_URL=${DATABASE_URL}
+
 RUN npm run prisma:generate
 RUN npm run build
 
