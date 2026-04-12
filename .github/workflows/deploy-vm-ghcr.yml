@@ -6,7 +6,7 @@
 # REQUIRED GITHUB SECRETS (set in repo → Settings → Secrets → Actions):
 #   VM_HOST            - IP or hostname of your deployment VM
 #   VM_USERNAME        - SSH username for the VM
-#   VM_SSH_PRIVATE_KEY - SSH password or key for authentication
+#   VM_SSH_PRIVATE_KEY - SSH private key for authentication
 #   VM_PORT            - (Optional) SSH port, defaults to 22
 #   GITHUB_TOKEN       - Auto-provided by GitHub, no setup needed
 #
@@ -34,8 +34,8 @@ env:
   REGISTRY: ghcr.io                        # Container registry (ghcr.io | docker.io | etc.)
   IMAGE_NAME: mindmate                 # Image name: registry/owner/IMAGE_NAME:tag
   IMAGE_TAG: latest                        # Tag to build and deploy
-  DOCKER_CONTEXT: ./              # Build context path
-  DOCKERFILE: ./Dockerfile         # Dockerfile location
+  BUILD_CONTEXT: ./              # Build context path
+  BUILD_DOCKERFILE: ./Dockerfile         # Dockerfile location
   COMPOSE_SERVICE: mindmate             # Docker Compose service name to pull & restart
   VM_DEPLOY_DIR: /home/hamidijaz/my-stack                 # Path on VM where docker-compose.yml lives
 
@@ -76,8 +76,8 @@ jobs:
       - name: Build and push image
         uses: docker/build-push-action@v6
         with:
-          context: ${{ env.DOCKER_CONTEXT }}
-          file: ${{ env.DOCKERFILE }}
+          context: ${{ env.BUILD_CONTEXT }}
+          file: ${{ env.BUILD_DOCKERFILE }}
           push: true
           tags: ${{ steps.prep.outputs.full_image }}
           cache-from: type=gha
@@ -87,6 +87,7 @@ jobs:
       # Uncomment if your VM is behind a Tailscale network:
       #
       - name: Connect to Tailscale
+        if: ${{ secrets.TAILSCALE_AUTHKEY != '' }}
         uses: tailscale/github-action@v2
         with:
           authkey: ${{ secrets.TAILSCALE_AUTHKEY }}
@@ -96,7 +97,7 @@ jobs:
         with:
           host: ${{ secrets.VM_HOST }}
           username: ${{ secrets.VM_USERNAME }}
-          password: ${{ secrets.VM_SSH_PRIVATE_KEY }}
+          key: ${{ secrets.VM_SSH_PRIVATE_KEY }}
           port: ${{ secrets.VM_PORT || '22' }}
           script_stop: true
           script: |
