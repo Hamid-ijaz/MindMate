@@ -129,6 +129,7 @@ jobs:
 
             # ── Pull and restart ────────────────────────────────────────
             echo "▶ Image: ${IMAGE}"
+            export IMAGE
 
             echo "▶ Pulling updated image..."
             $DC pull ${SERVICE} || true
