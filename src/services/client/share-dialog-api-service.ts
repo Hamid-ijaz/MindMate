@@ -3,32 +3,13 @@ import type {
   SharePermission,
   SharedItem,
 } from '@/lib/types';
-
-type ApiErrorPayload = {
-  error?: string;
-};
+import { requestJson } from '@/lib/client-api';
 
 type ShareSettingsUpdate = Partial<
   Pick<SharedItem, 'allowComments' | 'allowDownload' | 'expiresAt'>
 >;
 
-const request = async <T>(input: string, init?: RequestInit): Promise<T> => {
-  const response = await fetch(input, {
-    ...init,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(init?.headers ?? {}),
-    },
-  });
-
-  const payload = (await response.json().catch(() => ({}))) as T & ApiErrorPayload;
-
-  if (!response.ok) {
-    throw new Error(payload.error ?? `Request failed with status ${response.status}`);
-  }
-
-  return payload;
-};
+const request = requestJson;
 
 const toSettingsPayload = (settings: ShareSettingsUpdate): Record<string, unknown> => {
   const payload: Record<string, unknown> = {};

@@ -7,11 +7,10 @@ import { formatDistanceToNow, isPast } from 'date-fns';
 import { useTasks } from '@/contexts/task-context';
 import { useNotifications } from '@/contexts/notification-context';
 import { useCompletionAudio } from '@/hooks/use-completion-audio';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
 import { 
     AlertCircle, 
@@ -24,13 +23,9 @@ import {
     RotateCcw, 
     Trash2,
     Clock,
-    User,
     Share2,
     ChevronDown,
     ChevronUp,
-    PlusCircle,
-    Eye,
-    FileText,
     Target,
     Timer,
     Zap,

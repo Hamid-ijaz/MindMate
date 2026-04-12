@@ -13,14 +13,13 @@ import { useNotes } from '@/contexts/note-context';
 import { useKeyboardShortcuts } from '@/hooks/use-keyboard-shortcuts';
 import { Button } from './ui/button';
 import { Skeleton } from './ui/skeleton';
-import { Badge } from './ui/badge';
 import { NotificationBadge } from './ui/notification-badge';
 import { 
-  MessageSquare, ListChecks, HomeIcon, ListTodo, Settings, 
+  HomeIcon, ListTodo, Settings, 
   Notebook, Calendar, BarChart3, Menu, X,
-  User, LogOut, Bell, Keyboard, ChevronDown, Plus,
-  Zap, Search, Command as CommandIcon, Palette, BookOpen, Timer,
-  TrendingUp, Activity, CheckCircle2, Clock, Globe, CheckSquare, StickyNote, Gift
+  User, LogOut, Keyboard, ChevronDown, Plus,
+  Search, Palette, Timer,
+  Activity, CheckCircle2, Clock, CheckSquare, StickyNote, Gift
 } from 'lucide-react';
 import { ThemePicker } from './theme-picker';
 import { ThemePickerDialog } from './theme-picker-dialog';
@@ -35,19 +34,16 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
   DropdownMenuLabel,
-  DropdownMenuShortcut,
   DropdownMenuGroup
 } from './ui/dropdown-menu';
 import { 
   NavigationMenu,
   NavigationMenuContent,
   NavigationMenuItem,
-  NavigationMenuLink,
   NavigationMenuList,
   NavigationMenuTrigger,
 } from './ui/navigation-menu';
 import { 
-  Command,
   CommandDialog,
   CommandEmpty,
   CommandGroup,
@@ -82,7 +78,7 @@ export function Header() {
   const { isAuthenticated, user, logout, loading } = useAuth();
   const { setIsSheetOpen, tasks } = useTasks();
   const { notes } = useNotes();
-  const { formatShortcut, getPrimaryModifier, matchesShortcut, getModifiers } = useKeyboardShortcuts();
+  const { matchesShortcut } = useKeyboardShortcuts();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isShortcutsHelpOpen, setIsShortcutsHelpOpen] = useState(false);
   const [isCommandOpen, setIsCommandOpen] = useState(false);
@@ -174,9 +170,6 @@ export function Header() {
     };
   }, [isMobileMenuOpen]);
 
-  // Get OS-appropriate modifier keys
-  const modifiers = getModifiers();
-
   const handleLogout = async () => {
     await logout();
     window.location.href = '/login';
@@ -229,13 +222,6 @@ export function Header() {
     },
     
     // Tools and utilities
-    { 
-      label: 'AI Assistant', 
-      href: '/chat', 
-      icon: MessageSquare, 
-      category: 'tools',
-      description: 'Get help and suggestions'
-    },
     { 
       label: 'Focus Timer', 
       href: '/timer', 
@@ -382,7 +368,7 @@ export function Header() {
 
       if (matchesShortcut(e, ['cmd'], 'i')) {
         e.preventDefault();
-        window.location.href = '/chat';
+        window.location.href = '/milestones';
         return;
       }
 
@@ -736,9 +722,16 @@ export function Header() {
                       {/* Quick Actions */}
                       <div className="flex gap-2">
                         <AddTaskButton className="flex-1" />
-                        <Button variant="outline" size="default" className="px-6">
-                          <MessageSquare className="h-4 w-4 mr-2" />
-                          AI Chat
+                        <Button
+                          variant="outline"
+                          size="default"
+                          className="px-6"
+                          onClick={() => {
+                            window.location.href = '/milestones';
+                          }}
+                        >
+                          <Gift className="h-4 w-4 mr-2" />
+                          Milestones
                         </Button>
                       </div>
 

@@ -48,7 +48,7 @@ export function KeyboardNavigation({ isEnabled = true }: KeyboardNavigationProps
             path = '/history';
             break;
           case '8':
-            path = '/chat';
+            path = '/milestones';
             break;
           case '9':
             path = '/settings';

@@ -87,12 +87,12 @@ export function useKeyboardShortcuts() {
   const getNavigationShortcuts = () => [
     { key: 'D', modifiers: ['cmd'], description: 'Go to Dashboard', category: 'navigation' as const },
     { key: 'C', modifiers: ['cmd'], description: 'Go to Calendar', category: 'navigation' as const },
-    { key: 'G', modifiers: ['cmd'], description: 'Go to Goals', category: 'navigation' as const },
+    { key: 'M', modifiers: ['cmd'], description: 'Go to Milestones', category: 'navigation' as const },
     { key: 'N', modifiers: ['cmd'], description: 'Go to Notes', category: 'navigation' as const },
     { key: 'A', modifiers: ['cmd'], description: 'Go to Analytics', category: 'navigation' as const },
     { key: 'P', modifiers: ['cmd'], description: 'Go to Pending Tasks', category: 'navigation' as const },
     { key: 'H', modifiers: ['cmd'], description: 'Go to Completed Tasks', category: 'navigation' as const },
-    { key: 'I', modifiers: ['cmd'], description: 'Go to AI Assistant', category: 'navigation' as const },
+    { key: 'I', modifiers: ['cmd'], description: 'Go to Milestones', category: 'navigation' as const },
     { key: 'T', modifiers: ['cmd'], description: 'Go to Focus Timer', category: 'navigation' as const },
     { key: ',', modifiers: ['cmd'], description: 'Go to Settings', category: 'navigation' as const },
   ];

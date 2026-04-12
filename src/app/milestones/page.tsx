@@ -45,6 +45,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/contexts/auth-context';
 import { useToast } from '@/hooks/use-toast';
 import type { Milestone, MilestoneType } from '@/lib/types';
+import { getApiErrorMessage } from '@/lib/client-api';
 import { MilestoneUtils } from '@/lib/milestone-utils';
 import { MilestoneForm } from '@/components/milestone-form';
 import { cn } from '@/lib/utils';
@@ -53,11 +54,6 @@ const pageVariants = {
   initial: { opacity: 0, y: 20 },
   animate: { opacity: 1, y: 0 },
   exit: { opacity: 0, y: -20 }
-};
-
-const getApiErrorMessage = async (response: Response, fallback: string): Promise<string> => {
-  const data = (await response.json().catch(() => null)) as { error?: string } | null;
-  return data?.error || fallback;
 };
 
 const fetchMilestones = async (userEmail: string): Promise<Milestone[]> => {

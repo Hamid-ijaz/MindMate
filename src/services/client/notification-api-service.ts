@@ -1,32 +1,7 @@
 import type { NotificationData, NotificationDocument, NotificationStats } from '@/lib/types';
+import { requestJson } from '@/lib/client-api';
 
-type ApiErrorPayload = {
-  error?: string;
-};
-
-type RequestOptions = RequestInit & {
-  skipJsonContentType?: boolean;
-};
-
-const request = async <T>(input: string, init?: RequestOptions): Promise<T> => {
-  const { skipJsonContentType, ...requestInit } = init ?? {};
-
-  const response = await fetch(input, {
-    ...requestInit,
-    headers: {
-      ...(skipJsonContentType ? {} : { 'Content-Type': 'application/json' }),
-      ...(requestInit.headers ?? {}),
-    },
-  });
-
-  const payload = (await response.json().catch(() => ({}))) as T & ApiErrorPayload;
-
-  if (!response.ok) {
-    throw new Error(payload.error ?? `Request failed with status ${response.status}`);
-  }
-
-  return payload;
-};
+const request = requestJson;
 
 export const notificationApiService = {
   async listNotifications(userEmail: string, maxCount?: number): Promise<NotificationDocument[]> {

@@ -35,6 +35,7 @@ import { Separator } from '@/components/ui/separator';
 import { useAuth } from '@/contexts/auth-context';
 import { useToast } from '@/hooks/use-toast';
 import type { Milestone, MilestoneType } from '@/lib/types';
+import { getApiErrorMessage } from '@/lib/client-api';
 import { MilestoneUtils } from '@/lib/milestone-utils';
 import { cn } from '@/lib/utils';
 
@@ -132,11 +133,6 @@ const milestoneTypes: Array<{
 ];
 
 type MilestoneMutationInput = Omit<Milestone, 'id' | 'userEmail' | 'createdAt' | 'updatedAt'>;
-
-const getApiErrorMessage = async (response: Response, fallback: string): Promise<string> => {
-  const data = (await response.json().catch(() => null)) as { error?: string } | null;
-  return data?.error || fallback;
-};
 
 const createMilestone = async (
   userEmail: string,

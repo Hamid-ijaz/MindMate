@@ -17,12 +17,6 @@ enum ShareItemType {
   note
 }
 
-enum ChatRole {
-  user
-  assistant
-  system
-}
-
 enum MilestoneType {
   birthday
   anniversary
@@ -57,7 +51,6 @@ model User {
   accomplishments        Accomplishment[]
   settings               UserSettings?
   milestones             Milestone[]
-  chatSessions           ChatSession[]
   notifications          Notification[]
   pushSubscriptions      PushSubscription[]
   notificationPreference NotificationPreference?
@@ -172,39 +165,6 @@ model Milestone {
   user User @relation(fields: [userEmail], references: [email], onDelete: Cascade)
 
   @@index([userEmail, isActive, originalDate])
-}
-
-model ChatSession {
-  id           String        @id @default(cuid())
-  userEmail    String
-  title        String
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
-  messageCount Int           @default(0)
-  lastMessage  String?
-  isActive     Boolean       @default(true)
-  context      Json?
-
-  user     User          @relation(fields: [userEmail], references: [email], onDelete: Cascade)
-  messages ChatMessage[]
-
-  @@index([userEmail, updatedAt])
-}
-
-model ChatMessage {
-  id            String    @id @default(cuid())
-  sessionId     String
-  role          ChatRole
-  content       String
-  timestamp     DateTime  @default(now())
-  suggestedTasks Json?
-  quickActions  Json?
-  taskReferences Json?
-  metadata      Json?
-
-  session ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-
-  @@index([sessionId, timestamp])
 }
 
 model SharedItem {

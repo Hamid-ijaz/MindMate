@@ -1,31 +1,12 @@
 import type { TaskCategory, TaskDuration } from '@/lib/types';
-
-type ApiErrorPayload = {
-  error?: string;
-};
+import { requestJson } from '@/lib/client-api';
 
 type UserTaskSettings = {
   taskCategories: TaskCategory[];
   taskDurations: TaskDuration[];
 };
 
-const request = async <T>(input: string, init?: RequestInit): Promise<T> => {
-  const response = await fetch(input, {
-    ...init,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(init?.headers ?? {}),
-    },
-  });
-
-  const payload = (await response.json().catch(() => ({}))) as T & ApiErrorPayload;
-
-  if (!response.ok) {
-    throw new Error(payload.error ?? `Request failed with status ${response.status}`);
-  }
-
-  return payload;
-};
+const request = requestJson;
 
 export const userSettingsApiService = {
   async getUserSettings(userEmail: string): Promise<UserTaskSettings | null> {

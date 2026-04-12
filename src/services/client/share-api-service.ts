@@ -1,8 +1,5 @@
 import type { Note, ShareHistoryEntry, SharePermission, SharedItem, Task } from '@/lib/types';
-
-type ApiErrorPayload = {
-  error?: string;
-};
+import { requestJson } from '@/lib/client-api';
 
 type ShareAccessValidation = {
   isValid: boolean;
@@ -17,23 +14,7 @@ type SharedContentResponse = {
   subtasks: Task[];
 };
 
-const request = async <T>(input: string, init?: RequestInit): Promise<T> => {
-  const response = await fetch(input, {
-    ...init,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(init?.headers ?? {}),
-    },
-  });
-
-  const payload = (await response.json().catch(() => ({}))) as T & ApiErrorPayload;
-
-  if (!response.ok) {
-    throw new Error(payload.error ?? `Request failed with status ${response.status}`);
-  }
-
-  return payload;
-};
+const request = requestJson;
 
 const toPatchPayload = (updates: Record<string, unknown>) => {
   const nextUpdates: Record<string, unknown> = {};

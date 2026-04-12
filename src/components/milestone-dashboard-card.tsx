@@ -33,6 +33,7 @@ import {
 import { useAuth } from '@/contexts/auth-context';
 import { useToast } from '@/hooks/use-toast';
 import type { Milestone } from '@/lib/types';
+import { getApiErrorMessage } from '@/lib/client-api';
 import { MilestoneUtils } from '@/lib/milestone-utils';
 import { cn } from '@/lib/utils';
 
@@ -41,11 +42,6 @@ interface MilestoneDashboardCardProps {
   onEditMilestone?: (milestone: Milestone) => void;
   className?: string;
 }
-
-const getApiErrorMessage = async (response: Response, fallback: string): Promise<string> => {
-  const data = (await response.json().catch(() => null)) as { error?: string } | null;
-  return data?.error || fallback;
-};
 
 const fetchUpcomingMilestones = async (userEmail: string, limit: number): Promise<Milestone[]> => {
   const response = await fetch(

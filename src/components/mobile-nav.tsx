@@ -6,12 +6,12 @@ import { usePathname } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { useAuth } from '@/contexts/auth-context';
 import { Button } from './ui/button';
-import { Badge } from './ui/badge';
 import { NotificationBadge } from './ui/notification-badge';
 import { 
-  MessageSquare, ListChecks, HomeIcon, ListTodo, 
-  Notebook, Calendar, Plus, Search,
-  TrendingUp, Clock
+  HomeIcon,
+  Notebook,
+  Plus,
+  TrendingUp, Clock, Gift
 } from 'lucide-react';
 import { AddTaskButton } from './manage-tasks-sheet';
 import { cn } from '@/lib/utils';
@@ -35,7 +35,7 @@ export function MobileNav() {
   const navItems: MobileNavItem[] = [
     { label: 'Home', href: '/', icon: HomeIcon },
     { label: 'Notes', href: '/notes', icon: Notebook },
-    { label: 'Chat', href: '/chat', icon: MessageSquare },
+    { label: 'Milestones', href: '/milestones', icon: Gift },
     { label: 'Pending', href: '/pending', icon: Clock },
     { label: 'History', href: '/history', icon: TrendingUp },
   ];
@@ -46,7 +46,7 @@ export function MobileNav() {
       <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-50 h-20 bg-background/98 backdrop-blur-md supports-[backdrop-filter]:bg-background/80 border-t border-border/60">
         <div className="h-full px-2">
           <div className="grid h-full grid-cols-6 items-center gap-1">
-            {navItems.map((item, index) => {
+            {navItems.map((item) => {
               const isActive = pathname === item.href;
               const Icon = item.icon;
               

@@ -1,12 +1,9 @@
 import type { User } from '@/lib/types';
+import { requestJson } from '@/lib/client-api';
 
 type AuthUser = Pick<User, 'firstName' | 'lastName' | 'email' | 'phone' | 'dob'>;
 export type SignupData = Pick<User, 'firstName' | 'lastName' | 'email'> &
   Partial<Pick<User, 'phone' | 'dob' | 'password'>>;
-
-type ApiErrorPayload = {
-  error?: string;
-};
 
 type LoginResponse = {
   success: boolean;
@@ -18,26 +15,7 @@ type SignupResponse = {
   user?: AuthUser;
 };
 
-const request = async <T>(
-  input: string,
-  init?: RequestInit
-): Promise<T> => {
-  const response = await fetch(input, {
-    ...init,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(init?.headers ?? {}),
-    },
-  });
-
-  const payload = (await response.json().catch(() => ({}))) as T & ApiErrorPayload;
-
-  if (!response.ok) {
-    throw new Error(payload.error ?? `Request failed with status ${response.status}`);
-  }
-
-  return payload;
-};
+const request = requestJson;
 
 export const authApiService = {
   async login(email: string, password: string): Promise<LoginResponse> {

@@ -1,29 +1,7 @@
 import type { Task } from '@/lib/types';
+import { requestJson } from '@/lib/client-api';
 
-type ApiErrorPayload = {
-  error?: string;
-};
-
-const request = async <T>(
-  input: string,
-  init?: RequestInit
-): Promise<T> => {
-  const response = await fetch(input, {
-    ...init,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(init?.headers ?? {}),
-    },
-  });
-
-  const payload = (await response.json().catch(() => ({}))) as T & ApiErrorPayload;
-
-  if (!response.ok) {
-    throw new Error(payload.error ?? `Request failed with status ${response.status}`);
-  }
-
-  return payload;
-};
+const request = requestJson;
 
 const toPatchPayload = (updates: Partial<Omit<Task, 'id' | 'userEmail' | 'createdAt'>>) => {
   const nextUpdates: Record<string, unknown> = {};
