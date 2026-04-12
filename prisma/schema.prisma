@@ -1,0 +1,357 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum SharePermission {
+  view
+  edit
+}
+
+enum ShareItemType {
+  task
+  note
+}
+
+enum ChatRole {
+  user
+  assistant
+  system
+}
+
+enum MilestoneType {
+  birthday
+  anniversary
+  work_anniversary
+  graduation
+  exam_passed
+  achievement
+  milestone
+  purchase
+  relationship
+  travel
+  custom
+}
+
+enum MilestoneRecurringFrequency {
+  yearly
+  monthly
+}
+
+model User {
+  email                  String                   @id
+  firstName              String
+  lastName               String
+  phone                  String?
+  dob                    String?
+  password               String?
+  createdAt              DateTime                 @default(now())
+  updatedAt              DateTime                 @updatedAt
+
+  tasks                  Task[]
+  notes                  Note[]
+  accomplishments        Accomplishment[]
+  settings               UserSettings?
+  milestones             Milestone[]
+  chatSessions           ChatSession[]
+  notifications          Notification[]
+  pushSubscriptions      PushSubscription[]
+  notificationPreference NotificationPreference?
+  emailPreference        EmailPreference?
+  passwordResetTokens    PasswordResetToken[]
+  sharedItemsOwned       SharedItem[]             @relation("SharedItemOwner")
+  shareHistoryEntries    ShareHistoryEntry[]      @relation("ShareHistoryActor")
+  shareCollaborations    ShareCollaborator[]      @relation("ShareCollaboratorUser")
+}
+
+model UserSettings {
+  userEmail      String   @id
+  taskCategories Json?
+  taskDurations  Json?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  user User @relation(fields: [userEmail], references: [email], onDelete: Cascade)
+}
+
+model Task {
+  id                  String         @id @default(cuid())
+  userEmail           String
+  title               String
+  description         String?
+  category            String
+  priority            String
+  duration            Int
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime?
+  rejectionCount      Int            @default(0)
+  lastRejectedAt      DateTime?
+  isMuted             Boolean        @default(false)
+  isArchived          Boolean        @default(false)
+  completedAt         DateTime?
+  parentId            String?
+  reminderAt          DateTime?
+  onlyNotifyAtReminder Boolean       @default(false)
+  notifiedAt          DateTime?
+  recurrence          Json?
+  scheduledAt         DateTime?
+  scheduledEndAt      DateTime?
+  isTimeBlocked       Boolean?
+  calendarEventId     String?
+  pomodoroSessions    Int?
+  estimatedPomodoros  Int?
+  timeSpent           Int?
+  isAllDay            Boolean?
+  calendarColor       String?
+  location            String?
+  attendees           Json?
+  isRecurring         Boolean?
+  originalTaskId      String?
+
+  user          User           @relation(fields: [userEmail], references: [email], onDelete: Cascade)
+  parent        Task?          @relation("TaskParent", fields: [parentId], references: [id], onDelete: SetNull)
+  subtasks      Task[]         @relation("TaskParent")
+  notifications Notification[]
+
+  @@index([userEmail, createdAt])
+  @@index([parentId])
+}
+
+model Note {
+  id        String   @id @default(cuid())
+  userEmail String
+  title     String
+  content   String
+  imageUrl  String?
+  audioUrl  String?
+  color     String?
+  fontSize  Int?
+  isArchived Boolean @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userEmail], references: [email], onDelete: Cascade)
+
+  @@index([userEmail, createdAt])
+}
+
+model Accomplishment {
+  id        String   @id @default(cuid())
+  userEmail String
+  date      String
+  content   String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userEmail], references: [email], onDelete: Cascade)
+
+  @@index([userEmail, date])
+}
+
+model Milestone {
+  id                  String                       @id @default(cuid())
+  userEmail           String
+  title               String
+  description         String?
+  type                MilestoneType
+  originalDate        DateTime
+  isRecurring         Boolean                      @default(false)
+  recurringFrequency  MilestoneRecurringFrequency?
+  icon                String?
+  color               String?
+  isActive            Boolean                      @default(true)
+  notificationSettings Json?
+  lastNotifiedAt      DateTime?
+  nextAnniversaryDate DateTime?
+  createdAt           DateTime                     @default(now())
+  updatedAt           DateTime                     @updatedAt
+
+  user User @relation(fields: [userEmail], references: [email], onDelete: Cascade)
+
+  @@index([userEmail, isActive, originalDate])
+}
+
+model ChatSession {
+  id           String        @id @default(cuid())
+  userEmail    String
+  title        String
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  messageCount Int           @default(0)
+  lastMessage  String?
+  isActive     Boolean       @default(true)
+  context      Json?
+
+  user     User          @relation(fields: [userEmail], references: [email], onDelete: Cascade)
+  messages ChatMessage[]
+
+  @@index([userEmail, updatedAt])
+}
+
+model ChatMessage {
+  id            String    @id @default(cuid())
+  sessionId     String
+  role          ChatRole
+  content       String
+  timestamp     DateTime  @default(now())
+  suggestedTasks Json?
+  quickActions  Json?
+  taskReferences Json?
+  metadata      Json?
+
+  session ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, timestamp])
+}
+
+model SharedItem {
+  id            String          @id @default(cuid())
+  itemId        String
+  itemType      ShareItemType
+  ownerEmail    String
+  ownerName     String?
+  permission    SharePermission @default(view)
+  shareToken    String          @unique
+  description   String?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  expiresAt     DateTime?
+  isActive      Boolean         @default(true)
+  viewCount     Int             @default(0)
+  lastViewedAt  DateTime?
+  lastEditedAt  DateTime?
+  lastEditedBy  String?
+  allowComments Boolean         @default(true)
+  allowDownload Boolean         @default(true)
+  metadata      Json?
+
+  owner        User               @relation("SharedItemOwner", fields: [ownerEmail], references: [email], onDelete: Cascade)
+  history      ShareHistoryEntry[]
+  collaborators ShareCollaborator[]
+
+  @@index([ownerEmail, createdAt])
+  @@index([itemId, itemType])
+}
+
+model ShareHistoryEntry {
+  id           String   @id @default(cuid())
+  sharedItemId String
+  userEmail    String?
+  action       String
+  details      String?
+  timestamp    DateTime @default(now())
+
+  sharedItem SharedItem @relation(fields: [sharedItemId], references: [id], onDelete: Cascade)
+  user       User?      @relation("ShareHistoryActor", fields: [userEmail], references: [email], onDelete: SetNull)
+
+  @@index([sharedItemId, timestamp])
+}
+
+model ShareCollaborator {
+  id           String          @id @default(cuid())
+  sharedItemId String
+  userEmail    String
+  permission   SharePermission @default(view)
+  isActive     Boolean         @default(true)
+  addedAt      DateTime        @default(now())
+
+  sharedItem SharedItem @relation(fields: [sharedItemId], references: [id], onDelete: Cascade)
+  user       User       @relation("ShareCollaboratorUser", fields: [userEmail], references: [email], onDelete: Cascade)
+
+  @@unique([sharedItemId, userEmail])
+  @@index([userEmail, isActive])
+}
+
+model Notification {
+  id            String   @id @default(cuid())
+  userEmail     String
+  title         String
+  body          String
+  type          String
+  relatedTaskId String?
+  isRead        Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  sentAt        DateTime?
+  readAt        DateTime?
+  data          Json?
+
+  user User  @relation(fields: [userEmail], references: [email], onDelete: Cascade)
+  task Task? @relation(fields: [relatedTaskId], references: [id], onDelete: SetNull)
+
+  @@index([userEmail, isRead, createdAt])
+  @@index([relatedTaskId])
+}
+
+model PushSubscription {
+  id                 String   @id @default(cuid())
+  userEmail          String
+  endpoint           String   @unique
+  keys               Json
+  subscription       Json?
+  isActive           Boolean  @default(true)
+  subscribedAt       DateTime @default(now())
+  lastUsedAt         DateTime?
+  unsubscribedAt     DateTime?
+  deactivatedAt      DateTime?
+  deactivationReason String?
+  deviceInfo         Json?
+  notificationStats  Json?
+  preferences        Json?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  user User @relation(fields: [userEmail], references: [email], onDelete: Cascade)
+
+  @@index([userEmail, isActive])
+}
+
+model NotificationPreference {
+  userEmail   String   @id
+  enabled     Boolean  @default(true)
+  overdueAlerts Boolean @default(true)
+  taskReminders Boolean @default(true)
+  quietHours  Json?
+  dailyLimit  Int?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user User @relation(fields: [userEmail], references: [email], onDelete: Cascade)
+}
+
+model EmailPreference {
+  userEmail           String   @id
+  welcomeEmails       Boolean  @default(true)
+  taskReminders       Boolean  @default(true)
+  shareNotifications  Boolean  @default(true)
+  teamInvitations     Boolean  @default(true)
+  weeklyDigest        Boolean  @default(true)
+  dailyDigest         Boolean  @default(true)
+  marketingEmails     Boolean  @default(false)
+  reminderFrequency   String?  @default("immediate")
+  digestDay           String?  @default("monday")
+  dailyDigestTime     String?  @default("09:00")
+  quietHours          Json?
+  lastDailySent       DateTime?
+  lastWeeklySent      DateTime?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  user User @relation(fields: [userEmail], references: [email], onDelete: Cascade)
+}
+
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  email     String
+  token     String   @unique
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [email], references: [email], onDelete: Cascade)
+
+  @@index([email, expiresAt])
+}
