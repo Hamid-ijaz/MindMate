@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import webpush from 'web-push';
 import { prisma } from '@/lib/prisma';
+import { isAuthorizedCronRequest } from '@/lib/auth-utils';
 import type { PushSubscription } from '@prisma/client';
 
 type JsonObject = Record<string, unknown>;
@@ -64,8 +65,7 @@ if (vapidPublicKey && vapidPrivateKey) {
 
 export async function POST(request: NextRequest) {
   try {
-    const authHeader = request.headers.get('authorization');
-    if (process.env.CRON_SECRET && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+    if (!isAuthorizedCronRequest(request)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 

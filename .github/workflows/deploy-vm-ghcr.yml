@@ -1,0 +1,147 @@
+# ╔══════════════════════════════════════════════════════════════════════════════╗
+# ║                    🔧 PROJECT CONFIGURATION SECTION                        ║
+# ║         Change ONLY these variables when reusing in a new project          ║
+# ╚══════════════════════════════════════════════════════════════════════════════╝
+#
+# REQUIRED GITHUB SECRETS (set in repo → Settings → Secrets → Actions):
+#   VM_HOST            - IP or hostname of your deployment VM
+#   VM_USERNAME        - SSH username for the VM
+#   VM_SSH_PRIVATE_KEY - SSH password or key for authentication
+#   VM_PORT            - (Optional) SSH port, defaults to 22
+#   GITHUB_TOKEN       - Auto-provided by GitHub, no setup needed
+#
+# OPTIONAL SECRETS:
+#   TAILSCALE_AUTHKEY  - Uncomment the Tailscale step if your VM is on Tailscale
+#
+# HOW TO REUSE IN A NEW PROJECT:
+#   1. Copy this file to .github/workflows/
+#   2. Update the variables in the "Project Variables" section below
+#   3. Set the required secrets in your repo settings
+#   4. Done!
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: Docker Build and Deploy to VM
+
+# ─── Trigger Configuration ────────────────────────────────────────────────────
+on:
+  push:
+    branches:
+      - PostgresDBIntegration
+  workflow_dispatch:
+
+# ─── Project Variables (EDIT THESE PER PROJECT) ──────────────────────────────
+env:
+  REGISTRY: ghcr.io                        # Container registry (ghcr.io | docker.io | etc.)
+  IMAGE_NAME: mindmate                 # Image name: registry/owner/IMAGE_NAME:tag
+  IMAGE_TAG: latest                        # Tag to build and deploy
+  DOCKER_CONTEXT: ./              # Build context path
+  DOCKERFILE: ./Dockerfile         # Dockerfile location
+  COMPOSE_SERVICE: mindmate             # Docker Compose service name to pull & restart
+  VM_DEPLOY_DIR: /home/hamidijaz/my-stack                 # Path on VM where docker-compose.yml lives
+
+# ─── Permissions (least privilege) ────────────────────────────────────────────
+permissions:
+  contents: read
+  packages: write
+
+# ═══════════════════════════════════════════════════════════════════════════════
+#  JOBS — You generally do NOT need to edit below this line
+# ═══════════════════════════════════════════════════════════════════════════════
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Prepare image name
+        id: prep
+        shell: bash
+        run: |
+          OWNER_LC="$(echo "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')"
+          FULL_IMAGE="${{ env.REGISTRY }}/${OWNER_LC}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}"
+          echo "full_image=${FULL_IMAGE}" >> "$GITHUB_OUTPUT"
+          echo "📦 Image: ${FULL_IMAGE}"
+
+      - name: Log in to container registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push image
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ env.DOCKER_CONTEXT }}
+          file: ${{ env.DOCKERFILE }}
+          push: true
+          tags: ${{ steps.prep.outputs.full_image }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # ── (Optional) Tailscale VPN ──────────────────────────────────────
+      # Uncomment if your VM is behind a Tailscale network:
+      #
+      - name: Connect to Tailscale
+        uses: tailscale/github-action@v2
+        with:
+          authkey: ${{ secrets.TAILSCALE_AUTHKEY }}
+
+      - name: Deploy on VM over SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VM_HOST }}
+          username: ${{ secrets.VM_USERNAME }}
+          password: ${{ secrets.VM_SSH_PRIVATE_KEY }}
+          port: ${{ secrets.VM_PORT || '22' }}
+          script_stop: true
+          script: |
+            set -euo pipefail
+
+            # ── Variables (auto-populated from workflow) ────────────────
+            REGISTRY="${{ env.REGISTRY }}"
+            IMAGE="${{ steps.prep.outputs.full_image }}"
+            DEPLOY_DIR="${{ env.VM_DEPLOY_DIR }}"
+            SERVICE="${{ env.COMPOSE_SERVICE }}"
+
+            # ── Registry login ──────────────────────────────────────────
+            echo "▶ Logging in to ${REGISTRY}..."
+            echo "${{ secrets.GITHUB_TOKEN }}" | docker login "${REGISTRY}" -u "${{ github.actor }}" --password-stdin
+
+            # ── Navigate to project ─────────────────────────────────────
+            cd "${DEPLOY_DIR}"
+            echo "▶ Working directory: $(pwd)"
+
+            # ── Detect docker compose command ───────────────────────────
+            if docker compose version >/dev/null 2>&1; then
+              DC="docker compose"
+            elif docker-compose version >/dev/null 2>&1; then
+              DC="docker-compose"
+            else
+              echo "✗ Docker Compose not found on VM"
+              exit 1
+            fi
+            echo "▶ Using: $DC"
+
+            # ── Pull and restart ────────────────────────────────────────
+            echo "▶ Image: ${IMAGE}"
+
+            echo "▶ Pulling updated image..."
+            $DC pull ${SERVICE} || true
+
+            echo "▶ Restarting container..."
+            $DC up -d ${SERVICE}
+
+            # ── Cleanup ─────────────────────────────────────────────────
+            echo "▶ Pruning dangling images..."
+            docker image prune -f || true
+
+            echo "✓ Deployment completed successfully"
+
+
+
+

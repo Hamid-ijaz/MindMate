@@ -28,6 +28,14 @@ const nextConfig: NextConfig = {
   },
   // Webpack configuration for non-Turbopack builds
   webpack: (config, { isServer }) => {
+    config.ignoreWarnings = [
+      ...(config.ignoreWarnings ?? []),
+      {
+        module: /node_modules[\\/]handlebars[\\/]lib[\\/]index\.js/,
+        message: /require\.extensions is not supported by webpack/,
+      },
+    ];
+
     if (!isServer) {
       // Exclude Node.js modules from client-side bundle
       config.resolve.fallback = {

@@ -247,6 +247,18 @@ To get a local copy up and running, follow these simple steps.
     ```
     The Genkit development UI will be available at `http://localhost:4000`.
 
+## 🚢 Production Deployment (Docker + GHCR + VM)
+
+Production deployment is automated with GitHub Actions:
+
+- Build Docker image on push to `main`
+- Push image to GHCR
+- SSH to VM and restart the Docker Compose stack
+
+Use this runbook for complete setup:
+
+- [docs/docker-ghcr-vm-deployment.md](docs/docker-ghcr-vm-deployment.md)
+
 ## 🤝 Contributing
 
 Contributions are what make the open-source community such an amazing place to learn, inspire, and create. Any contributions you make are **greatly appreciated**.
