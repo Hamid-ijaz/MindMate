@@ -50,6 +50,8 @@ permissions:
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
+    env:
+      TAILSCALE_AUTHKEY: ${{ secrets.TAILSCALE_AUTHKEY }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -84,13 +86,12 @@ jobs:
           cache-to: type=gha,mode=max
 
       # ── (Optional) Tailscale VPN ──────────────────────────────────────
-      # Uncomment if your VM is behind a Tailscale network:
-      #
+      # Runs only when TAILSCALE_AUTHKEY secret is set.
       - name: Connect to Tailscale
-        if: ${{ secrets.TAILSCALE_AUTHKEY != '' }}
+        if: ${{ env.TAILSCALE_AUTHKEY != '' }}
         uses: tailscale/github-action@v2
         with:
-          authkey: ${{ secrets.TAILSCALE_AUTHKEY }}
+          authkey: ${{ env.TAILSCALE_AUTHKEY }}
 
       - name: Deploy on VM over SSH
         uses: appleboy/ssh-action@v1.0.3
