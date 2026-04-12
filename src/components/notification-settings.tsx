@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Separator } from '@/components/ui/separator';
 import { Bell, BellOff, Clock, Volume2, VolumeX, Smartphone, Monitor, Tablet, TestTube, X, Plus } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { getVapidPublicKey, urlBase64ToUint8Array } from '@/lib/push-client';
 
 interface NotificationPreferences {
   enabled: boolean;
@@ -304,22 +305,7 @@ export function NotificationSettings() {
           // Subscribe to push notifications
           const registration = await navigator.serviceWorker.ready;
 
-          // Helper to convert base64 VAPID key to Uint8Array
-          function urlBase64ToUint8Array(base64String: string) {
-            const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
-            const base64 = (base64String + padding)
-              .replace(/-/g, '+')
-              .replace(/_/g, '/');
-            const rawData = window.atob(base64);
-            const outputArray = new Uint8Array(rawData.length);
-            for (let i = 0; i < rawData.length; ++i) {
-              outputArray[i] = rawData.charCodeAt(i);
-            }
-            return outputArray;
-          }
-
-          const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
-          if (!vapidKey) throw new Error('VAPID public key is not set');
+          const vapidKey = await getVapidPublicKey();
           const convertedKey = urlBase64ToUint8Array(vapidKey);
           const subscription = await registration.pushManager.subscribe({
             userVisibleOnly: true,

@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/contexts/auth-context';
 import { useToast } from '@/hooks/use-toast';
+import { getVapidPublicKey, urlBase64ToUint8Array } from '@/lib/push-client';
 
 interface NotificationPromptProps {
   onDismiss?: () => void;
@@ -40,10 +41,11 @@ export function NotificationPrompt({ onDismiss, onSubscribed }: NotificationProm
       if (permission === 'granted') {
         // Subscribe to push notifications
         const registration = await navigator.serviceWorker.ready;
+        const vapidPublicKey = await getVapidPublicKey();
         
         const subscription = await registration.pushManager.subscribe({
           userVisibleOnly: true,
-          applicationServerKey: process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY
+          applicationServerKey: urlBase64ToUint8Array(vapidPublicKey)
         });
 
         // Get device info

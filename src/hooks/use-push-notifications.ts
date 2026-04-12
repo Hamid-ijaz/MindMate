@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/contexts/auth-context';
 import { useToast } from './use-toast';
+import { getVapidPublicKey, urlBase64ToUint8Array } from '@/lib/push-client';
 
 interface PushSubscription {
   endpoint: string;
@@ -117,13 +118,7 @@ export function usePushNotifications() {
     setIsLoading(true);
     try {
       const registration = await navigator.serviceWorker.ready;
-      
-      // Get VAPID public key from environment
-      const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
-      
-      if (!vapidPublicKey) {
-        throw new Error('VAPID public key not configured');
-      }
+      const vapidPublicKey = await getVapidPublicKey();
       
       const subscription = await registration.pushManager.subscribe({
         userVisibleOnly: true,
@@ -275,18 +270,6 @@ export function usePushNotifications() {
 }
 
 // Helper functions
-function urlBase64ToUint8Array(base64String: string): Uint8Array {
-  const padding = '='.repeat((4 - base64String.length % 4) % 4);
-  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
-  const rawData = window.atob(base64);
-  const outputArray = new Uint8Array(rawData.length);
-
-  for (let i = 0; i < rawData.length; ++i) {
-    outputArray[i] = rawData.charCodeAt(i);
-  }
-
-  return outputArray;
-}
 
 function arrayBufferToBase64(buffer: ArrayBuffer): string {
   const bytes = new Uint8Array(buffer);

@@ -3,7 +3,7 @@ import webpush from 'web-push';
 
 // Configure VAPID keys (you should set these as environment variables)
 const vapidKeys = {
-  publicKey: process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY,
+  publicKey: process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || process.env.VAPID_PUBLIC_KEY,
   privateKey: process.env.VAPID_PRIVATE_KEY
 };
 
