@@ -11,7 +11,8 @@
     <!-- Use a static MIT badge to avoid GitHub repo-name resolution issues -->
     <img alt="License" src="https://img.shields.io/badge/License-MIT-blue?style=for-the-badge&logo=github">
   <img alt="Next.js" src="https://img.shields.io/badge/Next.js-000000?style=for-the-badge&logo=nextdotjs&logoColor=white">
-  <img alt="Firebase" src="https://img.shields.io/badge/Firebase-FFCA28?style=for-the-badge&logo=firebase&logoColor=black">
+    <img alt="PostgreSQL" src="https://img.shields.io/badge/PostgreSQL-4169E1?style=for-the-badge&logo=postgresql&logoColor=white">
+    <img alt="Prisma" src="https://img.shields.io/badge/Prisma-2D3748?style=for-the-badge&logo=prisma&logoColor=white">
   <img alt="Genkit" src="https://img.shields.io/badge/Genkit-4285F4?style=for-the-badge&logo=google&logoColor=white">
   <img alt="Tailwind CSS" src="https://img.shields.io/badge/Tailwind_CSS-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white">
 </p>
@@ -50,7 +51,7 @@ Here is a summary of the key features implemented so far:
     -   **Custom Settings**: Define your own task categories and default durations.
     -   **Smart Notifications**: Get reminders for upcoming tasks right in your browser.
 
--   **🎉 Milestones & Anniversary Tracking**: Track one-time events and recurring milestones (birthdays, anniversaries, achievements). Includes a create/edit UI, dashboard card showing time-since and time-until, and scheduled push reminders (30d, 7d, 3d, 1d, on-the-day). Server-side logic stores notifications in Firestore and sends web-push via VAPID.
+-   **🎉 Milestones & Anniversary Tracking**: Track one-time events and recurring milestones (birthdays, anniversaries, achievements). Includes a create/edit UI, dashboard card showing time-since and time-until, and scheduled push reminders (30d, 7d, 3d, 1d, on-the-day). Server-side logic persists notifications through Next.js API routes and sends web-push via VAPID.
 
 ## 🚀 Newly Implemented & Advanced Features
 
@@ -117,24 +118,24 @@ This project now includes a Milestones subsystem for tracking important dates (b
 
 Quick summary
 - Milestones can be one-time or recurring (yearly/monthly). Recurring milestones compute the next anniversary and can trigger reminders at: 30 days, 7 days, 3 days, 1 day, and on the day.
-- Notifications are saved to Firestore under `users/{email}/notifications` and sent as web-push to subscriptions saved in `pushSubscriptions`.
+- Notifications are persisted via Prisma models (`Notification` and `PushSubscription`) and sent as web-push.
 
 Core features
 - Milestone data model (typed) with notification preferences, recurrence flags, and timestamps.
 - UI: create / edit modal with conditional notification settings (shown only for recurring milestones) and a dashboard card that displays "time since" and "time until" next anniversary.
 - Server: integrated scheduling in the comprehensive notification check. Prevents duplicate daily sends, respects quiet hours, and removes invalid push subscriptions.
-- Utilities & service layer: date helpers for anniversary math and a Firestore-backed service that safely writes only defined fields (avoids undefined causing Firestore errors).
+- Utilities & service layer: date helpers for anniversary math and a Prisma-backed service that safely writes only defined fields.
 
 File locations (primary)
 - Types: `src/lib/types.ts`
 - Date utils: `src/lib/milestone-utils.ts`
-- Firestore service (CRUD): `src/services/milestone-service.ts`
+- Data service (CRUD): `src/services/milestone-service.ts`
 - Milestone form UI: `src/components/milestone-form.tsx`
 - Dashboard card UI: `src/components/milestone-dashboard-card.tsx`
 - Notification processing and web-push logic: `src/app/api/notifications/comprehensive-check/route.ts`
 
 How to test notifications (single-run)
-1. Ensure dev server is running and environment variables are set (VAPID keys, Firebase credentials).
+1. Ensure dev server is running and environment variables are set (`DATABASE_URL`, API tokens, and VAPID keys).
 2. Run a single notification check (this will log detailed milestone debug info):
 
 PowerShell (from project root):
@@ -150,21 +151,21 @@ curl -X POST "http://localhost:3000/api/notifications/comprehensive-check?mode=s
 
 Debugging tips
 - Check server logs for these markers added to the notification route:
-    - `🔍 Processing milestone:` shows milestone payload read from Firestore
+    - `🔍 Processing milestone:` shows milestone payload read from the data layer
     - `📅 Anniversary calculation:` shows computed next anniversary and `daysUntil`
     - `📋 Notification settings for ...` shows effective notification toggles
     - `✅ Should notify:` or `❌ No notification rule matches:` explains the decision
 - Common causes for missed sends:
     1) `isRecurring` is false (one-time milestones do not calculate `daysUntil`).
-    2) `originalDate` stored in Firestore as an unexpected type (ensure it's a timestamp/number or valid Date). 
+    2) `originalDate` stored with an unexpected type (ensure it's a valid timestamp/number or Date).
     3) The specific notification preference (oneWeekBefore, oneDayBefore, etc.) is disabled.
     4) User has no valid push subscriptions or notifications are disabled in `notificationPreferences`.
     5) Quiet hours are active for the user at check time.
 
-What to check in Firestore
-- `users/{email}/milestones/{milestoneId}`: fields `isRecurring`, `originalDate`, `notificationSettings`, and `lastNotifiedAt`.
-- `pushSubscriptions` collection: verify valid subscription documents for the user.
-- `users/{email}/notifications`: look for documents with `data.type === 'milestone-reminder'` to see if a notification was created and whether `sentAt` was updated.
+What to check in PostgreSQL (via Prisma)
+- `Milestone` records: verify `isRecurring`, `originalDate`, `notificationSettings`, and `lastNotifiedAt`.
+- `PushSubscription` records: verify active subscriptions for the user.
+- `Notification` records: check `data.type === 'milestone-reminder'` and whether `sentAt` is populated.
 
 If you'd like, I can run a single check locally and paste the server logs here or add an optional debug endpoint that forces a notification for a specific milestone id for safe testing.
 
@@ -172,10 +173,10 @@ If you'd like, I can run a single check locally and paste the server logs here o
 
 -   **Framework**: [Next.js](https://nextjs.org/) (App Router)
 -   **Language**: [TypeScript](https://www.typescriptlang.org/)
--   **AI Framework**: [Genkit](https://firebase.google.com/docs/genkit) (with Google Gemini)
+-   **AI Framework**: [Genkit](https://genkit.dev/) (with Google Gemini)
 -   **UI Library**: [React](https://react.dev/), [ShadCN UI](https://ui.shadcn.com/)
 -   **Styling**: [Tailwind CSS](https://tailwindcss.com/)
--   **Database**: [Firebase Firestore](https://firebase.google.com/docs/firestore)
+-   **Database**: [PostgreSQL](https://www.postgresql.org/) with [Prisma](https://www.prisma.io/)
 -   **State Management**: React Context API
 
 ## 🚀 Getting Started
@@ -200,49 +201,29 @@ To get a local copy up and running, follow these simple steps.
     npm install
     ```
 
-3.  **Set up Firebase:**
-    -   Create a Firebase project at [console.firebase.google.com](https://console.firebase.google.com/).
-    -   Enable the **Firestore Database**.
-    -   Copy your Firebase project configuration credentials.
-
-    -   Create a `.env.local` file in the root of the project and add your credentials. Below is a full list of required and optional fields:
+3.  **Set up environment variables:**
+    -   Copy `env.example` to `.env.local` and update values for your local environment.
+    -   Core fields:
     
     ```env
-    # Firebase Configuration
-    NEXT_PUBLIC_FIREBASE_API_KEY=your_firebase_api_key_here
-    NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=your_project.firebaseapp.com
-    NEXT_PUBLIC_FIREBASE_PROJECT_ID=your_project_id
-    NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=your_project.firebasestorage.app
-    NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=your_messaging_sender_id
-    NEXT_PUBLIC_FIREBASE_APP_ID=your_app_id
-    NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=your_measurement_id
+    # PostgreSQL Configuration
+    DATABASE_URL=postgresql://postgres:postgres@localhost:5432/mindmate_dev
+
+    # Internal Security Tokens
+    CRON_AUTH_TOKEN=replace_with_random_32_plus_char_token
+    INTERNAL_API_KEY=replace_with_random_32_plus_char_internal_key
 
     # Google AI Configuration
     GOOGLE_AI_API_KEY=your_google_ai_api_key_here
 
-    # Legacy Google Tasks OAuth (optional, deprecated)
-    # Uncomment only if you are running legacy /api/google/* sync routes.
-    # GOOGLE_CLIENT_ID=your_google_oauth_client_id
-    # GOOGLE_CLIENT_SECRET=your_google_oauth_client_secret
-    # GOOGLE_OAUTH_REDIRECT=http://localhost:9002/api/google/callback
-
-    # External Calendar Integration - Microsoft Outlook
-    OUTLOOK_CLIENT_ID=your_outlook_app_client_id
-    OUTLOOK_CLIENT_SECRET=your_outlook_app_client_secret
-    OUTLOOK_REDIRECT_URI=http://localhost:3000/api/calendar/outlook
-
-    # Development Settings
-    NEXT_PUBLIC_USE_FIREBASE_EMULATOR=false
+    # NextAuth URL (for OAuth redirects)
+    NEXTAUTH_URL=http://localhost:9002
 
     # Push Notification Configuration (VAPID Keys)
     NEXT_PUBLIC_VAPID_PUBLIC_KEY=your_vapid_public_key_here
     VAPID_PRIVATE_KEY=your_vapid_private_key_here
-
-    # Optional: Analytics
-    NEXT_PUBLIC_GA_MEASUREMENT_ID=your_ga_measurement_id
     ```
-
-    -   Refer to `FIREBASE_MIGRATION.md` for details on the Firestore data structure.
+    -   Optional integrations include legacy Google Tasks OAuth, Outlook calendar OAuth, SMTP email settings, and analytics keys.
 
 4.  **Set up Genkit (for AI features):**
     -   Obtain a Gemini API key from [Google AI Studio](https://aistudio.google.com/app/apikey).

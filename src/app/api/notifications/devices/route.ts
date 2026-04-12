@@ -1,47 +1,47 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { initializeApp, getApps, cert } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
+import { prisma } from '@/lib/prisma';
 
-// Initialize Firebase Admin if not already initialized
-if (!getApps().length) {
-  try {
-    initializeApp({
-      credential: cert({
-        projectId: process.env.FIREBASE_PROJECT_ID,
-        clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-        privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-      }),
-    });
-  } catch (error) {
-    console.error('Firebase Admin initialization error:', error);
+const isRecord = (value: unknown): value is Record<string, unknown> => {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+};
+
+const normalizeUserEmail = (authorizationHeader: string | null): string | null => {
+  if (!authorizationHeader) {
+    return null;
   }
-}
+
+  const withoutBearer = authorizationHeader.replace('Bearer ', '').trim().toLowerCase();
+  return withoutBearer.length > 0 ? withoutBearer : null;
+};
 
 // GET - Get all devices for a user
 export async function GET(request: NextRequest) {
   try {
     const authHeader = request.headers.get('authorization');
-    const userEmail = authHeader?.replace('Bearer ', '');
+    const userEmail = normalizeUserEmail(authHeader);
 
     if (!userEmail) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const db = getFirestore();
+    const subscriptions = await prisma.pushSubscription.findMany({
+      where: { userEmail },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        deviceInfo: true,
+        createdAt: true,
+      },
+    });
 
-    // Get all push subscriptions for this user
-    const subscriptionsSnapshot = await db
-      .collection('pushSubscriptions')
-      .where('userEmail', '==', userEmail)
-      .get();
+    const devices = subscriptions.map((subscription) => {
+      const deviceInfo = isRecord(subscription.deviceInfo) ? subscription.deviceInfo : {};
 
-    const devices = subscriptionsSnapshot.docs.map(doc => {
-      const data = doc.data();
       return {
-        id: doc.id,
-        userAgent: data.deviceInfo?.userAgent || 'Unknown',
-        platform: data.deviceInfo?.platform || 'Unknown',
-        createdAt: data.createdAt?._seconds ? data.createdAt._seconds * 1000 : Date.now(),
+        id: subscription.id,
+        userAgent: typeof deviceInfo.userAgent === 'string' ? deviceInfo.userAgent : 'Unknown',
+        platform: typeof deviceInfo.platform === 'string' ? deviceInfo.platform : 'Unknown',
+        createdAt: subscription.createdAt.getTime(),
       };
     });
 
@@ -50,10 +50,11 @@ export async function GET(request: NextRequest) {
       devices
     });
 
-  } catch (error: any) {
+  } catch (error) {
+    const err = error instanceof Error ? error : new Error(String(error));
     console.error('Error fetching devices:', error);
     return NextResponse.json(
-      { error: 'Internal server error', details: error.message },
+      { error: 'Internal server error', details: err.message },
       { status: 500 }
     );
   }
@@ -63,7 +64,7 @@ export async function GET(request: NextRequest) {
 export async function DELETE(request: NextRequest) {
   try {
     const authHeader = request.headers.get('authorization');
-    const userEmail = authHeader?.replace('Bearer ', '');
+    const userEmail = normalizeUserEmail(authHeader);
 
     if (!userEmail) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -79,23 +80,22 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    const db = getFirestore();
+    const subscription = await prisma.pushSubscription.findUnique({
+      where: { id: deviceId },
+      select: {
+        id: true,
+        userEmail: true,
+      },
+    });
 
-    // Verify the subscription belongs to this user before deleting
-    const subscriptionDoc = await db
-      .collection('pushSubscriptions')
-      .doc(deviceId)
-      .get();
-
-    if (!subscriptionDoc.exists) {
+    if (!subscription) {
       return NextResponse.json(
         { error: 'Device subscription not found' },
         { status: 404 }
       );
     }
 
-    const subscriptionData = subscriptionDoc.data();
-    if (subscriptionData?.userEmail !== userEmail) {
+    if (subscription.userEmail !== userEmail) {
       return NextResponse.json(
         { error: 'Unauthorized to delete this device' },
         { status: 403 }
@@ -103,17 +103,20 @@ export async function DELETE(request: NextRequest) {
     }
 
     // Delete the subscription
-    await db.collection('pushSubscriptions').doc(deviceId).delete();
+    await prisma.pushSubscription.delete({
+      where: { id: deviceId },
+    });
 
     return NextResponse.json({
       success: true,
       message: 'Device subscription removed successfully'
     });
 
-  } catch (error: any) {
+  } catch (error) {
+    const err = error instanceof Error ? error : new Error(String(error));
     console.error('Error removing device:', error);
     return NextResponse.json(
-      { error: 'Internal server error', details: error.message },
+      { error: 'Internal server error', details: err.message },
       { status: 500 }
     );
   }

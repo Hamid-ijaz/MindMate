@@ -47,7 +47,7 @@ export function NotificationDropdown() {
   } = useUnifiedNotifications();
   const [isOpen, setIsOpen] = useState(false);
 
-  // Convert Firestore notifications to dropdown format
+  // Convert persisted notifications to dropdown format
   const dropdownNotifications: NotificationEvent[] = notifications.map(notif => ({
     id: notif.id,
     type: notif.data?.type === 'task-overdue' ? 'overdue' : 
@@ -59,7 +59,7 @@ export function NotificationDropdown() {
     title: notif.title,
     message: notif.body || '',
     timestamp: (() => {
-      // Type guard for Firestore Timestamp
+      // Type guard for timestamp-like objects
       const createdAt: any = notif.createdAt;
       if (
         createdAt &&
@@ -72,7 +72,7 @@ export function NotificationDropdown() {
         // Try native Date parsing first
         const nativeDate = new Date(createdAt);
         if (!isNaN(nativeDate.getTime())) return nativeDate;
-        // Try to parse human-readable Firebase string
+        // Try to parse human-readable timestamp strings
         // Example: August 11, 2025 at 4:20:56 PM UTC+5
         const parsed = parse(
           createdAt.replace(' at ', ' '),

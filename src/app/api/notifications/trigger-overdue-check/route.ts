@@ -1,131 +1,179 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { initializeApp, getApps, cert } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
 import webpush from 'web-push';
+import { prisma } from '@/lib/prisma';
+import type { PushSubscription } from '@prisma/client';
 
-// Initialize Firebase Admin if not already initialized
-if (!getApps().length) {
+type JsonObject = Record<string, unknown>;
+
+const isJsonObject = (value: unknown): value is JsonObject => {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+};
+
+const getCanonicalSubscription = (
+  pushSubscription: PushSubscription
+): { endpoint: string; keys: { p256dh: string; auth: string } } | null => {
+  const subscription = pushSubscription.subscription;
+  if (isJsonObject(subscription)) {
+    const keys = subscription.keys;
+    if (
+      typeof subscription.endpoint === 'string' &&
+      isJsonObject(keys) &&
+      typeof keys.p256dh === 'string' &&
+      typeof keys.auth === 'string'
+    ) {
+      return {
+        endpoint: subscription.endpoint,
+        keys: {
+          p256dh: keys.p256dh,
+          auth: keys.auth,
+        },
+      };
+    }
+  }
+
+  const keys = pushSubscription.keys;
+  if (
+    typeof pushSubscription.endpoint === 'string' &&
+    isJsonObject(keys) &&
+    typeof keys.p256dh === 'string' &&
+    typeof keys.auth === 'string'
+  ) {
+    return {
+      endpoint: pushSubscription.endpoint,
+      keys: {
+        p256dh: keys.p256dh,
+        auth: keys.auth,
+      },
+    };
+  }
+
+  return null;
+};
+
+const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || process.env.VAPID_PUBLIC_KEY;
+const vapidPrivateKey = process.env.VAPID_PRIVATE_KEY;
+const vapidEmail = process.env.VAPID_EMAIL || 'hamid.ijaz91@gmail.com';
+
+if (vapidPublicKey && vapidPrivateKey) {
   try {
-    initializeApp({
-      credential: cert({
-        projectId: process.env.FIREBASE_PROJECT_ID,
-        clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-        privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-      }),
-    });
+    webpush.setVapidDetails(`mailto:${vapidEmail}`, vapidPublicKey, vapidPrivateKey);
   } catch (error) {
-    console.error('Firebase Admin initialization error:', error);
+    console.error('VAPID configuration error:', error);
   }
-}
-
-// Configure VAPID keys for web push
-try {
-  if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY && process.env.VAPID_EMAIL) {
-    webpush.setVapidDetails(
-      `mailto:${process.env.VAPID_EMAIL}`,
-      process.env.VAPID_PUBLIC_KEY,
-      process.env.VAPID_PRIVATE_KEY
-    );
-  }
-} catch (error) {
-  console.error('VAPID configuration error:', error);
 }
 
 export async function POST(request: NextRequest) {
   try {
-    // Verify request (optional: check for secret token)
     const authHeader = request.headers.get('authorization');
     if (process.env.CRON_SECRET && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const db = getFirestore();
     const now = new Date();
-    
-    // Query for overdue tasks
-    const tasksSnapshot = await db.collection('tasks')
-      .where('completed', '==', false)
-      .where('dueDate', '<=', now)
-      .where('isMuted', '==', false)
-      .get();
 
-    const overdueTasksCount = tasksSnapshot.size;
+    const overdueTasks = await prisma.task.findMany({
+      where: {
+        completedAt: null,
+        reminderAt: { lte: now },
+        isMuted: false,
+      },
+      select: {
+        id: true,
+        userEmail: true,
+      },
+    });
+
+    const overdueTasksCount = overdueTasks.length;
     const processedUsers = new Set<string>();
 
-    console.log(`Found ${overdueTasksCount} overdue tasks`);
-
-    // Process each overdue task
-    for (const taskDoc of tasksSnapshot.docs) {
-      const task = taskDoc.data();
-      const userEmail = task.userEmail; // Use userEmail for consistency
-
-      // Only process each user once
-      if (processedUsers.has(userEmail)) {
+    for (const task of overdueTasks) {
+      const userEmail = task.userEmail;
+      if (!userEmail || processedUsers.has(userEmail)) {
         continue;
       }
       processedUsers.add(userEmail);
 
       try {
-        // Get user's push subscriptions using userEmail
-        const subscriptionsSnapshot = await db.collection('pushSubscriptions')
-          .where('userEmail', '==', userEmail)
-          .where('isActive', '==', true)
-          .get();
+        const subscriptions = await prisma.pushSubscription.findMany({
+          where: {
+            userEmail,
+            isActive: true,
+          },
+          orderBy: { createdAt: 'asc' },
+        });
 
-        if (subscriptionsSnapshot.empty) {
-          console.log(`No push subscriptions found for user ${userEmail}`);
+        if (subscriptions.length === 0) {
           continue;
         }
 
-        // Count overdue tasks for this user
-        const userOverdueTasksSnapshot = await db.collection('tasks')
-          .where('userEmail', '==', userEmail)
-          .where('completed', '==', false)
-          .where('dueDate', '<=', now)
-          .where('isMuted', '==', false)
-          .get();
-
-        const userOverdueCount = userOverdueTasksSnapshot.size;
-        
-        // Send push notification to all user's devices
-        const pushPromises = subscriptionsSnapshot.docs.map(async (subDoc) => {
-          const subscription = subDoc.data().subscription;
-          
-          const payload = {
-            title: 'Overdue Tasks',
-            body: `You have ${userOverdueCount} overdue task${userOverdueCount !== 1 ? 's' : ''}`,
-            icon: '/icon-192.png',
-            badge: '/icon-192.png',
-            tag: 'overdue-tasks',
-            data: {
-              type: 'overdue',
-              count: userOverdueCount,
-              url: '/tasks'
-            }
-          };
-
-          try {
-            await webpush.sendNotification(subscription, JSON.stringify(payload));
-            console.log(`Push notification sent successfully to user ${userEmail}`);
-          } catch (error: any) {
-            console.error(`Failed to send push notification to user ${userEmail}:`, error);
-            
-            // If subscription is invalid, remove it
-            if (error?.statusCode === 410 || error?.statusCode === 404) {
-              await subDoc.ref.delete();
-              console.log(`Removed invalid subscription for user ${userEmail}`);
-            }
-          }
+        const userOverdueCount = await prisma.task.count({
+          where: {
+            userEmail,
+            completedAt: null,
+            reminderAt: { lte: now },
+            isMuted: false,
+          },
         });
 
-        await Promise.all(pushPromises);
+        const payload = {
+          title: 'Overdue Tasks',
+          body: `You have ${userOverdueCount} overdue task${userOverdueCount !== 1 ? 's' : ''}`,
+          icon: '/icon-192.png',
+          badge: '/icon-192.png',
+          tag: 'overdue-tasks',
+          data: {
+            type: 'overdue',
+            count: userOverdueCount,
+            url: '/tasks',
+          },
+        };
 
-        // Update last notified timestamp for user's overdue tasks
-        const updatePromises = userOverdueTasksSnapshot.docs.map(doc => 
-          doc.ref.update({ notifiedAt: now })
+        await Promise.all(
+          subscriptions.map(async (subscriptionRow) => {
+            const canonical = getCanonicalSubscription(subscriptionRow);
+            if (!canonical) {
+              await prisma.pushSubscription.update({
+                where: { id: subscriptionRow.id },
+                data: {
+                  isActive: false,
+                  deactivatedAt: new Date(),
+                  deactivationReason: 'invalid_subscription_payload',
+                },
+              });
+              return;
+            }
+
+            try {
+              await webpush.sendNotification(canonical, JSON.stringify(payload));
+              await prisma.pushSubscription.update({
+                where: { id: subscriptionRow.id },
+                data: { lastUsedAt: new Date() },
+              });
+            } catch (error: unknown) {
+              const webPushError = error as { statusCode?: number };
+              if (webPushError.statusCode === 410 || webPushError.statusCode === 404) {
+                await prisma.pushSubscription.update({
+                  where: { id: subscriptionRow.id },
+                  data: {
+                    isActive: false,
+                    deactivatedAt: new Date(),
+                    deactivationReason: `webpush_${webPushError.statusCode}`,
+                  },
+                });
+              }
+            }
+          })
         );
-        await Promise.all(updatePromises);
 
+        await prisma.task.updateMany({
+          where: {
+            userEmail,
+            completedAt: null,
+            reminderAt: { lte: now },
+            isMuted: false,
+          },
+          data: { notifiedAt: now },
+        });
       } catch (error) {
         console.error(`Error processing notifications for user ${userEmail}:`, error);
       }
@@ -135,19 +183,21 @@ export async function POST(request: NextRequest) {
       success: true,
       message: `Processed ${overdueTasksCount} overdue tasks for ${processedUsers.size} users`,
       overdueTasksCount,
-      usersNotified: processedUsers.size
+      usersNotified: processedUsers.size,
     });
-
   } catch (error) {
     console.error('Error in trigger-overdue-check:', error);
     return NextResponse.json(
-      { error: 'Internal server error', details: error instanceof Error ? error.message : 'Unknown error' },
+      {
+        error: 'Internal server error',
+        details: error instanceof Error ? error.message : 'Unknown error',
+      },
       { status: 500 }
     );
   }
 }
 
-// Also support GET for testing
 export async function GET(request: NextRequest) {
   return POST(request);
 }
+

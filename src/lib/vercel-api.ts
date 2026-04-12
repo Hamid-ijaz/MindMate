@@ -1,6 +1,6 @@
 /**
  * Client-side helper functions to call Vercel API endpoints
- * This replaces Firebase callable functions
+ * Used by client code to call Next.js API routes
  */
 
 const API_BASE_URL = process.env.NODE_ENV === 'production' 
@@ -9,7 +9,7 @@ const API_BASE_URL = process.env.NODE_ENV === 'production'
 
 /**
  * Send a task reminder notification
- * Replaces the Firebase callable function
+ * Calls the notifications API route
  */
 export async function sendTaskReminder(taskId: string, userId: string, title: string, message: string, authToken?: string) {
   try {

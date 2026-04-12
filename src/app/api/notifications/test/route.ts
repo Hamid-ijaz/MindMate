@@ -1,22 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { initializeApp, getApps, cert } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
+import type { Prisma } from '@prisma/client';
+import { prisma } from '@/lib/prisma';
 import webpush from 'web-push';
-
-// Initialize Firebase Admin if not already initialized
-if (!getApps().length) {
-  try {
-    initializeApp({
-      credential: cert({
-        projectId: process.env.FIREBASE_PROJECT_ID,
-        clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-        privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-      }),
-    });
-  } catch (error) {
-    console.error('Firebase Admin initialization error:', error);
-  }
-}
 
 // Configure VAPID keys for web push
 try {
@@ -31,10 +16,35 @@ try {
   console.error('VAPID configuration error:', error);
 }
 
+const isRecord = (value: unknown): value is Record<string, unknown> => {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+};
+
+const toPushSubscription = (subscription: {
+  endpoint: string;
+  keys: Prisma.JsonValue;
+  subscription: Prisma.JsonValue | null;
+}): Record<string, unknown> | null => {
+  if (isRecord(subscription.subscription)) {
+    return subscription.subscription;
+  }
+
+  if (!subscription.endpoint) {
+    return null;
+  }
+
+  return {
+    endpoint: subscription.endpoint,
+    keys: subscription.keys,
+  };
+};
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { userEmail, message } = body;
+    const rawUserEmail = typeof body.userEmail === 'string' ? body.userEmail : '';
+    const userEmail = rawUserEmail.trim().toLowerCase();
+    const { message } = body;
 
     if (!userEmail || !message) {
       return NextResponse.json(
@@ -43,15 +53,19 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const db = getFirestore();
+    const subscriptions = await prisma.pushSubscription.findMany({
+      where: {
+        userEmail,
+      },
+      select: {
+        id: true,
+        endpoint: true,
+        keys: true,
+        subscription: true,
+      },
+    });
 
-    // Get all push subscriptions for this user
-    const subscriptionsSnapshot = await db
-      .collection('pushSubscriptions')
-      .where('userEmail', '==', userEmail)
-      .get();
-
-    if (subscriptionsSnapshot.empty) {
+    if (subscriptions.length === 0) {
       return NextResponse.json(
         { error: 'No active subscriptions found for this user' },
         { status: 404 }
@@ -63,34 +77,31 @@ export async function POST(request: NextRequest) {
     const errors: string[] = [];
 
     // Send test notification to all user's devices
-    for (const doc of subscriptionsSnapshot.docs) {
-      const subscriptionData = doc.data();
+    for (const subscriptionRecord of subscriptions) {
+      const pushSubscription = toPushSubscription(subscriptionRecord);
+      const endpoint =
+        pushSubscription && typeof pushSubscription.endpoint === 'string'
+          ? pushSubscription.endpoint
+          : '';
 
-      // normalize subscription object for web-push
-      const pushSubscription = subscriptionData.subscription
-        ? subscriptionData.subscription
-        : (subscriptionData.endpoint && subscriptionData.keys)
-          ? {
-            endpoint: subscriptionData.endpoint,
-            keys: subscriptionData.keys,
-          }
-          : null;
-
-      if (!pushSubscription || !pushSubscription.endpoint) {
-        console.warn(`Skipping subscription ${doc.id} - missing endpoint`, subscriptionData);
+      if (!pushSubscription || !endpoint) {
+        console.warn(`Skipping subscription ${subscriptionRecord.id} - missing endpoint`, subscriptionRecord);
         failureCount++;
-        errors.push(`Subscription ${doc.id}: missing endpoint`);
+        errors.push(`Subscription ${subscriptionRecord.id}: missing endpoint`);
 
         // Deactivate invalid subscription to avoid repeated failures
         try {
-          await db.collection('pushSubscriptions').doc(doc.id).update({
-            isActive: false,
-            deactivatedAt: new Date(),
-            deactivationReason: 'missing_endpoint'
+          await prisma.pushSubscription.update({
+            where: { id: subscriptionRecord.id },
+            data: {
+              isActive: false,
+              deactivatedAt: new Date(),
+              deactivationReason: 'missing_endpoint',
+            },
           });
-          console.log(`Deactivated subscription ${doc.id} due to missing endpoint`);
+          console.log(`Deactivated subscription ${subscriptionRecord.id} due to missing endpoint`);
         } catch (updateErr) {
-          console.error(`Failed to deactivate invalid subscription ${doc.id}:`, updateErr);
+          console.error(`Failed to deactivate invalid subscription ${subscriptionRecord.id}:`, updateErr);
         }
 
         continue;
@@ -98,7 +109,7 @@ export async function POST(request: NextRequest) {
 
       try {
         await webpush.sendNotification(
-          pushSubscription,
+          pushSubscription as any,
           JSON.stringify({
             title: message.title || 'Test Notification',
             body: message.body || 'This is a test notification from MindMate.',
@@ -114,21 +125,28 @@ export async function POST(request: NextRequest) {
         );
 
         successCount++;
-      } catch (error: any) {
-        console.error(`Failed to send test notification to subscription ${doc.id}:`, error);
+        await prisma.pushSubscription.update({
+          where: { id: subscriptionRecord.id },
+          data: { lastUsedAt: new Date() },
+        });
+      } catch (error) {
+        const webPushError = error as { statusCode?: number; message?: string };
+        console.error(`Failed to send test notification to subscription ${subscriptionRecord.id}:`, error);
         failureCount++;
 
         // If subscription is invalid (410 or 404), remove it
-        if (error.statusCode === 410 || error.statusCode === 404) {
+        if (webPushError.statusCode === 410 || webPushError.statusCode === 404) {
           try {
-            await db.collection('pushSubscriptions').doc(doc.id).delete();
-            console.log(`Removed invalid subscription: ${doc.id}`);
+            await prisma.pushSubscription.delete({
+              where: { id: subscriptionRecord.id },
+            });
+            console.log(`Removed invalid subscription: ${subscriptionRecord.id}`);
           } catch (deleteError) {
-            console.error(`Failed to delete invalid subscription ${doc.id}:`, deleteError);
+            console.error(`Failed to delete invalid subscription ${subscriptionRecord.id}:`, deleteError);
           }
         }
 
-        errors.push(`Subscription ${doc.id}: ${error.message}`);
+        errors.push(`Subscription ${subscriptionRecord.id}: ${webPushError.message || 'Unknown error'}`);
       }
     }
 
@@ -138,7 +156,7 @@ export async function POST(request: NextRequest) {
       stats: {
         successCount,
         failureCount,
-        totalSubscriptions: subscriptionsSnapshot.size
+        totalSubscriptions: subscriptions.length
       },
       errors: failureCount > 0 ? errors : undefined
     });

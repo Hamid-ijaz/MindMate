@@ -1,163 +1,268 @@
-
 import { NextRequest, NextResponse } from 'next/server';
-import { initializeApp, getApps, cert } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
 import webpush from 'web-push';
 import { isAuthorizedCronRequest } from '@/lib/auth-utils';
+import { prisma } from '@/lib/prisma';
+import type { EmailPreference, Prisma, PushSubscription } from '@prisma/client';
 
-// Initialize Firebase Admin if not already initialized
-if (!getApps().length) {
-  try {
-    initializeApp({
-      credential: cert({
-        projectId: process.env.FIREBASE_PROJECT_ID,
-        clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-        privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-      }),
-    });
-  } catch (error) {
-    console.error('Firebase Admin initialization error:', error);
+type JsonObject = Record<string, unknown>;
+
+type PushResults = {
+  type: 'push_notifications';
+  startTime: string;
+  usersProcessed: number;
+  usersSkipped: number;
+  overdueNotifications: number;
+  reminderNotifications: number;
+  totalNotificationsSent: number;
+  totalSubscriptionsProcessed: number;
+  invalidSubscriptionsRemoved: number;
+  errors: string[];
+  successLogs: string[];
+  userDetails: Array<Record<string, unknown>>;
+  summary: Record<string, unknown>;
+};
+
+type EmailResults = {
+  type: 'email_digests';
+  startTime: string;
+  usersProcessed: number;
+  usersSkipped: number;
+  dailyDigestsSent: number;
+  weeklyDigestsSent: number;
+  emailErrors: number;
+  errors: string[];
+  successLogs: string[];
+  userDetails: Array<Record<string, unknown>>;
+  summary: Record<string, unknown>;
+};
+
+type PushSendResult = {
+  success: boolean;
+  error?: string;
+  invalid?: boolean;
+};
+
+const isJsonObject = (value: unknown): value is JsonObject => {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+};
+
+const sanitizeJsonValue = (value: unknown): unknown => {
+  if (value === undefined) {
+    return null;
   }
-}
 
-// Configure VAPID keys for web push
-try {
-  if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY && process.env.VAPID_EMAIL) {
-    webpush.setVapidDetails(
-      `mailto:${process.env.VAPID_EMAIL}`,
-      process.env.VAPID_PUBLIC_KEY,
-      process.env.VAPID_PRIVATE_KEY
+  if (Array.isArray(value)) {
+    return value.map((entry) => sanitizeJsonValue(entry));
+  }
+
+  if (isJsonObject(value)) {
+    return Object.fromEntries(
+      Object.entries(value)
+        .filter(([, nested]) => nested !== undefined)
+        .map(([key, nested]) => [key, sanitizeJsonValue(nested)])
     );
   }
-} catch (error) {
-  console.error('VAPID configuration error:', error);
+
+  return value;
+};
+
+const parseTimeToMinutes = (value: string): number | null => {
+  if (!/^\d{2}:\d{2}$/.test(value)) {
+    return null;
+  }
+
+  const [hour, minute] = value.split(':').map(Number);
+  if (Number.isNaN(hour) || Number.isNaN(minute)) {
+    return null;
+  }
+
+  if (hour < 0 || hour > 23 || minute < 0 || minute > 59) {
+    return null;
+  }
+
+  return hour * 60 + minute;
+};
+
+function isInQuietHours(quietHours: unknown): boolean {
+  if (!isJsonObject(quietHours)) {
+    return false;
+  }
+
+  if (quietHours.enabled !== true) {
+    return false;
+  }
+
+  const start = typeof quietHours.start === 'string' ? quietHours.start : '';
+  const end = typeof quietHours.end === 'string' ? quietHours.end : '';
+
+  const startMinutes = parseTimeToMinutes(start);
+  const endMinutes = parseTimeToMinutes(end);
+
+  if (startMinutes === null || endMinutes === null) {
+    return false;
+  }
+
+  const now = new Date();
+  const currentMinutes = now.getHours() * 60 + now.getMinutes();
+
+  if (startMinutes <= endMinutes) {
+    return currentMinutes >= startMinutes && currentMinutes <= endMinutes;
+  }
+
+  return currentMinutes >= startMinutes || currentMinutes <= endMinutes;
 }
 
-// Helper function to get current date in a specific timezone (returns date at midnight in that timezone)
 function getCurrentDateInTimezone(timeZone: string = 'Asia/Karachi'): Date {
   const now = new Date();
-  
-  // Get the date string in the specified timezone
-  const dateString = now.toLocaleString('en-CA', {
-    timeZone,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit'
-  }); // Format: YYYY-MM-DD
-  
-  const [year, month, day] = dateString.split('-').map(Number);
-  return new Date(year, month - 1, day, 0, 0, 0, 0); // Return midnight in UTC
-}
-
-// Helper function to get current time in a specific timezone
-function getCurrentTimeInTimezone(timeZone: string = 'Asia/Karachi'): Date {
-  const now = new Date();
-  
-  // Get the date and time string in the specified timezone
   const dateString = now.toLocaleString('en-CA', {
     timeZone,
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hour12: false
-  }); // Format: YYYY-MM-DD HH:mm:ss
-  
-  const [datePart, timePart] = dateString.split(', ');
-  const [year, month, day] = datePart.split('-').map(Number);
-  const [hour, minute, second] = timePart.split(':').map(Number);
-  
-  return new Date(year, month - 1, day, hour, minute, second, 0);
-}
-
-// Helper function to check if current time is within quiet hours
-function isInQuietHours(quietHours: any): boolean {
-  if (!quietHours?.enabled) return false;
-  
-  const now = new Date();
-  const currentTime = now.getHours() * 60 + now.getMinutes();
-  
-  const [startHour, startMin] = quietHours.start.split(':').map(Number);
-  const [endHour, endMin] = quietHours.end.split(':').map(Number);
-  
-  const startTime = startHour * 60 + startMin;
-  const endTime = endHour * 60 + endMin;
-  
-  if (startTime <= endTime) {
-    return currentTime >= startTime && currentTime <= endTime;
-  } else {
-    // Quiet hours span midnight
-    return currentTime >= startTime || currentTime <= endTime;
-  }
-}
-
-// Helper function to send push notification
-async function sendPushNotification(subscription: any, payload: any): Promise<{ success: boolean; error?: string }> {
-  try {
-    await webpush.sendNotification(subscription, JSON.stringify(payload));
-    return { success: true };
-  } catch (error: any) {
-    console.error('Push notification error:', error);
-    return { success: false, error: error.message };
-  }
-}
-
-
-// Firestore-based loop control
-const LOOP_CONTROL_DOC = 'notificationLoop/control';
-
-async function setLoopRunningState(isRunning: boolean) {
-  const db = getFirestore();
-  const pkDate = new Date();
-  const pkTimeString = pkDate.toLocaleString('en-US', {
-    timeZone: 'Asia/Karachi',
-    hour12: true,
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit'
   });
-  // pkTimeString will be in "MM/DD/YYYY, hh:mm:ss AM/PM" format
-  await db.doc(LOOP_CONTROL_DOC).set(
-    { isLoopRunning: isRunning, updatedAt: pkTimeString },
-    { merge: true }
-  );
+
+  const [year, month, day] = dateString.split('-').map(Number);
+  if (!year || !month || !day) {
+    return new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
   }
 
-  async function getLoopRunningState(): Promise<boolean> {
-    const db = getFirestore();
-    const docRef = db.doc(LOOP_CONTROL_DOC);
-    const doc = await docRef.get();
-    // Update the 'updatedAt' field to current date/time in Pakistan timezone in 12-hour AM/PM format
-    const pkDate = new Date();
-    const pkTimeString = pkDate.toLocaleString('en-US', {
-      timeZone: 'Asia/Karachi',
-      hour12: true,
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit'
-    });
-    await docRef.set({ updatedAt: pkTimeString }, { merge: true });
-    return !!doc.data()?.isLoopRunning;
+  return new Date(year, month - 1, day, 0, 0, 0, 0);
 }
 
-let loopStartTime: Date | null = null;
+function getNotificationDataType(data: Prisma.JsonValue | null): string | null {
+  if (!isJsonObject(data)) {
+    return null;
+  }
 
-// Helper function to send daily digest email
+  return typeof data.type === 'string' ? data.type : null;
+}
+
+function getNotificationDataString(data: Prisma.JsonValue | null, key: string): string | null {
+  if (!isJsonObject(data)) {
+    return null;
+  }
+
+  const value = data[key];
+  return typeof value === 'string' ? value : null;
+}
+
+const getCanonicalSubscription = (
+  pushSubscription: PushSubscription
+): { endpoint: string; keys: { p256dh: string; auth: string } } | null => {
+  const embeddedSubscription = pushSubscription.subscription;
+  if (isJsonObject(embeddedSubscription)) {
+    const keys = embeddedSubscription.keys;
+    if (
+      typeof embeddedSubscription.endpoint === 'string' &&
+      isJsonObject(keys) &&
+      typeof keys.p256dh === 'string' &&
+      typeof keys.auth === 'string'
+    ) {
+      return {
+        endpoint: embeddedSubscription.endpoint,
+        keys: {
+          p256dh: keys.p256dh,
+          auth: keys.auth,
+        },
+      };
+    }
+  }
+
+  const keys = pushSubscription.keys;
+  if (
+    typeof pushSubscription.endpoint === 'string' &&
+    isJsonObject(keys) &&
+    typeof keys.p256dh === 'string' &&
+    typeof keys.auth === 'string'
+  ) {
+    return {
+      endpoint: pushSubscription.endpoint,
+      keys: {
+        p256dh: keys.p256dh,
+        auth: keys.auth,
+      },
+    };
+  }
+
+  return null;
+};
+
+const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || process.env.VAPID_PUBLIC_KEY;
+const vapidPrivateKey = process.env.VAPID_PRIVATE_KEY;
+const vapidEmail = process.env.VAPID_EMAIL || 'hamid.ijaz91@gmail.com';
+
+if (vapidPublicKey && vapidPrivateKey) {
+  try {
+    webpush.setVapidDetails(`mailto:${vapidEmail}`, vapidPublicKey, vapidPrivateKey);
+  } catch (error) {
+    console.error('VAPID configuration error:', error);
+  }
+}
+
+async function deactivateSubscription(id: string, reason: string): Promise<void> {
+  try {
+    await prisma.pushSubscription.update({
+      where: { id },
+      data: {
+        isActive: false,
+        deactivatedAt: new Date(),
+        deactivationReason: reason,
+      },
+    });
+  } catch (error) {
+    console.error(`Failed to deactivate push subscription ${id}:`, error);
+  }
+}
+
+async function sendPushNotification(
+  subscriptionRow: PushSubscription,
+  payload: Record<string, unknown>
+): Promise<PushSendResult> {
+  const canonical = getCanonicalSubscription(subscriptionRow);
+  if (!canonical) {
+    return {
+      success: false,
+      error: 'Invalid subscription payload',
+      invalid: true,
+    };
+  }
+
+  try {
+    await webpush.sendNotification(canonical, JSON.stringify(payload));
+    await prisma.pushSubscription.update({
+      where: { id: subscriptionRow.id },
+      data: { lastUsedAt: new Date() },
+    });
+    return { success: true };
+  } catch (error: unknown) {
+    const webPushError = error as { statusCode?: number; message?: string };
+    return {
+      success: false,
+      error: webPushError.message || 'Unknown error',
+      invalid: webPushError.statusCode === 410 || webPushError.statusCode === 404,
+    };
+  }
+}
+
+let loopIsRunning = false;
+let loopStartTime: Date | null = null;
+let loopUpdatedAt = '';
+
+async function setLoopRunningState(isRunning: boolean): Promise<void> {
+  loopIsRunning = isRunning;
+  loopUpdatedAt = new Date().toISOString();
+}
+
+async function getLoopRunningState(): Promise<boolean> {
+  loopUpdatedAt = new Date().toISOString();
+  return loopIsRunning;
+}
+
 async function sendDailyDigestForUser(userEmail: string): Promise<{ success: boolean; error?: string }> {
   try {
     const baseUrl = process.env.NEXT_PUBLIC_URL || 'https://mindmate.hamidijaz.dev';
     const apiUrl = `${baseUrl}/api/email/daily-digest`;
-    
-    console.log(`📧 Sending daily digest request to ${userEmail} via ${apiUrl}`);
-    
+
     const response = await fetch(apiUrl, {
       method: 'POST',
       headers: {
@@ -166,40 +271,27 @@ async function sendDailyDigestForUser(userEmail: string): Promise<{ success: boo
       body: JSON.stringify({ userEmail }),
     });
 
-    console.log(`📧 Daily digest API response: ${response.status} ${response.statusText}`);
-
     if (response.ok) {
-      console.log(`✅ Daily digest sent successfully to ${userEmail}`);
       return { success: true };
-    } else {
-      // Log response body for debugging
-      const responseText = await response.text();
-      console.log(`📧 Daily digest error response body:`, responseText);
-      
-      let errorData;
-      try {
-        errorData = JSON.parse(responseText);
-      } catch (jsonError) {
-        // Response doesn't contain valid JSON
-        errorData = { error: `HTTP ${response.status}: ${response.statusText}` };
-      }
-      console.error(`❌ Failed to send daily digest to ${userEmail}:`, errorData);
-      return { success: false, error: errorData.error || `HTTP ${response.status}` };
+    }
+
+    const responseText = await response.text();
+    try {
+      const parsed = JSON.parse(responseText) as { error?: string };
+      return { success: false, error: parsed.error || `HTTP ${response.status}` };
+    } catch {
+      return { success: false, error: `HTTP ${response.status}: ${response.statusText}` };
     }
   } catch (error) {
-    console.error(`❌ Error sending daily digest to ${userEmail}:`, error);
     return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
   }
 }
 
-// Helper function to send weekly digest email
 async function sendWeeklyDigestForUser(userEmail: string): Promise<{ success: boolean; error?: string }> {
   try {
     const baseUrl = process.env.NEXT_PUBLIC_URL || 'https://mindmate.hamidijaz.dev';
     const apiUrl = `${baseUrl}/api/email/weekly-digest-enhanced`;
-    
-    console.log(`📧 Sending weekly digest request to ${userEmail} via ${apiUrl}`);
-    
+
     const response = await fetch(apiUrl, {
       method: 'POST',
       headers: {
@@ -208,123 +300,136 @@ async function sendWeeklyDigestForUser(userEmail: string): Promise<{ success: bo
       body: JSON.stringify({ userEmail }),
     });
 
-    console.log(`📧 Weekly digest API response: ${response.status} ${response.statusText}`);
-
     if (response.ok) {
-      console.log(`✅ Weekly digest sent successfully to ${userEmail}`);
       return { success: true };
-    } else {
-      // Log response body for debugging
-      const responseText = await response.text();
-      console.log(`📧 Weekly digest error response body:`, responseText);
-      
-      let errorData;
-      try {
-        errorData = JSON.parse(responseText);
-      } catch (jsonError) {
-        // Response doesn't contain valid JSON
-        errorData = { error: `HTTP ${response.status}: ${response.statusText}` };
-      }
-      console.error(`❌ Failed to send weekly digest to ${userEmail}:`, errorData);
-      return { success: false, error: errorData.error || `HTTP ${response.status}` };
+    }
+
+    const responseText = await response.text();
+    try {
+      const parsed = JSON.parse(responseText) as { error?: string };
+      return { success: false, error: parsed.error || `HTTP ${response.status}` };
+    } catch {
+      return { success: false, error: `HTTP ${response.status}: ${response.statusText}` };
     }
   } catch (error) {
-    console.error(`❌ Error sending weekly digest to ${userEmail}:`, error);
     return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
   }
 }
 
-// Helper function to check if daily digest should be sent based on schedule and sent history
-async function shouldSendDailyDigest(preferences: any, now: Date, db: any, userEmail: string): Promise<{ shouldSend: boolean; reason: string }> {
+function shouldSendDailyDigest(
+  preferences: EmailPreference,
+  now: Date
+): { shouldSend: boolean; reason: string } {
   if (!preferences.dailyDigest) {
     return { shouldSend: false, reason: 'Daily digest disabled' };
   }
-  
+
   const dailyDigestTime = preferences.dailyDigestTime || '09:00';
-  const [hour, minute] = dailyDigestTime.split(':').map(Number);
-  
-  const currentHour = now.getHours();
-  const currentMinute = now.getMinutes();
-  
-  // Check if we've passed the scheduled time today
-  const scheduledMinutes = hour * 60 + minute;
-  const currentMinutes = currentHour * 60 + currentMinute;
-  
+  const scheduledMinutes = parseTimeToMinutes(dailyDigestTime);
+  if (scheduledMinutes === null) {
+    return { shouldSend: false, reason: 'Invalid daily digest time configured' };
+  }
+
+  const currentMinutes = now.getHours() * 60 + now.getMinutes();
   if (currentMinutes < scheduledMinutes) {
     return { shouldSend: false, reason: `Scheduled time (${dailyDigestTime}) not yet reached today` };
   }
-  
-  // Check if daily digest has already been sent today
-  const today = new Date(now);
-  today.setHours(0, 0, 0, 0);
-  const todayTimestamp = today.getTime();
-  
-  const lastDailySent = preferences.lastDailySent;
-  if (lastDailySent) {
-    const lastSentDate = lastDailySent.toDate ? lastDailySent.toDate() : new Date(lastDailySent);
+
+  if (preferences.lastDailySent) {
+    const lastSentDate = new Date(preferences.lastDailySent);
     const lastSentDay = new Date(lastSentDate);
     lastSentDay.setHours(0, 0, 0, 0);
-    
-    if (lastSentDay.getTime() === todayTimestamp) {
-      return { shouldSend: false, reason: `Daily digest already sent today at ${lastSentDate.toLocaleTimeString()}` };
+
+    const today = new Date(now);
+    today.setHours(0, 0, 0, 0);
+
+    if (lastSentDay.getTime() === today.getTime()) {
+      return {
+        shouldSend: false,
+        reason: `Daily digest already sent today at ${lastSentDate.toLocaleTimeString()}`,
+      };
     }
   }
-  
-  return { shouldSend: true, reason: `Scheduled time passed and not yet sent today` };
+
+  return { shouldSend: true, reason: 'Scheduled time passed and not yet sent today' };
 }
 
-// Helper function to check if weekly digest should be sent based on schedule and sent history
-async function shouldSendWeeklyDigest(preferences: any, now: Date, db: any, userEmail: string): Promise<{ shouldSend: boolean; reason: string }> {
+function shouldSendWeeklyDigest(
+  preferences: EmailPreference,
+  now: Date
+): { shouldSend: boolean; reason: string } {
   if (!preferences.weeklyDigest) {
     return { shouldSend: false, reason: 'Weekly digest disabled' };
   }
-  
-  const digestDay = preferences.digestDay || 'monday';
+
+  const digestDay = (preferences.digestDay || 'monday').toLowerCase();
   const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
-  const targetDay = dayNames.indexOf(digestDay.toLowerCase());
-  
+  const targetDay = dayNames.indexOf(digestDay);
+
   if (targetDay === -1) {
     return { shouldSend: false, reason: 'Invalid digest day configured' };
   }
-  
+
   const currentDay = now.getDay();
-  const currentHour = now.getHours();
-  
-  // Check if it's the right day and we've passed 9 AM
   if (currentDay !== targetDay) {
-    const currentDayName = dayNames[currentDay];
-    return { shouldSend: false, reason: `Today is ${currentDayName}, weekly digest scheduled for ${digestDay}` };
+    return { shouldSend: false, reason: `Today is ${dayNames[currentDay]}, weekly digest scheduled for ${digestDay}` };
   }
-  
-  if (currentHour < 9) {
-    return { shouldSend: false, reason: `Scheduled time (9:00 AM) not yet reached today` };
+
+  if (now.getHours() < 9) {
+    return { shouldSend: false, reason: 'Scheduled time (9:00 AM) not yet reached today' };
   }
-  
-  // Check if weekly digest has already been sent this week
-  // Calculate start of current week (Sunday)
-  const startOfWeek = new Date(now);
-  const daysFromSunday = now.getDay();
-  startOfWeek.setDate(now.getDate() - daysFromSunday);
-  startOfWeek.setHours(0, 0, 0, 0);
-  
-  const lastWeeklySent = preferences.lastWeeklySent;
-  if (lastWeeklySent) {
-    const lastSentDate = lastWeeklySent.toDate ? lastWeeklySent.toDate() : new Date(lastWeeklySent);
-    
-    // Check if last sent date is within current week
+
+  if (preferences.lastWeeklySent) {
+    const lastSentDate = new Date(preferences.lastWeeklySent);
+
+    const startOfWeek = new Date(now);
+    const daysFromSunday = now.getDay();
+    startOfWeek.setDate(now.getDate() - daysFromSunday);
+    startOfWeek.setHours(0, 0, 0, 0);
+
     if (lastSentDate >= startOfWeek) {
-      return { shouldSend: false, reason: `Weekly digest already sent this week on ${lastSentDate.toLocaleDateString()} at ${lastSentDate.toLocaleTimeString()}` };
+      return {
+        shouldSend: false,
+        reason: `Weekly digest already sent this week on ${lastSentDate.toLocaleDateString()} at ${lastSentDate.toLocaleTimeString()}`,
+      };
     }
   }
-  
-  return { shouldSend: true, reason: `Scheduled day and time passed, not yet sent this week` };
+
+  return { shouldSend: true, reason: 'Scheduled day and time passed, not yet sent this week' };
 }
 
-// Separate function for handling push notifications
-async function processPushNotifications(db: any, now: Date): Promise<any> {
-  console.log('🔔 Processing push notifications...');
-  
-  const results = {
+function milestoneNotificationEnabled(
+  notificationSettings: Prisma.JsonValue | null,
+  key: string
+): boolean {
+  if (!isJsonObject(notificationSettings)) {
+    return false;
+  }
+
+  return notificationSettings[key] === true;
+}
+
+function hasTaskNotification(
+  notifications: Array<{ relatedTaskId: string | null; data: Prisma.JsonValue | null; createdAt: Date }>,
+  taskId: string,
+  type: string,
+  createdAfter?: Date
+): boolean {
+  return notifications.some((notification) => {
+    if (notification.relatedTaskId !== taskId) {
+      return false;
+    }
+
+    if (createdAfter && notification.createdAt < createdAfter) {
+      return false;
+    }
+
+    return getNotificationDataType(notification.data) === type;
+  });
+}
+
+async function processPushNotifications(now: Date): Promise<PushResults> {
+  const results: PushResults = {
     type: 'push_notifications',
     startTime: now.toISOString(),
     usersProcessed: 0,
@@ -334,629 +439,576 @@ async function processPushNotifications(db: any, now: Date): Promise<any> {
     totalNotificationsSent: 0,
     totalSubscriptionsProcessed: 0,
     invalidSubscriptionsRemoved: 0,
-    errors: [] as string[],
-    successLogs: [] as string[],
-    userDetails: [] as any[],
-    summary: {} as any
+    errors: [],
+    successLogs: [],
+    userDetails: [],
+    summary: {},
   };
 
-  // Get all users who have push notification preferences
-  const preferencesSnapshot = await db.collection('notificationPreferences').get();
-  
+  const preferences = await prisma.notificationPreference.findMany();
 
-  for (const prefDoc of preferencesSnapshot.docs) {
-    
-    const userEmail = prefDoc.id;
-    console.log("🚀 > processPushNotifications > userEmail:", userEmail)
-    const preferences = prefDoc.data();
-
-    const userDetail = {
+  for (const preference of preferences) {
+    const userEmail = preference.userEmail;
+    const userDetail: Record<string, unknown> = {
       userEmail,
       preferences: {
-        enabled: preferences.enabled,
-        overdueAlerts: preferences.overdueAlerts,
-        taskReminders: preferences.taskReminders,
-        quietHours: preferences.quietHours
+        enabled: preference.enabled,
+        overdueAlerts: preference.overdueAlerts,
+        taskReminders: preference.taskReminders,
+        quietHours: preference.quietHours,
       },
       status: '',
       notifications: {
         overdue: 0,
         reminders: 0,
-        total: 0
+        total: 0,
       },
       subscriptions: {
         total: 0,
         active: 0,
-        removed: 0
+        removed: 0,
       },
       tasks: {
         total: 0,
         overdue: 0,
-        reminders: 0
+        reminders: 0,
       },
       errors: [] as string[],
-      logs: [] as string[]
+      logs: [] as string[],
     };
 
     try {
-      // Skip if notifications are disabled for this user
-      if (!preferences.enabled) {
+      if (!preference.enabled) {
         userDetail.status = 'skipped_disabled';
-        userDetail.logs.push('Notifications disabled for user');
-        results.usersSkipped++;
+        (userDetail.logs as string[]).push('Notifications disabled for user');
+        results.usersSkipped += 1;
         results.userDetails.push(userDetail);
         continue;
       }
 
-      // Check quiet hours
-      if (isInQuietHours(preferences.quietHours)) {
+      if (isInQuietHours(preference.quietHours)) {
         userDetail.status = 'skipped_quiet_hours';
-        userDetail.logs.push('User in quiet hours');
-        console.log(`Skipping user ${userEmail} - in quiet hours`);
-        results.usersSkipped++;
+        (userDetail.logs as string[]).push('User in quiet hours');
+        results.usersSkipped += 1;
         results.userDetails.push(userDetail);
         continue;
       }
 
-      // Get user's push subscriptions
-      const subscriptionsSnapshot = await db
-        .collection('pushSubscriptions')
-        .where('userEmail', '==', userEmail)
-        .get();
-
-      if (subscriptionsSnapshot.empty) {
-        userDetail.status = 'skipped_no_subscriptions';
-        userDetail.logs.push('No push subscriptions found');
-        results.usersSkipped++;
-        results.userDetails.push(userDetail);
-        continue;
-      }
-
-      const subscriptions = subscriptionsSnapshot.docs;
-      userDetail.subscriptions.total = subscriptions.length;
-      userDetail.logs.push(`Found ${subscriptions.length} push subscriptions`);
-      results.totalSubscriptionsProcessed += subscriptions.length;
-
-      // Fetch all tasks for this user once
-      const allTasksSnapshot = await db
-        .collection('tasks')
-        .where('userEmail', '==', userEmail)
-        .get();
-      
-      userDetail.tasks.total = allTasksSnapshot.docs.length;
-      userDetail.logs.push(`Found ${allTasksSnapshot.docs.length} total tasks`);
-      
-      function toMillis(val: any): number | undefined {
-        if (!val) return undefined;
-        if (typeof val === 'number') return val;
-        if (typeof val === 'object' && typeof val._seconds === 'number') {
-          return val._seconds * 1000 + Math.floor((val._nanoseconds || 0) / 1e6);
-        }
-        return undefined;
-      }
-      const allTasks = allTasksSnapshot.docs.map((doc: any) => {
-        const data = doc.data();
-        // Normalize all relevant fields to millis if present
-        return {
-          ...data,
-          reminderAt: toMillis(data.reminderAt),
-          completedAt: toMillis(data.completedAt),
-          notifiedAt: toMillis(data.notifiedAt),
-          lastRemindedAt: toMillis(data.lastRemindedAt),
-          _doc: doc
-        };
+      const subscriptions = await prisma.pushSubscription.findMany({
+        where: {
+          userEmail,
+          isActive: true,
+        },
+        orderBy: { createdAt: 'asc' },
       });
 
-      // Check for overdue tasks
-      if (preferences.overdueAlerts) {
-        const overdueTasks = allTasks.filter((task: any) => {
-          return task.reminderAt !=  undefined;
-        });
-        
-        userDetail.tasks.overdue = overdueTasks.length;
-        userDetail.logs.push(`Found ${overdueTasks.length} tasks with reminder times`);
-        
-        // Only process tasks that have reminderAt and completedAt fields
-        const twentyFourHoursAgo = now.getTime() - (24 * 60 * 60 * 1000);
-        const overdueTasksToNotify = overdueTasks.filter((task: any) => {
-          if (typeof task.completedAt !== 'undefined' && task.completedAt) return false;
-          if (typeof task.notifiedAt !== 'undefined' && task.notifiedAt >= twentyFourHoursAgo) return false;
-          
-          return task.reminderAt < now.getTime();
-        });
-
-        userDetail.logs.push(`${overdueTasksToNotify.length} overdue tasks to notify`);
-
-        if (overdueTasksToNotify.length > 0) {
-          for (const task of overdueTasksToNotify) {
-            
-            const taskTitle = (task._doc && typeof task._doc.data === 'function' && task._doc.data().title) ? task._doc.data().title : 'Untitled Task';
-            
-            // Generate notification ID
-            const notificationId = `notif_${userEmail.replace('@', '_').replace('.', '_')}_${Date.now()}_overdue`;
-            
-            // Before creating a new overdue notification, check if there's an existing unread
-            // notification for the same task. If so, skip to avoid repeated notifications
-            // until user has seen/read the previous one.
-            try {
-              const unreadQuery = await db
-                .collection(`users/${userEmail}/notifications`)
-                .where('relatedTaskId', '==', task._doc.id)
-                .where('data.type', '==', 'overdue-task')
-                .where('isRead', '==', false)
-                .limit(1)
-                .get();
-
-              if (!unreadQuery.empty) {
-                console.log(`Skipping overdue notification for task ${task._doc.id} because an unread notification already exists.`);
-                continue;
-              }
-            } catch (checkErr) {
-              console.error('Error checking existing unread overdue notifications:', checkErr);
-              // If the check fails, fall back to original behaviour and proceed to notify
-            }
-
-            // Save notification to Firestore first
-            const notificationData = {
-              id: notificationId,
-              userEmail,
-              title: 'Task Overdue',
-              body: `"${taskTitle}" is overdue!`,
-              type: 'push',
-              relatedTaskId: task._doc.id,
-              isRead: false,
-              createdAt: new Date(),
-              data: {
-                type: 'overdue-task',
-                taskId: task._doc.id,
-                title: taskTitle,
-                timestamp: now.toISOString()
-              },
-            };
-            
-            await db.collection(`users/${userEmail}/notifications`).doc(notificationId).set(notificationData);
-            console.log(`💾 Saved overdue notification to Firestore: ${notificationId}`);
-            
-            const payload = {
-              title: 'Task Overdue',
-              body: `"${taskTitle}" is overdue!`,
-              icon: '/icon-192.png',
-              badge: '/icon-192.png',
-              tag: `overdue-task-${task._doc.id}`,
-              data: {
-                type: 'overdue-task',
-                taskId: task._doc.id,
-                title: taskTitle,
-                notificationId, // Include the Firestore notification ID
-                userEmail,
-                url: `/task/${task._doc.id}`,
-                timestamp: now.toISOString()
-              }
-            };
-
-            let successCount = 0;
-            // Send to all user's devices
-            for (const sub of subscriptions) {
-              
-              const result = await sendPushNotification(sub.data().subscription, payload);
-              if (result.success) {
-                results.totalNotificationsSent++;
-                successCount++;
-              } else if (result.error?.includes('410') || result.error?.includes('404')) {
-                // Remove invalid subscription
-                await db.collection('pushSubscriptions').doc(sub.id).delete();
-              }
-            }
-
-            // Update notification with sent status if at least one was successful
-            if (successCount > 0) {
-              await db.collection(`users/${userEmail}/notifications`).doc(notificationId).update({ 
-                sentAt: new Date() 
-              });
-              console.log(`📝 Updated overdue notification sentAt for ${notificationId}`);
-            }
-
-            // Mark this task as having been notified
-            await task._doc.ref.update({ notifiedAt: now.getTime() });
-            results.overdueNotifications++;
-          }
-        }
+      if (subscriptions.length === 0) {
+        userDetail.status = 'skipped_no_subscriptions';
+        (userDetail.logs as string[]).push('No push subscriptions found');
+        results.usersSkipped += 1;
+        results.userDetails.push(userDetail);
+        continue;
       }
 
-      // Check for upcoming task reminders
-      if (preferences.taskReminders) {
-        const reminderTime = now.getTime() + (2 * 60 * 60 * 1000); // 2 hours from now
-        const thirtyMinutesAgo = now.getTime() - (30 * 60 * 1000); // 30 minutes ago
-        const RemindTasks = allTasks.filter((task: any) => {
-                  return task.reminderAt !=  undefined;
-                });
-        // Only process tasks that have reminderAt field
-        const tasksToRemind = RemindTasks.filter((task: any) => {
-          if (typeof task.reminderAt !== 'number') return false;
-          if (typeof task.completedAt !== 'undefined' && task.completedAt) return false;
-          if (typeof task.lastRemindedAt !== 'undefined' && task.lastRemindedAt >= thirtyMinutesAgo) return false;
-          if (task.onlyNotifyAtReminder) return false;
+      (userDetail.subscriptions as Record<string, unknown>).total = subscriptions.length;
+      (userDetail.subscriptions as Record<string, unknown>).active = subscriptions.length;
+      results.totalSubscriptionsProcessed += subscriptions.length;
 
-          return task.reminderAt > now.getTime() && task.reminderAt <= reminderTime;
-        });
+      const [totalTaskCount, tasksWithReminder, unreadNotifications, recentNotifications, milestones] =
+        await Promise.all([
+          prisma.task.count({ where: { userEmail } }),
+          prisma.task.findMany({
+            where: {
+              userEmail,
+              reminderAt: { not: null },
+            },
+            select: {
+              id: true,
+              title: true,
+              reminderAt: true,
+              completedAt: true,
+              notifiedAt: true,
+              onlyNotifyAtReminder: true,
+            },
+          }),
+          prisma.notification.findMany({
+            where: {
+              userEmail,
+              isRead: false,
+            },
+            select: {
+              relatedTaskId: true,
+              data: true,
+              createdAt: true,
+            },
+          }),
+          prisma.notification.findMany({
+            where: {
+              userEmail,
+              createdAt: {
+                gte: new Date(now.getTime() - 30 * 60 * 1000),
+              },
+            },
+            select: {
+              relatedTaskId: true,
+              data: true,
+              createdAt: true,
+            },
+          }),
+          prisma.milestone.findMany({
+            where: {
+              userEmail,
+              isActive: true,
+            },
+          }),
+        ]);
 
-        for (const task of tasksToRemind as any[]) {
-          
-          const timeUntilDue = Math.round((task.reminderAt - now.getTime()) / (60 * 1000));
-          const taskTitle = (task._doc && typeof task._doc.data === 'function' && task._doc.data().title) ? task._doc.data().title : 'Untitled Task';
-          
-          // Generate notification ID
-          const notificationId = `notif_${userEmail.replace('@', '_').replace('.', '_')}_${Date.now()}_reminder`;
-          
-          // Save notification to Firestore first
-          // Before creating a new reminder notification, check if there's an existing unread
-          // reminder for the same task. If so, skip sending another reminder until the
-          // user has seen/read the previous one.
-          try {
-            const unreadReminderQuery = await db
-              .collection(`users/${userEmail}/notifications`)
-              .where('relatedTaskId', '==', task._doc.id)
-              .where('data.type', '==', 'task-reminder')
-              .where('isRead', '==', false)
-              .limit(1)
-              .get();
+      (userDetail.tasks as Record<string, unknown>).total = totalTaskCount;
 
-            if (!unreadReminderQuery.empty) {
-              console.log(`Skipping reminder for task ${task._doc.id} because an unread reminder notification already exists.`);
-              continue;
-            }
-          } catch (checkErr) {
-            console.error('Error checking existing unread reminder notifications:', checkErr);
-            // Proceed with sending if the check fails
+      if (preference.overdueAlerts) {
+        const twentyFourHoursAgo = now.getTime() - 24 * 60 * 60 * 1000;
+        const overdueTasks = tasksWithReminder.filter((task) => {
+          if (!task.reminderAt) {
+            return false;
           }
 
-          const notificationData = {
-            id: notificationId,
-            userEmail,
-            title: 'Task Reminder',
-            body: `"${taskTitle}" is due in ${timeUntilDue} minutes`,
-            type: 'push',
-            relatedTaskId: task._doc.id,
-            isRead: false,
-            createdAt: new Date(),
+          if (task.completedAt) {
+            return false;
+          }
+
+          if (task.notifiedAt && task.notifiedAt.getTime() >= twentyFourHoursAgo) {
+            return false;
+          }
+
+          return task.reminderAt.getTime() < now.getTime();
+        });
+
+        (userDetail.tasks as Record<string, unknown>).overdue = overdueTasks.length;
+
+        for (const task of overdueTasks) {
+          if (hasTaskNotification(unreadNotifications, task.id, 'overdue-task')) {
+            continue;
+          }
+
+          const createdNotification = await prisma.notification.create({
             data: {
-              type: 'task-reminder',
-              taskId: task._doc.id,
-              title: taskTitle,
-              timestamp: now.toISOString()
+              userEmail,
+              title: 'Task Overdue',
+              body: `"${task.title}" is overdue!`,
+              type: 'push',
+              relatedTaskId: task.id,
+              isRead: false,
+              data: sanitizeJsonValue({
+                type: 'overdue-task',
+                taskId: task.id,
+                title: task.title,
+                timestamp: now.toISOString(),
+              }) as Prisma.InputJsonValue,
             },
-          };
-          
-          await db.collection(`users/${userEmail}/notifications`).doc(notificationId).set(notificationData);
-          console.log(`💾 Saved reminder notification to Firestore: ${notificationId}`);
-          
+            select: { id: true },
+          });
+
           const payload = {
-            title: 'Task Reminder',
-            body: `"${taskTitle}" is due in ${timeUntilDue} minutes`,
+            title: 'Task Overdue',
+            body: `"${task.title}" is overdue!`,
             icon: '/icon-192.png',
             badge: '/icon-192.png',
-            tag: `task-reminder-${task._doc.id}`,
+            tag: `overdue-task-${task.id}`,
             data: {
-              type: 'task-reminder',
-              taskId: task._doc.id,
-              title: taskTitle,
-              notificationId, // Include the Firestore notification ID
+              type: 'overdue-task',
+              taskId: task.id,
+              title: task.title,
+              notificationId: createdNotification.id,
               userEmail,
-              url: `/task/${task._doc.id}`,
-              timestamp: now.toISOString()
-            }
+              url: `/task/${task.id}`,
+              timestamp: now.toISOString(),
+            },
           };
 
           let successCount = 0;
-          // Send to all user's devices
-          for (const sub of subscriptions) {
-            
-            const result = await sendPushNotification(sub.data().subscription, payload);
-            if (result.success) {
-              results.totalNotificationsSent++;
-              successCount++;
-            } else if (result.error?.includes('410') || result.error?.includes('404')) {
-              // Remove invalid subscription
-              await db.collection('pushSubscriptions').doc(sub.id).delete();
+          for (const subscription of subscriptions) {
+            const sendResult = await sendPushNotification(subscription, payload);
+            if (sendResult.success) {
+              successCount += 1;
+              results.totalNotificationsSent += 1;
+            } else if (sendResult.invalid) {
+              results.invalidSubscriptionsRemoved += 1;
+              await deactivateSubscription(subscription.id, sendResult.error || 'invalid_subscription');
             }
           }
 
-          // Update notification with sent status if at least one was successful
           if (successCount > 0) {
-            await db.collection(`users/${userEmail}/notifications`).doc(notificationId).update({ 
-              sentAt: new Date() 
+            await prisma.notification.update({
+              where: { id: createdNotification.id },
+              data: { sentAt: new Date() },
             });
-            console.log(`📝 Updated reminder notification sentAt for ${notificationId}`);
           }
 
-          // Update reminder timestamp
-          await task._doc.ref.update({ lastRemindedAt: now.getTime() });
-          results.reminderNotifications++;
+          await prisma.task.updateMany({
+            where: {
+              id: task.id,
+              userEmail,
+            },
+            data: {
+              notifiedAt: now,
+            },
+          });
+
+          unreadNotifications.push({
+            relatedTaskId: task.id,
+            data: { type: 'overdue-task' } as Prisma.JsonValue,
+            createdAt: now,
+          });
+
+          results.overdueNotifications += 1;
+          (userDetail.notifications as Record<string, number>).overdue += 1;
         }
       }
 
-      // Process milestone notifications
+      if (preference.taskReminders) {
+        const reminderDeadline = now.getTime() + 2 * 60 * 60 * 1000;
+        const recentCutoff = new Date(now.getTime() - 30 * 60 * 1000);
+
+        const tasksToRemind = tasksWithReminder.filter((task) => {
+          if (!task.reminderAt) {
+            return false;
+          }
+
+          if (task.completedAt) {
+            return false;
+          }
+
+          if (task.onlyNotifyAtReminder) {
+            return false;
+          }
+
+          const reminderAtMillis = task.reminderAt.getTime();
+          return reminderAtMillis > now.getTime() && reminderAtMillis <= reminderDeadline;
+        });
+
+        (userDetail.tasks as Record<string, unknown>).reminders = tasksToRemind.length;
+
+        for (const task of tasksToRemind) {
+          const hasUnreadReminder = hasTaskNotification(unreadNotifications, task.id, 'task-reminder');
+          const hasRecentReminder = hasTaskNotification(
+            recentNotifications,
+            task.id,
+            'task-reminder',
+            recentCutoff
+          );
+
+          if (hasUnreadReminder || hasRecentReminder) {
+            continue;
+          }
+
+          const timeUntilDue = Math.max(0, Math.round((task.reminderAt!.getTime() - now.getTime()) / (60 * 1000)));
+
+          const createdNotification = await prisma.notification.create({
+            data: {
+              userEmail,
+              title: 'Task Reminder',
+              body: `"${task.title}" is due in ${timeUntilDue} minutes`,
+              type: 'push',
+              relatedTaskId: task.id,
+              isRead: false,
+              data: sanitizeJsonValue({
+                type: 'task-reminder',
+                taskId: task.id,
+                title: task.title,
+                timestamp: now.toISOString(),
+              }) as Prisma.InputJsonValue,
+            },
+            select: { id: true },
+          });
+
+          const payload = {
+            title: 'Task Reminder',
+            body: `"${task.title}" is due in ${timeUntilDue} minutes`,
+            icon: '/icon-192.png',
+            badge: '/icon-192.png',
+            tag: `task-reminder-${task.id}`,
+            data: {
+              type: 'task-reminder',
+              taskId: task.id,
+              title: task.title,
+              notificationId: createdNotification.id,
+              userEmail,
+              url: `/task/${task.id}`,
+              timestamp: now.toISOString(),
+            },
+          };
+
+          let successCount = 0;
+          for (const subscription of subscriptions) {
+            const sendResult = await sendPushNotification(subscription, payload);
+            if (sendResult.success) {
+              successCount += 1;
+              results.totalNotificationsSent += 1;
+            } else if (sendResult.invalid) {
+              results.invalidSubscriptionsRemoved += 1;
+              await deactivateSubscription(subscription.id, sendResult.error || 'invalid_subscription');
+            }
+          }
+
+          if (successCount > 0) {
+            await prisma.notification.update({
+              where: { id: createdNotification.id },
+              data: { sentAt: new Date() },
+            });
+          }
+
+          unreadNotifications.push({
+            relatedTaskId: task.id,
+            data: { type: 'task-reminder' } as Prisma.JsonValue,
+            createdAt: now,
+          });
+          recentNotifications.push({
+            relatedTaskId: task.id,
+            data: { type: 'task-reminder' } as Prisma.JsonValue,
+            createdAt: now,
+          });
+
+          results.reminderNotifications += 1;
+          (userDetail.notifications as Record<string, number>).reminders += 1;
+        }
+      }
+
       try {
-        userDetail.logs.push('Checking milestone notifications...');
-        
-        // Get user's milestones
-        const milestonesSnapshot = await db
-          .collection(`users/${userEmail}/milestones`)
-          .where('isActive', '==', true)
-          .get();
+        const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const todaysNotifications = await prisma.notification.findMany({
+          where: {
+            userEmail,
+            createdAt: { gte: todayStart },
+          },
+          select: {
+            data: true,
+          },
+        });
 
-        if (!milestonesSnapshot.empty) {
-          userDetail.logs.push(`Found ${milestonesSnapshot.docs.length} active milestones`);
-          
-          for (const milestoneDoc of milestonesSnapshot.docs) {
-            const milestone = { id: milestoneDoc.id, ...milestoneDoc.data() };
-            
-            userDetail.logs.push(`Processing milestone: ${milestone.title} (isRecurring: ${milestone.isRecurring})`);
-            console.log(`🔍 Processing milestone:`, {
-              id: milestone.id,
-              title: milestone.title,
-              isRecurring: milestone.isRecurring,
-              originalDate: milestone.originalDate,
-              notificationSettings: milestone.notificationSettings
-            });
-            
-            // Calculate days until next anniversary (TIMEZONE-AWARE)
-            let daysUntil = null;
-            if (milestone.isRecurring) {
-              const originalDate = new Date(milestone.originalDate);
-              
-              // Get the current date in the user's timezone (Asia/Karachi for Pakistan timezone)
-              const nowInUserTZ = getCurrentDateInTimezone('Asia/Karachi');
-              const currentYear = nowInUserTZ.getFullYear();
-              
-              userDetail.logs.push(`Original date: ${originalDate.toDateString()}, Current year: ${currentYear}, Now in TZ: ${nowInUserTZ.toDateString()}`);
-              
-              // Calculate this year's anniversary at midnight in UTC (equivalent to midnight in Pakistan timezone)
-              let thisYearAnniversary = new Date(currentYear, originalDate.getMonth(), originalDate.getDate(), 0, 0, 0, 0);
-              
-              // If this year's anniversary has passed, use next year's
-              if (thisYearAnniversary < nowInUserTZ) {
-                thisYearAnniversary = new Date(currentYear + 1, originalDate.getMonth(), originalDate.getDate(), 0, 0, 0, 0);
-              }
-              
-              // Calculate days between two dates at midnight (this gives correct day count)
-              const timeDiffMs = thisYearAnniversary.getTime() - nowInUserTZ.getTime();
-              daysUntil = Math.ceil(timeDiffMs / (1000 * 60 * 60 * 24));
-              
-              // If daysUntil is slightly negative due to rounding, set to 0 (same day)
-              if (daysUntil < 0 && daysUntil > -1) {
-                daysUntil = 0;
-              }
-              
-              userDetail.logs.push(`Next anniversary: ${thisYearAnniversary.toDateString()}, Days until: ${daysUntil} (currentDayInTZ: ${nowInUserTZ.toDateString()})`);
-              console.log(`📅 Anniversary calculation (TIMEZONE-AWARE):`, {
-                originalDate: originalDate.toISOString(),
-                thisYearAnniversary: thisYearAnniversary.toISOString(),
-                nowInUserTimezone: nowInUserTZ.toISOString(),
+        for (const milestone of milestones) {
+          if (!milestone.isRecurring) {
+            continue;
+          }
+
+          const originalDate = new Date(milestone.originalDate);
+          const nowInUserTimezone = getCurrentDateInTimezone('Asia/Karachi');
+          const currentYear = nowInUserTimezone.getFullYear();
+
+          let thisYearAnniversary = new Date(
+            currentYear,
+            originalDate.getMonth(),
+            originalDate.getDate(),
+            0,
+            0,
+            0,
+            0
+          );
+
+          if (thisYearAnniversary < nowInUserTimezone) {
+            thisYearAnniversary = new Date(
+              currentYear + 1,
+              originalDate.getMonth(),
+              originalDate.getDate(),
+              0,
+              0,
+              0,
+              0
+            );
+          }
+
+          const diffMs = thisYearAnniversary.getTime() - nowInUserTimezone.getTime();
+          const daysUntil = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+
+          let shouldNotify = false;
+          let notificationType = '';
+
+          if (daysUntil === 0 && milestoneNotificationEnabled(milestone.notificationSettings, 'onTheDay')) {
+            shouldNotify = true;
+            notificationType = 'on-the-day';
+          } else if (
+            daysUntil === 1 &&
+            milestoneNotificationEnabled(milestone.notificationSettings, 'oneDayBefore')
+          ) {
+            shouldNotify = true;
+            notificationType = 'one-day-before';
+          } else if (
+            daysUntil === 3 &&
+            milestoneNotificationEnabled(milestone.notificationSettings, 'threeDaysBefore')
+          ) {
+            shouldNotify = true;
+            notificationType = 'three-days-before';
+          } else if (
+            daysUntil === 7 &&
+            milestoneNotificationEnabled(milestone.notificationSettings, 'oneWeekBefore')
+          ) {
+            shouldNotify = true;
+            notificationType = 'one-week-before';
+          } else if (
+            daysUntil === 30 &&
+            milestoneNotificationEnabled(milestone.notificationSettings, 'oneMonthBefore')
+          ) {
+            shouldNotify = true;
+            notificationType = 'one-month-before';
+          }
+
+          if (!shouldNotify) {
+            continue;
+          }
+
+          const alreadySentToday = todaysNotifications.some((notification) => {
+            const dataType = getNotificationDataType(notification.data);
+            const dataMilestoneId = getNotificationDataString(notification.data, 'milestoneId');
+            const dataNotificationType = getNotificationDataString(notification.data, 'notificationType');
+
+            return (
+              dataType === 'milestone-reminder' &&
+              dataMilestoneId === milestone.id &&
+              dataNotificationType === notificationType
+            );
+          });
+
+          if (alreadySentToday) {
+            continue;
+          }
+
+          const yearsSince = Math.floor(
+            (now.getTime() - milestone.originalDate.getTime()) / (1000 * 60 * 60 * 24 * 365.25)
+          );
+
+          const prefix = typeof milestone.icon === 'string' && milestone.icon.trim() ? `${milestone.icon} ` : '';
+          const title =
+            daysUntil === 0
+              ? `${prefix}${milestone.title}`
+              : `${prefix}Upcoming Milestone`;
+          const body =
+            daysUntil === 0
+              ? milestone.isRecurring
+                ? `Today marks ${yearsSince + 1} years since ${milestone.title}!`
+                : `Anniversary of ${milestone.title}`
+              : `${milestone.title} is in ${daysUntil} days`;
+
+          const createdNotification = await prisma.notification.create({
+            data: {
+              userEmail,
+              title,
+              body,
+              type: 'push',
+              isRead: false,
+              data: sanitizeJsonValue({
+                type: 'milestone-reminder',
+                milestoneId: milestone.id,
+                milestoneTitle: milestone.title,
+                milestoneType: milestone.type,
+                notificationType,
                 daysUntil,
-                nowServerTime: now.toISOString()
-              });
-            }
-            
-            // Check if notification should be sent based on milestone settings
-            let shouldNotify = false;
-            let notificationType = '';
-            
-            userDetail.logs.push(`Checking notification rules for ${milestone.title}, daysUntil: ${daysUntil}`);
-            
-            if (daysUntil !== null) {
-              console.log(`📋 Notification settings for ${milestone.title}:`, milestone.notificationSettings);
-              
-              if (daysUntil === 0 && milestone.notificationSettings?.onTheDay) {
-                shouldNotify = true;
-                notificationType = 'on-the-day';
-                userDetail.logs.push(`✅ Should notify: On the day (${daysUntil} days)`);
-              } else if (daysUntil === 1 && milestone.notificationSettings?.oneDayBefore) {
-                shouldNotify = true;
-                notificationType = 'one-day-before';
-                userDetail.logs.push(`✅ Should notify: One day before (${daysUntil} days)`);
-              } else if (daysUntil === 3 && milestone.notificationSettings?.threeDaysBefore) {
-                shouldNotify = true;
-                notificationType = 'three-days-before';
-                userDetail.logs.push(`✅ Should notify: Three days before (${daysUntil} days)`);
-              } else if (daysUntil === 7 && milestone.notificationSettings?.oneWeekBefore) {
-                shouldNotify = true;
-                notificationType = 'one-week-before';
-                userDetail.logs.push(`✅ Should notify: One week before (${daysUntil} days)`);
-              } else if (daysUntil === 30 && milestone.notificationSettings?.oneMonthBefore) {
-                shouldNotify = true;
-                notificationType = 'one-month-before';
-                userDetail.logs.push(`✅ Should notify: One month before (${daysUntil} days)`);
-              } else {
-                userDetail.logs.push(`❌ No notification rule matches: daysUntil=${daysUntil}, settings enabled: onTheDay=${milestone.notificationSettings?.onTheDay}, oneDayBefore=${milestone.notificationSettings?.oneDayBefore}, threeDaysBefore=${milestone.notificationSettings?.threeDaysBefore}, oneWeekBefore=${milestone.notificationSettings?.oneWeekBefore}, oneMonthBefore=${milestone.notificationSettings?.oneMonthBefore}`);
-              }
-            } else {
-              userDetail.logs.push(`❌ daysUntil is null (non-recurring milestone)`);
-            }
-            
-            if (shouldNotify) {
-              // Check if we already sent a notification for this milestone today
-              const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-              const existingNotificationQuery = await db
-                .collection(`users/${userEmail}/notifications`)
-                .where('relatedMilestoneId', '==', milestone.id)
-                .where('data.type', '==', 'milestone-reminder')
-                .where('data.notificationType', '==', notificationType)
-                .where('createdAt', '>=', todayStart)
-                .limit(1)
-                .get();
+                yearsSince: yearsSince + (daysUntil === 0 ? 1 : 0),
+                timestamp: now.toISOString(),
+              }) as Prisma.InputJsonValue,
+            },
+            select: { id: true },
+          });
 
-              if (existingNotificationQuery.empty) {
-                // Generate notification content
-                const typeInfoMap = {
-                  birthday: { label: 'Birthday', icon: '🎂' },
-                  anniversary: { label: 'Anniversary', icon: '💖' },
-                  work_anniversary: { label: 'Work Anniversary', icon: '💼' },
-                  graduation: { label: 'Graduation', icon: '🎓' },
-                  exam_passed: { label: 'Exam Passed', icon: '📚' },
-                  achievement: { label: 'Achievement', icon: '🏆' },
-                  milestone: { label: 'Milestone', icon: '🎯' },
-                  purchase: { label: 'Purchase', icon: '🛍️' },
-                  relationship: { label: 'Relationship', icon: '❤️' },
-                  travel: { label: 'Travel', icon: '✈️' },
-                  custom: { label: 'Custom', icon: '⭐' },
-                };
-                
-                const typeInfo = typeInfoMap[milestone.type as keyof typeof typeInfoMap] || { label: 'Milestone', icon: '⭐' };
+          const payload = {
+            title,
+            body,
+            icon: '/icon-192.png',
+            badge: '/icon-192.png',
+            tag: `milestone-${milestone.id}-${notificationType}`,
+            data: {
+              type: 'milestone-reminder',
+              milestoneId: milestone.id,
+              notificationId: createdNotification.id,
+              userEmail,
+              url: '/milestones',
+              timestamp: now.toISOString(),
+            },
+          };
 
-                let title = '';
-                let body = '';
-                
-                // Calculate years since original event
-                const yearsSince = Math.floor((now.getTime() - milestone.originalDate) / (1000 * 60 * 60 * 24 * 365.25));
-                
-                if (daysUntil === 0) {
-                  title = `${milestone.icon || typeInfo.icon} ${milestone.title}`;
-                  body = milestone.isRecurring 
-                    ? `Today marks ${yearsSince + 1} year${yearsSince + 1 !== 1 ? 's' : ''} since ${milestone.title}!`
-                    : `Anniversary of ${milestone.title} (${yearsSince} year${yearsSince !== 1 ? 's' : ''} ago)`;
-                } else {
-                  const timeText = daysUntil === 1 ? 'tomorrow' : 
-                                 daysUntil === 7 ? 'in 1 week' :
-                                 daysUntil === 30 ? 'in 1 month' :
-                                 `in ${daysUntil} days`;
-                  
-                  title = `${milestone.icon || typeInfo.icon} Upcoming ${typeInfo.label}`;
-                  body = milestone.isRecurring
-                    ? `${milestone.title} is ${timeText} (${yearsSince + 1} year${yearsSince + 1 !== 1 ? 's' : ''})`
-                    : `${milestone.title} anniversary is ${timeText}`;
-                }
-
-                // Generate notification ID
-                const notificationId = `notif_${userEmail.replace('@', '_').replace('.', '_')}_${Date.now()}_milestone`;
-                
-                // Save notification to Firestore
-                const notificationData = {
-                  id: notificationId,
-                  userEmail,
-                  title,
-                  body,
-                  type: 'push',
-                  relatedMilestoneId: milestone.id,
-                  isRead: false,
-                  createdAt: new Date(),
-                  data: {
-                    type: 'milestone-reminder',
-                    milestoneId: milestone.id,
-                    milestoneTitle: milestone.title,
-                    milestoneType: milestone.type,
-                    notificationType,
-                    daysUntil,
-                    yearsSince: yearsSince + (daysUntil === 0 ? 1 : 0),
-                    timestamp: now.toISOString()
-                  },
-                };
-                
-                await db.collection(`users/${userEmail}/notifications`).doc(notificationId).set(notificationData);
-                console.log(`💾 Saved milestone notification to Firestore: ${notificationId}`);
-                
-                const payload = {
-                  title,
-                  body,
-                  icon: '/icon-192.png',
-                  badge: '/icon-192.png',
-                  tag: `milestone-${milestone.id}-${notificationType}`,
-                  data: {
-                    type: 'milestone-reminder',
-                    milestoneId: milestone.id,
-                    notificationId,
-                    userEmail,
-                    url: `/milestones`,
-                    timestamp: now.toISOString()
-                  }
-                };
-
-                let successCount = 0;
-                // Send to all user's devices
-                for (const sub of subscriptions) {
-                  const result = await sendPushNotification(sub.data().subscription, payload);
-                  if (result.success) {
-                    results.totalNotificationsSent++;
-                    successCount++;
-                  } else if (result.error?.includes('410') || result.error?.includes('404')) {
-                    // Remove invalid subscription
-                    await db.collection('pushSubscriptions').doc(sub.id).delete();
-                  }
-                }
-
-                // Update notification with sent status if at least one was successful
-                if (successCount > 0) {
-                  await db.collection(`users/${userEmail}/notifications`).doc(notificationId).update({ 
-                    sentAt: new Date() 
-                  });
-                  console.log(`📝 Updated milestone notification sentAt for ${notificationId}`);
-                }
-
-                // Update milestone with last notified timestamp
-                await db.collection(`users/${userEmail}/milestones`).doc(milestone.id).update({ 
-                  lastNotifiedAt: now.getTime() 
-                });
-                
-                userDetail.logs.push(`Sent milestone notification: ${title}`);
-                console.log(`🎉 Sent milestone notification for ${milestone.title} (${daysUntil} days until)`);
-              } else {
-                userDetail.logs.push(`Skipped milestone ${milestone.title} - already notified today`);
-              }
+          let successCount = 0;
+          for (const subscription of subscriptions) {
+            const sendResult = await sendPushNotification(subscription, payload);
+            if (sendResult.success) {
+              successCount += 1;
+              results.totalNotificationsSent += 1;
+            } else if (sendResult.invalid) {
+              results.invalidSubscriptionsRemoved += 1;
+              await deactivateSubscription(subscription.id, sendResult.error || 'invalid_subscription');
             }
           }
-        } else {
-          userDetail.logs.push('No active milestones found');
+
+          if (successCount > 0) {
+            await prisma.notification.update({
+              where: { id: createdNotification.id },
+              data: { sentAt: new Date() },
+            });
+          }
+
+          await prisma.milestone.updateMany({
+            where: {
+              id: milestone.id,
+              userEmail,
+            },
+            data: {
+              lastNotifiedAt: now,
+            },
+          });
+
+          todaysNotifications.push({
+            data: {
+              type: 'milestone-reminder',
+              milestoneId: milestone.id,
+              notificationType,
+            } as Prisma.JsonValue,
+          });
         }
-      } catch (milestoneError: any) {
-        console.error(`Error processing milestones for user ${userEmail}:`, milestoneError);
-        userDetail.errors.push(`Milestone processing error: ${milestoneError.message}`);
+      } catch (milestoneError) {
+        const message = milestoneError instanceof Error ? milestoneError.message : 'Unknown milestone error';
+        (userDetail.errors as string[]).push(`Milestone processing error: ${message}`);
       }
 
+      const notifications = userDetail.notifications as Record<string, number>;
+      notifications.total = notifications.overdue + notifications.reminders;
       userDetail.status = 'processed';
-      userDetail.notifications.total = userDetail.notifications.overdue + userDetail.notifications.reminders;
-      userDetail.logs.push(`Completed processing: ${userDetail.notifications.total} notifications sent`);
-      results.usersProcessed++;
-      results.userDetails.push(userDetail);
-      results.successLogs.push(`✅ User ${userEmail}: ${userDetail.notifications.total} notifications sent`);
 
-    } catch (error: any) {
-      userDetail.status = 'error';
-      userDetail.errors.push(error.message);
+      results.usersProcessed += 1;
       results.userDetails.push(userDetail);
-      console.error(`Error processing notifications for user ${userEmail}:`, error);
-      results.errors.push(`User ${userEmail}: ${error.message}`);
+      results.successLogs.push(`User ${userEmail}: ${notifications.total} notifications sent`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      (userDetail.errors as string[]).push(message);
+      userDetail.status = 'error';
+      results.userDetails.push(userDetail);
+      results.errors.push(`User ${userEmail}: ${message}`);
     }
   }
 
-  // Generate comprehensive summary
   const endTime = new Date();
   results.summary = {
-    totalUsers: preferencesSnapshot.docs.length,
+    totalUsers: preferences.length,
     usersProcessed: results.usersProcessed,
     usersSkipped: results.usersSkipped,
-    successRate: results.usersProcessed > 0 ? ((results.usersProcessed / (results.usersProcessed + results.usersSkipped)) * 100).toFixed(2) + '%' : '0%',
+    successRate:
+      results.usersProcessed > 0
+        ? `${((results.usersProcessed / Math.max(1, results.usersProcessed + results.usersSkipped)) * 100).toFixed(2)}%`
+        : '0%',
     notificationTypes: {
       overdue: results.overdueNotifications,
       reminders: results.reminderNotifications,
-      total: results.totalNotificationsSent
+      total: results.totalNotificationsSent,
     },
     subscriptions: {
       total: results.totalSubscriptionsProcessed,
-      invalidRemoved: results.invalidSubscriptionsRemoved
+      invalidRemoved: results.invalidSubscriptionsRemoved,
     },
     executionTime: endTime.getTime() - now.getTime(),
-    endTime: endTime.toISOString()
+    endTime: endTime.toISOString(),
   };
 
-  console.log('🔔 Push notifications processing completed:', results.summary);
   return results;
 }
 
-// Separate function for handling email digests
-async function processEmailDigests(db: any, now: Date): Promise<any> {
-  console.log('📧 Processing email digests...');
-  
-  const results = {
+async function processEmailDigests(now: Date): Promise<EmailResults> {
+  const results: EmailResults = {
     type: 'email_digests',
     startTime: now.toISOString(),
     usersProcessed: 0,
@@ -964,211 +1016,173 @@ async function processEmailDigests(db: any, now: Date): Promise<any> {
     dailyDigestsSent: 0,
     weeklyDigestsSent: 0,
     emailErrors: 0,
-    errors: [] as string[],
-    successLogs: [] as string[],
-    userDetails: [] as any[],
-    summary: {} as any
+    errors: [],
+    successLogs: [],
+    userDetails: [],
+    summary: {},
   };
 
-  // Get all users who have email preferences (independent of push notifications)
-  const emailPreferencesSnapshot = await db.collection('emailPreferences').get();
+  const emailPreferences = await prisma.emailPreference.findMany();
 
-  for (const emailPrefDoc of emailPreferencesSnapshot.docs) {
-    const userEmail = emailPrefDoc.id;
-    const emailPreferences = emailPrefDoc.data();
-
-    const userDetail = {
+  for (const preferences of emailPreferences) {
+    const userEmail = preferences.userEmail;
+    const userDetail: Record<string, unknown> = {
       userEmail,
       preferences: {
-        dailyDigest: emailPreferences.dailyDigest,
-        weeklyDigest: emailPreferences.weeklyDigest,
-        dailyDigestTime: emailPreferences.dailyDigestTime,
-        digestDay: emailPreferences.digestDay,
-        quietHours: emailPreferences.quietHours,
-        lastDailySent: emailPreferences.lastDailySent,
-        lastWeeklySent: emailPreferences.lastWeeklySent
+        dailyDigest: preferences.dailyDigest,
+        weeklyDigest: preferences.weeklyDigest,
+        dailyDigestTime: preferences.dailyDigestTime,
+        digestDay: preferences.digestDay,
+        quietHours: preferences.quietHours,
+        lastDailySent: preferences.lastDailySent,
+        lastWeeklySent: preferences.lastWeeklySent,
       },
       status: '',
       digests: {
         daily: { shouldSend: false, sent: false, error: null as string | null },
-        weekly: { shouldSend: false, sent: false, error: null as string | null }
+        weekly: { shouldSend: false, sent: false, error: null as string | null },
       },
       logs: [] as string[],
-      errors: [] as string[]
+      errors: [] as string[],
     };
 
     try {
-      console.log(`📧 Checking email preferences for user: ${userEmail}`);
-      userDetail.logs.push('Started email digest check');
-
       let digestsSent = 0;
 
-      // Check if it's time to send daily digest
-      const dailyCheck = await shouldSendDailyDigest(emailPreferences, now, db, userEmail);
-      userDetail.digests.daily.shouldSend = dailyCheck.shouldSend;
-      userDetail.logs.push(`Daily digest check: ${dailyCheck.reason}`);
-      
+      const dailyCheck = shouldSendDailyDigest(preferences, now);
+      (userDetail.digests as Record<string, Record<string, unknown>>).daily.shouldSend = dailyCheck.shouldSend;
+      (userDetail.logs as string[]).push(`Daily digest check: ${dailyCheck.reason}`);
+
       if (dailyCheck.shouldSend) {
-        console.log(`📧 Time to send daily digest for user: ${userEmail} - ${dailyCheck.reason}`);
-        
-        // Check quiet hours for email
-        if (!isInQuietHours(emailPreferences.quietHours)) {
+        if (!isInQuietHours(preferences.quietHours)) {
           const dailyResult = await sendDailyDigestForUser(userEmail);
-          userDetail.digests.daily.sent = dailyResult.success;
-          
+          (userDetail.digests as Record<string, Record<string, unknown>>).daily.sent = dailyResult.success;
+
           if (dailyResult.success) {
-            // Update the lastDailySent timestamp in emailPreferences
-            try {
-              await db.collection('emailPreferences').doc(userEmail).update({
-                lastDailySent: new Date()
-              });
-              console.log(`📝 Updated lastDailySent for ${userEmail}`);
-            } catch (updateError) {
-              console.error('Error updating lastDailySent:', updateError);
-            }
-            
-            results.dailyDigestsSent++;
-            digestsSent++;
-            userDetail.logs.push('✅ Daily digest sent successfully and timestamp updated');
-            console.log(`✅ Daily digest sent to ${userEmail}`);
+            await prisma.emailPreference.update({
+              where: { userEmail },
+              data: { lastDailySent: new Date() },
+            });
+
+            results.dailyDigestsSent += 1;
+            digestsSent += 1;
           } else {
-            userDetail.digests.daily.error = dailyResult.error || 'Unknown error';
-            results.emailErrors++;
-            userDetail.errors.push(`Daily digest failed: ${dailyResult.error}`);
-            results.errors.push(`Daily digest failed for ${userEmail}: ${dailyResult.error}`);
+            const errorMessage = dailyResult.error || 'Unknown error';
+            (userDetail.digests as Record<string, Record<string, unknown>>).daily.error = errorMessage;
+            (userDetail.errors as string[]).push(`Daily digest failed: ${errorMessage}`);
+            results.emailErrors += 1;
+            results.errors.push(`Daily digest failed for ${userEmail}: ${errorMessage}`);
           }
         } else {
-          userDetail.logs.push('🔇 Daily digest skipped - in quiet hours');
-          console.log(`🔇 Skipping daily digest for ${userEmail} - in quiet hours`);
+          (userDetail.logs as string[]).push('Daily digest skipped - in quiet hours');
         }
       }
 
-      // Check if it's time to send weekly digest
-      const weeklyCheck = await shouldSendWeeklyDigest(emailPreferences, now, db, userEmail);
-      userDetail.digests.weekly.shouldSend = weeklyCheck.shouldSend;
-      userDetail.logs.push(`Weekly digest check: ${weeklyCheck.reason}`);
-      
+      const weeklyCheck = shouldSendWeeklyDigest(preferences, now);
+      (userDetail.digests as Record<string, Record<string, unknown>>).weekly.shouldSend = weeklyCheck.shouldSend;
+      (userDetail.logs as string[]).push(`Weekly digest check: ${weeklyCheck.reason}`);
+
       if (weeklyCheck.shouldSend) {
-        console.log(`📧 Time to send weekly digest for user: ${userEmail} - ${weeklyCheck.reason}`);
-        
-        // Check quiet hours for email
-        if (!isInQuietHours(emailPreferences.quietHours)) {
+        if (!isInQuietHours(preferences.quietHours)) {
           const weeklyResult = await sendWeeklyDigestForUser(userEmail);
-          userDetail.digests.weekly.sent = weeklyResult.success;
-          
+          (userDetail.digests as Record<string, Record<string, unknown>>).weekly.sent = weeklyResult.success;
+
           if (weeklyResult.success) {
-            // Update the lastWeeklySent timestamp in emailPreferences
-            try {
-              await db.collection('emailPreferences').doc(userEmail).update({
-                lastWeeklySent: new Date()
-              });
-              console.log(`📝 Updated lastWeeklySent for ${userEmail}`);
-            } catch (updateError) {
-              console.error('Error updating lastWeeklySent:', updateError);
-            }
-            
-            results.weeklyDigestsSent++;
-            digestsSent++;
-            userDetail.logs.push('✅ Weekly digest sent successfully and timestamp updated');
-            console.log(`✅ Weekly digest sent to ${userEmail}`);
+            await prisma.emailPreference.update({
+              where: { userEmail },
+              data: { lastWeeklySent: new Date() },
+            });
+
+            results.weeklyDigestsSent += 1;
+            digestsSent += 1;
           } else {
-            userDetail.digests.weekly.error = weeklyResult.error || 'Unknown error';
-            results.emailErrors++;
-            userDetail.errors.push(`Weekly digest failed: ${weeklyResult.error}`);
-            results.errors.push(`Weekly digest failed for ${userEmail}: ${weeklyResult.error}`);
+            const errorMessage = weeklyResult.error || 'Unknown error';
+            (userDetail.digests as Record<string, Record<string, unknown>>).weekly.error = errorMessage;
+            (userDetail.errors as string[]).push(`Weekly digest failed: ${errorMessage}`);
+            results.emailErrors += 1;
+            results.errors.push(`Weekly digest failed for ${userEmail}: ${errorMessage}`);
           }
         } else {
-          userDetail.logs.push('🔇 Weekly digest skipped - in quiet hours');
-          console.log(`🔇 Skipping weekly digest for ${userEmail} - in quiet hours`);
+          (userDetail.logs as string[]).push('Weekly digest skipped - in quiet hours');
         }
       }
 
       userDetail.status = digestsSent > 0 ? 'digests_sent' : 'no_digests_due';
-      userDetail.logs.push(`Completed processing: ${digestsSent} digests sent`);
-      results.usersProcessed++;
+      results.usersProcessed += 1;
       results.userDetails.push(userDetail);
-      
-      if (digestsSent > 0) {
-        results.successLogs.push(`✅ User ${userEmail}: ${digestsSent} digest(s) sent`);
-      }
 
-    } catch (emailError: any) {
+      if (digestsSent > 0) {
+        results.successLogs.push(`User ${userEmail}: ${digestsSent} digest(s) sent`);
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      (userDetail.errors as string[]).push(message);
       userDetail.status = 'error';
-      userDetail.errors.push(emailError.message);
       results.userDetails.push(userDetail);
-      console.error(`Error checking email digests for user ${userEmail}:`, emailError);
-      results.emailErrors++;
-      results.errors.push(`Email digest check failed for ${userEmail}: ${emailError.message}`);
+      results.emailErrors += 1;
+      results.errors.push(`Email digest check failed for ${userEmail}: ${message}`);
     }
   }
 
-  // Generate comprehensive summary
   const endTime = new Date();
   results.summary = {
-    totalUsers: emailPreferencesSnapshot.docs.length,
+    totalUsers: emailPreferences.length,
     usersProcessed: results.usersProcessed,
     digestsSent: {
       daily: results.dailyDigestsSent,
       weekly: results.weeklyDigestsSent,
-      total: results.dailyDigestsSent + results.weeklyDigestsSent
+      total: results.dailyDigestsSent + results.weeklyDigestsSent,
     },
     errors: {
       count: results.emailErrors,
-      rate: results.usersProcessed > 0 ? ((results.emailErrors / results.usersProcessed) * 100).toFixed(2) + '%' : '0%'
+      rate: results.usersProcessed > 0 ? `${((results.emailErrors / results.usersProcessed) * 100).toFixed(2)}%` : '0%',
     },
-    successRate: results.usersProcessed > 0 ? (((results.usersProcessed - results.emailErrors) / results.usersProcessed) * 100).toFixed(2) + '%' : '0%',
+    successRate:
+      results.usersProcessed > 0
+        ? `${(((results.usersProcessed - results.emailErrors) / results.usersProcessed) * 100).toFixed(2)}%`
+        : '0%',
     executionTime: endTime.getTime() - now.getTime(),
-    endTime: endTime.toISOString()
+    endTime: endTime.toISOString(),
   };
 
-  console.log('📧 Email digests processing completed:', results.summary);
   return results;
 }
 
-// Main function that orchestrates both push notifications and email digests
-async function executeNotificationCheck(): Promise<any> {
-  console.log('🚀 Executing comprehensive notification and email digest check...');
-  
-  const db = getFirestore();
+async function executeNotificationCheck(): Promise<Record<string, unknown>> {
   const now = new Date();
   const startTime = now.getTime();
-  
-  // Run push notifications and email digests independently
+
   const [pushResults, emailResults] = await Promise.all([
-    processPushNotifications(db, now),
-    processEmailDigests(db, now)
+    processPushNotifications(now),
+    processEmailDigests(now),
   ]);
 
   const endTime = new Date();
   const totalExecutionTime = endTime.getTime() - startTime;
 
-  // Create comprehensive combined results
-  const combinedResults = {
+  return {
     success: true,
     timestamp: now.toISOString(),
     executionTime: totalExecutionTime,
-    
-    // Overall summary
+
     overall: {
-      totalUsersChecked: (pushResults.summary?.totalUsers || 0) + (emailResults.summary?.totalUsers || 0),
+      totalUsersChecked:
+        Number(pushResults.summary.totalUsers || 0) + Number(emailResults.summary.totalUsers || 0),
       totalUsersProcessed: pushResults.usersProcessed + emailResults.usersProcessed,
       totalErrors: pushResults.errors.length + emailResults.errors.length,
-      executionTime: totalExecutionTime
+      executionTime: totalExecutionTime,
     },
 
-    // Push notifications detailed results
     pushNotifications: {
       ...pushResults,
-      description: 'Push notification processing results with detailed user information'
+      description: 'Push notification processing results with detailed user information',
     },
 
-    // Email digests detailed results  
     emailDigests: {
       ...emailResults,
-      description: 'Email digest processing results with detailed user information'
+      description: 'Email digest processing results with detailed user information',
     },
 
-    // Legacy compatibility (for existing integrations)
     usersProcessed: pushResults.usersProcessed + emailResults.usersProcessed,
     overdueNotifications: pushResults.overdueNotifications,
     reminderNotifications: pushResults.reminderNotifications,
@@ -1179,34 +1193,27 @@ async function executeNotificationCheck(): Promise<any> {
     syncErrors: [],
     errors: [...pushResults.errors, ...emailResults.errors],
 
-    // Comprehensive logs
     logs: {
       success: [...pushResults.successLogs, ...emailResults.successLogs],
       errors: [...pushResults.errors, ...emailResults.errors],
       combined: [
-        ...pushResults.successLogs.map((log: string) => `[PUSH] ${log}`),
-        ...emailResults.successLogs.map((log: string) => `[EMAIL] ${log}`),
-        ...pushResults.errors.map((error: string) => `[PUSH ERROR] ${error}`),
-        ...emailResults.errors.map((error: string) => `[EMAIL ERROR] ${error}`)
-      ]
-    }
+        ...pushResults.successLogs.map((log) => `[PUSH] ${log}`),
+        ...emailResults.successLogs.map((log) => `[EMAIL] ${log}`),
+        ...pushResults.errors.map((error) => `[PUSH ERROR] ${error}`),
+        ...emailResults.errors.map((error) => `[EMAIL ERROR] ${error}`),
+      ],
+    },
   };
-
-  console.log('🚀 Comprehensive notification check completed:', combinedResults.overall);
-  return combinedResults;
 }
 
-async function startNotificationLoop() {
+async function startNotificationLoop(): Promise<Record<string, unknown>> {
   if (await getLoopRunningState()) {
-    console.log('Notification loop already running, skipping...');
     return { success: true, message: 'Loop already running' };
   }
 
   await setLoopRunningState(true);
   loopStartTime = new Date();
-  
-  console.log('Starting 30-minute notification loop...');
-  
+
   const totalResults = {
     cycles: 0,
     totalUsersProcessed: 0,
@@ -1219,162 +1226,144 @@ async function startNotificationLoop() {
     totalSyncErrors: 0,
     allErrors: [] as string[],
     startTime: loopStartTime.toISOString(),
-    endTime: ''
+    endTime: '',
   };
 
   try {
-    // Run the loop for maximum Vercel timeout (58 minutes to be safe)
-    const maxRunTime = 24 * 60 * 60 * 1000; // 24 hours
-    const startTime = Date.now();
-    
-    while (Date.now() - startTime < maxRunTime && (await getLoopRunningState())) {
+    const maxRunTime = 24 * 60 * 60 * 1000;
+    const startedAt = Date.now();
+
+    while (Date.now() - startedAt < maxRunTime && (await getLoopRunningState())) {
       try {
         await setLoopRunningState(true);
 
-        console.log(`Starting notification check cycle ${totalResults.cycles + 1}...`);
-        const cycleStart = new Date();
         const cycleResults = await executeNotificationCheck();
-        
-        totalResults.cycles++;
-        totalResults.totalUsersProcessed += cycleResults.usersProcessed;
-        totalResults.totalOverdueNotifications += cycleResults.overdueNotifications;
-        totalResults.totalReminderNotifications += cycleResults.reminderNotifications;
-        totalResults.totalNotificationsSent += cycleResults.totalNotificationsSent;
-        totalResults.totalDailyDigestsSent += cycleResults.dailyDigestsSent;
-        totalResults.totalWeeklyDigestsSent += cycleResults.weeklyDigestsSent;
-        totalResults.totalEmailErrors += cycleResults.emailErrors;
-        totalResults.totalSyncErrors += cycleResults.syncErrors?.length || 0;
-        totalResults.allErrors.push(...cycleResults.errors);
-        
-        const cycleDuration = Date.now() - cycleStart.getTime();
-        console.log(`Cycle ${totalResults.cycles} completed in ${cycleDuration}ms:`, cycleResults);
-        
-        // Check if we have enough time for another full cycle (30 min + buffer)
-        const timeRemaining = maxRunTime - (Date.now() - startTime);
-        if (timeRemaining < 1 * 60 * 1000) { // Less than 1 minute remaining
-          console.log('Not enough time for another cycle, ending loop');
+        totalResults.cycles += 1;
+        totalResults.totalUsersProcessed += Number(cycleResults.usersProcessed || 0);
+        totalResults.totalOverdueNotifications += Number(cycleResults.overdueNotifications || 0);
+        totalResults.totalReminderNotifications += Number(cycleResults.reminderNotifications || 0);
+        totalResults.totalNotificationsSent += Number(cycleResults.totalNotificationsSent || 0);
+        totalResults.totalDailyDigestsSent += Number(cycleResults.dailyDigestsSent || 0);
+        totalResults.totalWeeklyDigestsSent += Number(cycleResults.weeklyDigestsSent || 0);
+        totalResults.totalEmailErrors += Number(cycleResults.emailErrors || 0);
+
+        const cycleErrors = Array.isArray(cycleResults.errors)
+          ? cycleResults.errors.filter((item): item is string => typeof item === 'string')
+          : [];
+        totalResults.allErrors.push(...cycleErrors);
+
+        const timeRemaining = maxRunTime - (Date.now() - startedAt);
+        if (timeRemaining < 60 * 1000) {
           break;
         }
-        
-        // Wait for 30 sec before next cycle
-        console.log('Waiting 30 seconds before next cycle...');
-        await new Promise(resolve => setTimeout(resolve, 30 * 1000)); // 30 seconds
 
-      } catch (cycleError: any) {
-        console.error('Error in notification cycle:', cycleError);
-        totalResults.allErrors.push(`Cycle ${totalResults.cycles + 1} error: ${cycleError.message}`);
-        // Continue with the loop even if one cycle fails
-        await new Promise(resolve => setTimeout(resolve, 0.5 * 60 * 1000)); // Still wait 30 minutes
+        await new Promise<void>((resolve) => {
+          setTimeout(() => resolve(), 30 * 1000);
+        });
+      } catch (cycleError) {
+        const message = cycleError instanceof Error ? cycleError.message : 'Unknown cycle error';
+        totalResults.allErrors.push(`Cycle ${totalResults.cycles + 1} error: ${message}`);
+
+        await new Promise<void>((resolve) => {
+          setTimeout(() => resolve(), 30 * 1000);
+        });
       }
     }
-    
   } finally {
     const endTime = new Date();
     totalResults.endTime = endTime.toISOString();
     await setLoopRunningState(false);
     loopStartTime = null;
-    
-    const totalDuration = endTime.getTime() - new Date(totalResults.startTime).getTime();
-    console.log(`Notification loop completed after ${Math.round(totalDuration / 60000)} minutes. Total results:`, totalResults);
   }
-  
+
   return {
     success: true,
     message: 'Notification loop completed',
-    results: totalResults
+    results: totalResults,
   };
 }
 
 export async function POST(request: NextRequest) {
-  console.log('Comprehensive notification check endpoint called...');
-  
   try {
     if (!isAuthorizedCronRequest(request)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Check if we want to run a single check or start the loop
     const url = new URL(request.url);
-    const mode = url.searchParams.get('mode') || 'single'; // Default to loop mode
+    const mode = url.searchParams.get('mode') || 'single';
 
     if (mode === 'single') {
-      // Single execution mode (for testing)
       const results = await executeNotificationCheck();
-      console.log('Single notification check completed:', results);
-      
       return NextResponse.json({
         success: true,
         message: 'Single notification check completed',
-        results
-      });
-    } else {
-      // Loop mode (default for production)
-      const results = await startNotificationLoop();
-      
-      return NextResponse.json({
-        success: true,
-        message: 'Notification loop process completed',
-        results
+        results,
       });
     }
 
-  } catch (error: any) {
+    const results = await startNotificationLoop();
+    return NextResponse.json({
+      success: true,
+      message: 'Notification loop process completed',
+      results,
+    });
+  } catch (error) {
     console.error('Error in comprehensive notification check:', error);
     await setLoopRunningState(false);
     loopStartTime = null;
+
     return NextResponse.json(
-      { error: 'Internal server error', details: error.message },
+      {
+        error: 'Internal server error',
+        details: error instanceof Error ? error.message : 'Unknown error',
+      },
       { status: 500 }
     );
   }
 }
-// Also support GET for testing
+
 export async function GET(request: NextRequest) {
-  // Generate a test notification to all users
   try {
     if (!isAuthorizedCronRequest(request)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const db = getFirestore();
-    const preferencesSnapshot = await db.collection('notificationPreferences').get();
+    const preferences = await prisma.notificationPreference.findMany();
     let totalSent = 0;
-    let errors: string[] = [];
+    const errors: string[] = [];
 
-    for (const prefDoc of preferencesSnapshot.docs) {
-      const userEmail = prefDoc.id;
-      const preferences = prefDoc.data();
+    for (const preference of preferences) {
+      const userEmail = preference.userEmail;
+      if (!preference.enabled) {
+        continue;
+      }
 
-      if (!preferences.enabled) continue;
-
-      const subscriptionsSnapshot = await db
-        .collection('pushSubscriptions')
-        .where('userEmail', '==', userEmail)
-        .get();
-
-      if (subscriptionsSnapshot.empty) continue;
-
-      // Generate notification ID
-      const notificationId = `notif_${userEmail.replace('@', '_').replace('.', '_')}_${Date.now()}_test`;
-      
-      // Save test notification to Firestore
-      const notificationData = {
-        id: notificationId,
-        userEmail,
-        title: 'Test Notification',
-        body: 'This is a test notification from MindMate.',
-        type: 'push',
-        relatedTaskId: null,
-        isRead: false,
-        createdAt: new Date(),
-        data: {
-          type: 'test',
-          timestamp: new Date().toISOString()
+      const subscriptions = await prisma.pushSubscription.findMany({
+        where: {
+          userEmail,
+          isActive: true,
         },
-      };
-      
-      await db.collection(`users/${userEmail}/notifications`).doc(notificationId).set(notificationData);
-      console.log(`💾 Saved test notification to Firestore: ${notificationId}`);
+        orderBy: { createdAt: 'asc' },
+      });
+
+      if (subscriptions.length === 0) {
+        continue;
+      }
+
+      const createdNotification = await prisma.notification.create({
+        data: {
+          userEmail,
+          title: 'Test Notification',
+          body: 'This is a test notification from MindMate.',
+          type: 'push',
+          isRead: false,
+          data: sanitizeJsonValue({
+            type: 'test',
+            timestamp: new Date().toISOString(),
+          }) as Prisma.InputJsonValue,
+        },
+        select: { id: true },
+      });
 
       const payload = {
         title: 'Test Notification',
@@ -1384,31 +1373,30 @@ export async function GET(request: NextRequest) {
         tag: 'test-notification',
         data: {
           type: 'test',
-          notificationId, // Include the Firestore notification ID
-          timestamp: new Date().toISOString()
-        }
+          notificationId: createdNotification.id,
+          timestamp: new Date().toISOString(),
+        },
       };
 
       let successCount = 0;
-      for (const sub of subscriptionsSnapshot.docs) {
-        const result = await sendPushNotification(sub.data().subscription, payload);
-        if (result.success) {
-          totalSent++;
-          successCount++;
+      for (const subscription of subscriptions) {
+        const sendResult = await sendPushNotification(subscription, payload);
+        if (sendResult.success) {
+          totalSent += 1;
+          successCount += 1;
         } else {
-          errors.push(`User ${userEmail} sub ${sub.id}: ${result.error}`);
-          if (result.error?.includes('410') || result.error?.includes('404')) {
-            await db.collection('pushSubscriptions').doc(sub.id).delete();
+          errors.push(`User ${userEmail} sub ${subscription.id}: ${sendResult.error || 'Unknown error'}`);
+          if (sendResult.invalid) {
+            await deactivateSubscription(subscription.id, sendResult.error || 'invalid_subscription');
           }
         }
       }
 
-      // Update notification with sent status if at least one was successful
       if (successCount > 0) {
-        await db.collection(`users/${userEmail}/notifications`).doc(notificationId).update({ 
-          sentAt: new Date() 
+        await prisma.notification.update({
+          where: { id: createdNotification.id },
+          data: { sentAt: new Date() },
         });
-        console.log(`📝 Updated test notification sentAt for ${notificationId}`);
       }
     }
 
@@ -1417,25 +1405,23 @@ export async function GET(request: NextRequest) {
       loopStartTime: loopStartTime?.toISOString() || null,
       testNotification: {
         totalSent,
-        errors
+        errors,
       },
-      message: `Test notification sent to all users. Total sent: ${totalSent}`
+      message: `Test notification sent to all users. Total sent: ${totalSent}`,
     });
-  } catch (error: any) {
+  } catch (error) {
     return NextResponse.json(
       {
         isLoopRunning: await getLoopRunningState(),
         loopStartTime: loopStartTime?.toISOString() || null,
-        error: error.message,
-        message: 'Failed to send test notification'
+        error: error instanceof Error ? error.message : 'Unknown error',
+        message: 'Failed to send test notification',
       },
       { status: 500 }
     );
   }
 }
 
-
-// Support DELETE to stop the notification loop
 export async function DELETE(request: NextRequest) {
   if (!isAuthorizedCronRequest(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -1443,9 +1429,10 @@ export async function DELETE(request: NextRequest) {
 
   await setLoopRunningState(false);
   loopStartTime = null;
-  console.log('Notification loop stopped by DELETE request.');
+
   return NextResponse.json({
     success: true,
-    message: 'Notification loop stopped.'
+    message: 'Notification loop stopped.',
   });
 }
+

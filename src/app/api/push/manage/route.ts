@@ -1,27 +1,39 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { initializeApp, getApps, cert } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
+import type { Prisma, PushSubscription as PrismaPushSubscription } from '@prisma/client';
+import { prisma } from '@/lib/prisma';
 import { getAuthenticatedUserEmail, isAuthorizedCronRequest } from '@/lib/auth-utils';
-import { PushSubscriptionDocument } from '@/lib/types';
 
-// Initialize Firebase Admin if not already initialized
-if (!getApps().length) {
-  try {
-    initializeApp({
-      credential: cert({
-        projectId: process.env.FIREBASE_PROJECT_ID,
-        clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-        privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-      }),
-    });
-  } catch (error) {
-    console.error('Firebase Admin initialization error:', error);
+const isRecord = (value: unknown): value is Record<string, unknown> => {
+  return typeof value === 'object' && value !== null;
+};
+
+const sanitizeJsonValue = (value: unknown): unknown => {
+  if (value === undefined) {
+    return null;
   }
-}
+
+  if (Array.isArray(value)) {
+    return value.map((item) => sanitizeJsonValue(item));
+  }
+
+  if (isRecord(value)) {
+    return Object.fromEntries(
+      Object.entries(value)
+        .filter(([, nestedValue]) => nestedValue !== undefined)
+        .map(([key, nestedValue]) => [key, sanitizeJsonValue(nestedValue)])
+    );
+  }
+
+  return value;
+};
+
+const toApiSubscription = (subscription: PrismaPushSubscription) => ({
+  ...subscription,
+  userId: subscription.userEmail,
+});
 
 export async function POST(request: NextRequest) {
   try {
-    const db = getFirestore();
     const authenticatedUserEmail = await getAuthenticatedUserEmail(request);
     const isCronRequest = isAuthorizedCronRequest(request);
 
@@ -29,17 +41,21 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
     }
 
-    const body = await request.json();
-    const { 
-      endpoint, 
-      keys, 
-      userId, 
-      userEmail, 
+    const body = await request.json() as {
+      endpoint?: string;
+      keys?: { p256dh?: string; auth?: string };
+      userEmail?: string;
+      deviceInfo?: Record<string, unknown>;
+      preferences?: { enabled?: boolean; allowedTypes?: string[] };
+    };
+    const {
+      endpoint,
+      keys,
+      userEmail,
       deviceInfo,
-      preferences = { enabled: true, allowedTypes: ['reminders', 'overdue'] }
+      preferences = { enabled: true, allowedTypes: ['reminders', 'overdue'] },
     } = body;
 
-    // Validate required fields
     if (!endpoint || !keys?.p256dh || !keys?.auth || !userEmail) {
       return NextResponse.json(
         { error: 'Missing required fields: endpoint, keys, userEmail' },
@@ -51,73 +67,77 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    // Check if subscription already exists
-    const existingSubscription = await db.collection('pushSubscriptions')
-      .where('endpoint', '==', endpoint)
-      .where('userEmail', '==', userEmail)
-      .get();
+    const userAgent = isRecord(deviceInfo) && typeof deviceInfo.userAgent === 'string'
+      ? deviceInfo.userAgent
+      : undefined;
+    const parsedUserAgent = getUserAgent(userAgent);
+    const serializedKeys = sanitizeJsonValue(keys) as Prisma.InputJsonValue;
+    const serializedSubscription = sanitizeJsonValue({ endpoint, keys }) as Prisma.InputJsonValue;
+    const serializedDeviceInfo = sanitizeJsonValue({
+      ...(isRecord(deviceInfo) ? deviceInfo : {}),
+      browserName: parsedUserAgent?.browser?.name,
+      browserVersion: parsedUserAgent?.browser?.version,
+      deviceType: getDeviceType(userAgent),
+    }) as Prisma.InputJsonValue;
+    const serializedPreferences = sanitizeJsonValue(preferences) as Prisma.InputJsonValue;
 
-    if (!existingSubscription.empty) {
-      // Update existing subscription
-      const docId = existingSubscription.docs[0].id;
-      const updateData: Partial<PushSubscriptionDocument> = {
+    const existingSubscription = await prisma.pushSubscription.findUnique({
+      where: { endpoint },
+      select: { id: true },
+    });
+
+    if (existingSubscription) {
+      const updateData: Prisma.PushSubscriptionUncheckedUpdateInput = {
+        userEmail,
+        keys: serializedKeys,
         isActive: true,
-        lastUsedAt: Date.now(),
-        deviceInfo: {
-          ...deviceInfo,
-          browserName: getUserAgent(deviceInfo?.userAgent)?.browser?.name,
-          browserVersion: getUserAgent(deviceInfo?.userAgent)?.browser?.version,
-          deviceType: getDeviceType(deviceInfo?.userAgent),
-        },
-        preferences,
+        lastUsedAt: new Date(),
+        deviceInfo: serializedDeviceInfo,
+        preferences: serializedPreferences,
+        subscription: serializedSubscription,
+        unsubscribedAt: null,
+        deactivatedAt: null,
+        deactivationReason: null,
       };
-      // also update canonical subscription object for compatibility
-      if (endpoint && keys) {
-        (updateData as any).subscription = { endpoint, keys } as any;
-      }
 
-      await db.collection('pushSubscriptions').doc(docId).update(updateData as any);
+      await prisma.pushSubscription.update({
+        where: { id: existingSubscription.id },
+        data: updateData,
+      });
 
       return NextResponse.json({
         success: true,
         message: 'Subscription updated successfully',
-        subscriptionId: docId,
+        subscriptionId: existingSubscription.id,
       });
     }
 
-    // Create new subscription
-    // Build subscription data (use any to allow extra compatibility fields)
-    const subscriptionData: any = {
-      userId: userEmail, // Use email as consistent identifier
+    const createData: Prisma.PushSubscriptionUncheckedCreateInput = {
       userEmail,
       endpoint,
-      keys,
+      keys: serializedKeys,
       isActive: true,
-      subscribedAt: Date.now(),
-      lastUsedAt: Date.now(),
-      deviceInfo: {
-        ...deviceInfo,
-        browserName: getUserAgent(deviceInfo?.userAgent)?.browser?.name,
-        browserVersion: getUserAgent(deviceInfo?.userAgent)?.browser?.version,
-        deviceType: getDeviceType(deviceInfo?.userAgent),
-      },
-      notificationStats: {
+      subscribedAt: new Date(),
+      lastUsedAt: new Date(),
+      deviceInfo: serializedDeviceInfo,
+      notificationStats: sanitizeJsonValue({
         totalSent: 0,
         totalDelivered: 0,
         failureCount: 0,
-      },
-      preferences,
+      }) as Prisma.InputJsonValue,
+      preferences: serializedPreferences,
+      subscription: serializedSubscription,
     };
 
-    // canonical subscription object for web-push
-    subscriptionData.subscription = { endpoint, keys };
-
-    const docRef = await db.collection('pushSubscriptions').add(subscriptionData);
+    const createdSubscription = await prisma.pushSubscription.create({
+      data: createData,
+      select: { id: true },
+    });
 
     return NextResponse.json({
       success: true,
       message: 'Subscription created successfully',
-      subscriptionId: docRef.id,
+      subscriptionId: createdSubscription.id,
     });
 
   } catch (error) {
@@ -134,7 +154,6 @@ export async function POST(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
-  const db = getFirestore();
     const authenticatedUserEmail = await getAuthenticatedUserEmail(request);
     const isCronRequest = isAuthorizedCronRequest(request);
 
@@ -157,38 +176,31 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    let query = db.collection('pushSubscriptions').where('userEmail', '==', userEmail);
-    
-    if (endpoint) {
-      query = query.where('endpoint', '==', endpoint);
-    }
+    const where: Prisma.PushSubscriptionWhereInput = endpoint
+      ? { userEmail, endpoint }
+      : { userEmail };
 
-    const subscriptions = await query.get();
+    const result = await prisma.pushSubscription.updateMany({
+      where,
+      data: {
+        isActive: false,
+        deactivatedAt: new Date(),
+        deactivationReason: 'user_unsubscribed',
+        unsubscribedAt: new Date(),
+      },
+    });
 
-    if (subscriptions.empty) {
+    if (result.count === 0) {
       return NextResponse.json(
         { error: 'No subscriptions found' },
         { status: 404 }
       );
     }
 
-    // Delete or deactivate subscriptions
-    const batch = db.batch();
-    subscriptions.docs.forEach(doc => {
-      // Mark as inactive instead of deleting for analytics
-      batch.update(doc.ref, {
-        isActive: false,
-        deactivatedAt: Date.now(),
-        deactivationReason: 'user_unsubscribed',
-      });
-    });
-
-    await batch.commit();
-
     return NextResponse.json({
       success: true,
-      message: `Deactivated ${subscriptions.size} subscription(s)`,
-      count: subscriptions.size,
+      message: `Deactivated ${result.count} subscription(s)`,
+      count: result.count,
     });
 
   } catch (error) {
@@ -205,7 +217,6 @@ export async function DELETE(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   try {
-  const db = getFirestore();
     const authenticatedUserEmail = await getAuthenticatedUserEmail(request);
     const isCronRequest = isAuthorizedCronRequest(request);
 
@@ -227,15 +238,15 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    const subscriptions = await db.collection('pushSubscriptions')
-      .where('userEmail', '==', userEmail)
-      .where('isActive', '==', true)
-      .get();
+    const subscriptions = await prisma.pushSubscription.findMany({
+      where: {
+        userEmail,
+        isActive: true,
+      },
+      orderBy: { updatedAt: 'desc' },
+    });
 
-    const subscriptionData = subscriptions.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data(),
-    }));
+    const subscriptionData = subscriptions.map(toApiSubscription);
 
     return NextResponse.json({
       success: true,

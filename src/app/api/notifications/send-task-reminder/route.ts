@@ -1,40 +1,98 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { initializeApp, getApps, cert } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
 import webpush from 'web-push';
 import { getAuthenticatedUserEmail, isAuthorizedCronRequest } from '@/lib/auth-utils';
+import { prisma } from '@/lib/prisma';
+import type { Prisma, PushSubscription } from '@prisma/client';
 
-// Initialize Firebase Admin if not already initialized
-if (!getApps().length) {
-  try {
-    initializeApp({
-      credential: cert({
-        projectId: process.env.FIREBASE_PROJECT_ID,
-        clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-        privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-      }),
-    });
-  } catch (error) {
-    console.error('Firebase Admin initialization error:', error);
+type SendTaskReminderBody = {
+  taskId?: string;
+  userEmail?: string;
+  title?: string;
+  message?: string;
+};
+
+type JsonObject = Record<string, unknown>;
+
+const isJsonObject = (value: unknown): value is JsonObject => {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+};
+
+const sanitizeJsonValue = (value: unknown): unknown => {
+  if (value === undefined) {
+    return null;
   }
-}
 
-// Configure VAPID keys for web push
-try {
-  if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY && process.env.VAPID_EMAIL) {
-    webpush.setVapidDetails(
-      `mailto:${process.env.VAPID_EMAIL}`,
-      process.env.VAPID_PUBLIC_KEY,
-      process.env.VAPID_PRIVATE_KEY
+  if (Array.isArray(value)) {
+    return value.map((entry) => sanitizeJsonValue(entry));
+  }
+
+  if (isJsonObject(value)) {
+    return Object.fromEntries(
+      Object.entries(value)
+        .filter(([, nested]) => nested !== undefined)
+        .map(([key, nested]) => [key, sanitizeJsonValue(nested)])
     );
   }
-} catch (error) {
-  console.error('VAPID configuration error:', error);
+
+  return value;
+};
+
+const getCanonicalSubscription = (
+  pushSubscription: PushSubscription
+): { endpoint: string; keys: { p256dh: string; auth: string } } | null => {
+  const subscription = pushSubscription.subscription;
+  if (isJsonObject(subscription)) {
+    const keys = subscription.keys;
+    if (
+      typeof subscription.endpoint === 'string' &&
+      isJsonObject(keys) &&
+      typeof keys.p256dh === 'string' &&
+      typeof keys.auth === 'string'
+    ) {
+      return {
+        endpoint: subscription.endpoint,
+        keys: {
+          p256dh: keys.p256dh,
+          auth: keys.auth,
+        },
+      };
+    }
+  }
+
+  const keys = pushSubscription.keys;
+  if (
+    typeof pushSubscription.endpoint === 'string' &&
+    isJsonObject(keys) &&
+    typeof keys.p256dh === 'string' &&
+    typeof keys.auth === 'string'
+  ) {
+    return {
+      endpoint: pushSubscription.endpoint,
+      keys: {
+        p256dh: keys.p256dh,
+        auth: keys.auth,
+      },
+    };
+  }
+
+  return null;
+};
+
+const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || process.env.VAPID_PUBLIC_KEY;
+const vapidPrivateKey = process.env.VAPID_PRIVATE_KEY;
+const vapidEmail = process.env.VAPID_EMAIL || 'hamid.ijaz91@gmail.com';
+
+if (vapidPublicKey && vapidPrivateKey) {
+  try {
+    webpush.setVapidDetails(`mailto:${vapidEmail}`, vapidPublicKey, vapidPrivateKey);
+  } catch (error) {
+    console.error('VAPID configuration error:', error);
+  }
 }
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
+    const body = (await request.json()) as SendTaskReminderBody;
     const { taskId, userEmail, title, message } = body;
     const authenticatedUserEmail = await getAuthenticatedUserEmail(request);
     const isCronRequest = isAuthorizedCronRequest(request);
@@ -51,51 +109,43 @@ export async function POST(request: NextRequest) {
     }
 
     if (!isCronRequest && authenticatedUserEmail !== userEmail) {
-      return NextResponse.json(
-        { error: 'Forbidden' },
-        { status: 403 }
-      );
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    const db = getFirestore();
+    const subscriptions = await prisma.pushSubscription.findMany({
+      where: {
+        userEmail,
+        isActive: true,
+      },
+      orderBy: { createdAt: 'asc' },
+    });
 
-    // Get user's push subscriptions
-    const subscriptionsSnapshot = await db.collection('pushSubscriptions')
-      .where('userEmail', '==', userEmail)
-      .where('isActive', '==', true)
-      .get();
-
-    if (subscriptionsSnapshot.empty) {
+    if (subscriptions.length === 0) {
       return NextResponse.json(
         { error: 'No push subscriptions found for user' },
         { status: 404 }
       );
     }
 
-    // First, save notification to Firestore
-    const notificationId = `notif_${userEmail.replace('@', '_').replace('.', '_')}_${Date.now()}`;
-    const notificationData = {
-      id: notificationId,
-      userEmail,
-      title,
-      body: message,
-      type: 'push',
-      // Only include relatedTaskId if defined, else set to null
-      relatedTaskId: typeof taskId !== 'undefined' ? taskId : null,
-      isRead: false,
-      createdAt: new Date(),
-      data: {
-        type: 'task-reminder',
-        taskId,
-        taskTitle: title,
-      },
-    };
-    
-    // Save notification to user's notifications subcollection
-    await db.collection(`users/${userEmail}/notifications`).doc(notificationId).set(notificationData);
-    console.log(`💾 Saved notification to Firestore: ${notificationId}`);
+    const notificationId = `notif_${userEmail.replace('@', '_').replace(/\./g, '_')}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
-    // Prepare notification payload
+    await prisma.notification.create({
+      data: {
+        id: notificationId,
+        userEmail,
+        title,
+        body: message,
+        type: 'push',
+        relatedTaskId: taskId,
+        isRead: false,
+        data: sanitizeJsonValue({
+          type: 'task-reminder',
+          taskId,
+          taskTitle: title,
+        }) as Prisma.InputJsonValue,
+      },
+    });
+
     const payload = {
       title,
       body: message,
@@ -105,52 +155,82 @@ export async function POST(request: NextRequest) {
       data: {
         type: 'task-reminder',
         taskId,
-        notificationId, // Include the Firestore notification ID
-  userEmail,
-        url: `/task/${taskId}`
-      }
+        taskTitle: title,
+        notificationId,
+        userEmail,
+        url: `/task/${taskId}`,
+      },
     };
 
-    // Send push notification to all user's devices
-    const pushPromises = subscriptionsSnapshot.docs.map(async (subDoc) => {
-      const subscription = subDoc.data().subscription;
-      
-      try {
-        await webpush.sendNotification(subscription, JSON.stringify(payload));
-        console.log(`Task reminder sent successfully for task ${taskId} to user ${userEmail}`);
-        return { success: true, subscriptionId: subDoc.id };
-      } catch (error: unknown) {
-        console.error(`Failed to send task reminder for task ${taskId}:`, error);
-        
-        // If subscription is invalid, remove it
-        const webPushError = error as { statusCode?: number; message?: string };
-        if (webPushError.statusCode === 410 || webPushError.statusCode === 404) {
-          await subDoc.ref.delete();
-          console.log(`Removed invalid subscription ${subDoc.id} for user ${userEmail}`);
-        }
-        
-        return { success: false, error: webPushError.message || 'Unknown error', subscriptionId: subDoc.id };
-      }
-    });
+    const results = await Promise.all(
+      subscriptions.map(async (subscriptionRow) => {
+        const canonical = getCanonicalSubscription(subscriptionRow);
+        if (!canonical) {
+          await prisma.pushSubscription.update({
+            where: { id: subscriptionRow.id },
+            data: {
+              isActive: false,
+              deactivatedAt: new Date(),
+              deactivationReason: 'invalid_subscription_payload',
+            },
+          });
 
-    const results = await Promise.all(pushPromises);
-    const successCount = results.filter(r => r.success).length;
+          return {
+            success: false,
+            error: 'Invalid subscription payload',
+            subscriptionId: subscriptionRow.id,
+          };
+        }
+
+        try {
+          await webpush.sendNotification(canonical, JSON.stringify(payload));
+
+          await prisma.pushSubscription.update({
+            where: { id: subscriptionRow.id },
+            data: { lastUsedAt: new Date() },
+          });
+
+          return { success: true, subscriptionId: subscriptionRow.id };
+        } catch (error: unknown) {
+          const webPushError = error as { statusCode?: number; message?: string };
+
+          if (webPushError.statusCode === 410 || webPushError.statusCode === 404) {
+            await prisma.pushSubscription.update({
+              where: { id: subscriptionRow.id },
+              data: {
+                isActive: false,
+                deactivatedAt: new Date(),
+                deactivationReason: `webpush_${webPushError.statusCode}`,
+              },
+            });
+          }
+
+          return {
+            success: false,
+            error: webPushError.message || 'Unknown error',
+            subscriptionId: subscriptionRow.id,
+          };
+        }
+      })
+    );
+
+    const successCount = results.filter((result) => result.success).length;
     const totalCount = results.length;
 
-    // Update notification with sent status and task's notified timestamp
-    const batch = db.batch();
-    
     if (successCount > 0) {
-      // Update the notification with sentAt timestamp
-      const notificationRef = db.collection(`users/${userEmail}/notifications`).doc(notificationId);
-      batch.update(notificationRef, { sentAt: new Date() });
-      
-      // Update task's last notified timestamp
-      const taskRef = db.collection('tasks').doc(taskId);
-      batch.update(taskRef, { notifiedAt: new Date() });
-      
-      await batch.commit();
-      console.log(`📝 Updated notification sentAt and task notifiedAt for task ${taskId}`);
+      await Promise.all([
+        prisma.notification.update({
+          where: { id: notificationId },
+          data: { sentAt: new Date() },
+        }),
+        prisma.task.updateMany({
+          where: {
+            id: taskId,
+            userEmail,
+          },
+          data: { notifiedAt: new Date() },
+        }),
+      ]);
     }
 
     return NextResponse.json({
@@ -161,9 +241,8 @@ export async function POST(request: NextRequest) {
       notificationId,
       notificationsSent: successCount,
       totalSubscriptions: totalCount,
-      results
+      results,
     });
-
   } catch (error) {
     console.error('Error in send-task-reminder:', error);
     return NextResponse.json(
@@ -172,3 +251,4 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+

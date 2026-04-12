@@ -10,7 +10,7 @@ export default function NotificationTestPage() {
       <div className="text-center">
         <h1 className="text-3xl font-bold mb-2">🔔 Notification System Test</h1>
         <p className="text-muted-foreground">
-          Test the unified notification system with Firestore storage and real-time updates
+          Test the unified notification system with database storage and real-time updates
         </p>
       </div>
       

@@ -1,26 +1,27 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { initializeApp, getApps, cert } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
+import type { Prisma } from '@prisma/client';
+import { prisma } from '@/lib/prisma';
 
-// Initialize Firebase Admin if not already initialized
-if (!getApps().length) {
-  try {
-    initializeApp({
-      credential: cert({
-        projectId: process.env.FIREBASE_PROJECT_ID,
-        clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-        privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-      }),
-    });
-  } catch (error) {
-    console.error('Firebase Admin initialization error:', error);
+const toJson = (value: unknown): Prisma.InputJsonValue => {
+  if (value === undefined || value === null) {
+    return {};
   }
-}
+
+  try {
+    const normalized = JSON.parse(JSON.stringify(value));
+    return (normalized ?? {}) as Prisma.InputJsonValue;
+  } catch {
+    return {};
+  }
+};
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { userEmail, title, body: messageBody } = body;
+    const rawUserEmail = typeof body.userEmail === 'string' ? body.userEmail : '';
+    const userEmail = rawUserEmail.trim().toLowerCase();
+    const title = typeof body.title === 'string' ? body.title : '';
+    const messageBody = typeof body.body === 'string' ? body.body : '';
 
     if (!userEmail || !title || !messageBody) {
       return NextResponse.json(
@@ -28,8 +29,6 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
-
-    const db = getFirestore();
 
     // Create test in-app notification
     const notificationId = `notif_test_${userEmail.replace('@', '_').replace('.', '_')}_${Date.now()}`;
@@ -46,14 +45,25 @@ export async function POST(request: NextRequest) {
         metadata: {
           isTest: true,
         },
-  },
+      },
     };
-    
-    // Save notification to user's notifications subcollection
-    await db.collection(`users/${userEmail}/notifications`).doc(notificationId).set(notificationData);
+
+    await prisma.notification.create({
+      data: {
+        id: notificationId,
+        userEmail,
+        title,
+        body: messageBody,
+        type: 'in_app',
+        isRead: false,
+        createdAt: notificationData.createdAt,
+        data: toJson(notificationData.data),
+      },
+    });
+
     console.log(`💾 Created test in-app notification: ${notificationId}`);
 
-  return NextResponse.json({
+    return NextResponse.json({
       success: true,
       message: 'Test in-app notification created successfully',
       notificationId,

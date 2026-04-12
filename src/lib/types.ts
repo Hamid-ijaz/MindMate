@@ -309,7 +309,7 @@ export interface NotificationPreferences {
   };
 }
 
-// Push Subscription Types for Firestore
+// Push subscription payload persisted by the notifications data layer
 export interface PushSubscriptionDocument {
   id?: string;
   userId: string; // Use userEmail for consistency

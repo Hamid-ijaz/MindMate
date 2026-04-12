@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { collection, query, where, getDocs, updateDoc, doc } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import type { Prisma } from '@prisma/client';
+import { prisma } from '@/lib/prisma';
 import { getAuthenticatedUserEmail, isAuthorizedCronRequest } from '@/lib/auth-utils';
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
+    const body = await request.json() as { userId?: string; endpoint?: string };
     const { userId, endpoint } = body;
     const authenticatedUserEmail = await getAuthenticatedUserEmail(request);
     const isCronRequest = isAuthorizedCronRequest(request);
@@ -26,52 +26,41 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    // If specific endpoint provided, remove that one
-    // Otherwise remove all subscriptions for user
-    const subscriptionsRef = collection(db, 'pushSubscriptions');
-    let subscriptionQuery;
-    
+    let where: Prisma.PushSubscriptionWhereInput;
+
     if (endpoint) {
-      subscriptionQuery = query(
-        subscriptionsRef,
-        where('endpoint', '==', endpoint)
-      );
+      where = { endpoint };
     } else if (targetUserId) {
-      subscriptionQuery = query(
-        subscriptionsRef,
-        where('userId', '==', targetUserId),
-        where('isActive', '==', true)
-      );
+      where = {
+        userEmail: targetUserId,
+        isActive: true,
+      };
     } else {
       return NextResponse.json(
         { error: 'Either userId or endpoint is required' },
         { status: 400 }
       );
     }
-    
-    const querySnapshot = await getDocs(subscriptionQuery);
-    
-    if (querySnapshot.empty) {
+
+    const result = await prisma.pushSubscription.updateMany({
+      where,
+      data: {
+        isActive: false,
+        unsubscribedAt: new Date(),
+      },
+    });
+
+    if (result.count === 0) {
       return NextResponse.json(
         { message: 'No subscriptions found to remove' },
         { status: 404 }
       );
     }
 
-    // Mark subscriptions as inactive instead of deleting
-    const updatePromises = querySnapshot.docs.map(docSnapshot => 
-      updateDoc(doc(db, 'pushSubscriptions', docSnapshot.id), {
-        isActive: false,
-        unsubscribedAt: new Date(),
-      })
-    );
-
-    await Promise.all(updatePromises);
-
     return NextResponse.json({
       success: true,
-      message: `Successfully removed ${querySnapshot.docs.length} subscription(s)`,
-      count: querySnapshot.docs.length,
+      message: `Successfully removed ${result.count} subscription(s)`,
+      count: result.count,
     });
   } catch (error) {
     console.error('Error removing push subscription:', error);

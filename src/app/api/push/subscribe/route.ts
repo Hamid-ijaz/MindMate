@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { collection, addDoc, query, where, getDocs, serverTimestamp, updateDoc } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import type { Prisma, PushSubscription as PrismaPushSubscription } from '@prisma/client';
+import { prisma } from '@/lib/prisma';
 import { getAuthenticatedUserEmail, isAuthorizedCronRequest } from '@/lib/auth-utils';
 
 interface PushSubscriptionData {
@@ -12,12 +12,51 @@ interface PushSubscriptionData {
   userId?: string;
   userEmail?: string;
   deviceInfo?: {
-    userAgent: string;
-    platform: string;
-    vendor: string;
+    userAgent?: string;
+    platform?: string;
+    vendor?: string;
+    [key: string]: unknown;
   };
   subscribedAt?: number;
 }
+
+const isRecord = (value: unknown): value is Record<string, unknown> => {
+  return typeof value === 'object' && value !== null;
+};
+
+const sanitizeJsonValue = (value: unknown): unknown => {
+  if (value === undefined) {
+    return null;
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((item) => sanitizeJsonValue(item));
+  }
+
+  if (isRecord(value)) {
+    return Object.fromEntries(
+      Object.entries(value)
+        .filter(([, nestedValue]) => nestedValue !== undefined)
+        .map(([key, nestedValue]) => [key, sanitizeJsonValue(nestedValue)])
+    );
+  }
+
+  return value;
+};
+
+const toOptionalDate = (value?: number): Date | undefined => {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return undefined;
+  }
+
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? undefined : parsed;
+};
+
+const toApiSubscription = (subscription: PrismaPushSubscription) => ({
+  ...subscription,
+  userId: subscription.userEmail,
+});
 
 export async function POST(request: NextRequest) {
   try {
@@ -55,59 +94,65 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const userId = targetUserEmail;
+    const serializedKeys = sanitizeJsonValue(body.keys) as Prisma.InputJsonValue;
+    const serializedSubscription = sanitizeJsonValue({
+      endpoint: body.endpoint,
+      keys: body.keys,
+    }) as Prisma.InputJsonValue;
+    const serializedDeviceInfo = body.deviceInfo
+      ? (sanitizeJsonValue(body.deviceInfo) as Prisma.InputJsonValue)
+      : undefined;
+    const subscribedAt = toOptionalDate(body.subscribedAt);
 
-    // Check if subscription already exists for this endpoint
-    const subscriptionsRef = collection(db, 'pushSubscriptions');
-    const existingQuery = query(
-      subscriptionsRef,
-      where('endpoint', '==', body.endpoint)
-    );
-    
-    const existingDocs = await getDocs(existingQuery);
-    
-    if (!existingDocs.empty) {
-      // Update existing subscription
-      const existingDoc = existingDocs.docs[0];
-      const docRef = existingDoc.ref;
-      
-      await updateDoc(docRef, {
-        keys: body.keys,
-        userId: userId,
+    const existingSubscription = await prisma.pushSubscription.findUnique({
+      where: { endpoint: body.endpoint },
+      select: { id: true },
+    });
+
+    if (existingSubscription) {
+      const updateData: Prisma.PushSubscriptionUncheckedUpdateInput = {
+        keys: serializedKeys,
         userEmail: targetUserEmail,
-        deviceInfo: body.deviceInfo,
-        updatedAt: serverTimestamp(),
+        deviceInfo: serializedDeviceInfo,
         isActive: true,
-        // also keep canonical subscription object
-        subscription: { endpoint: body.endpoint, keys: body.keys },
+        subscription: serializedSubscription,
+        lastUsedAt: new Date(),
+        unsubscribedAt: null,
+        deactivatedAt: null,
+        deactivationReason: null,
+      };
+
+      await prisma.pushSubscription.update({
+        where: { id: existingSubscription.id },
+        data: updateData,
       });
 
       return NextResponse.json({
         success: true,
         message: 'Subscription updated successfully',
-        id: existingDoc.id,
+        id: existingSubscription.id,
       });
     } else {
-      // Create new subscription
-      const subscriptionDoc = {
+      const createData: Prisma.PushSubscriptionUncheckedCreateInput = {
         endpoint: body.endpoint,
-        keys: body.keys,
-        userId: userId,
+        keys: serializedKeys,
         userEmail: targetUserEmail,
-        deviceInfo: body.deviceInfo,
-  // canonical subscription object
-  subscription: { endpoint: body.endpoint, keys: body.keys },
-        subscribedAt: body.subscribedAt ? new Date(body.subscribedAt) : serverTimestamp(),
-        createdAt: serverTimestamp(),
         isActive: true,
+        lastUsedAt: new Date(),
+        subscription: serializedSubscription,
+        ...(serializedDeviceInfo !== undefined ? { deviceInfo: serializedDeviceInfo } : {}),
+        ...(subscribedAt !== undefined ? { subscribedAt } : {}),
       };
 
-      const docRef = await addDoc(subscriptionsRef, subscriptionDoc);
+      const createdSubscription = await prisma.pushSubscription.create({
+        data: createData,
+        select: { id: true },
+      });
 
       return NextResponse.json({
         success: true,
         message: 'Subscription saved successfully',
-        id: docRef.id,
+        id: createdSubscription.id,
       });
     }
   } catch (error) {
@@ -152,22 +197,17 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const subscriptionsRef = collection(db, 'pushSubscriptions');
-    const userQuery = query(
-      subscriptionsRef,
-      where('userId', '==', userId),
-      where('isActive', '==', true)
-    );
-    
-    const querySnapshot = await getDocs(userQuery);
-    const subscriptions = querySnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data(),
-    }));
+    const subscriptions = await prisma.pushSubscription.findMany({
+      where: {
+        userEmail: userId,
+        isActive: true,
+      },
+      orderBy: { updatedAt: 'desc' },
+    });
 
     return NextResponse.json({
       success: true,
-      subscriptions,
+      subscriptions: subscriptions.map(toApiSubscription),
     });
   } catch (error) {
     console.error('Error fetching push subscriptions:', error);

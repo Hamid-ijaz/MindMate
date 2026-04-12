@@ -1,26 +1,127 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { initializeApp, getApps, cert } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
 import { getAuthenticatedUserEmail, isAuthorizedCronRequest } from '@/lib/auth-utils';
+import { prisma } from '@/lib/prisma';
 
-// Initialize Firebase Admin if not already initialized
-if (!getApps().length) {
-  try {
-    initializeApp({
-      credential: cert({
-        projectId: process.env.FIREBASE_PROJECT_ID,
-        clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-        privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-      }),
-    });
-  } catch (error) {
-    console.error('Firebase Admin initialization error:', error);
-  }
-}
+type RouteBody = {
+  userId?: string;
+};
+
+const mapTaskForResponse = (task: {
+  id: string;
+  userEmail: string;
+  title: string;
+  description: string | null;
+  category: string;
+  priority: string;
+  duration: number;
+  createdAt: Date;
+  updatedAt: Date | null;
+  rejectionCount: number;
+  lastRejectedAt: Date | null;
+  isMuted: boolean;
+  isArchived: boolean;
+  completedAt: Date | null;
+  parentId: string | null;
+  reminderAt: Date | null;
+  onlyNotifyAtReminder: boolean;
+  notifiedAt: Date | null;
+  recurrence: unknown;
+  scheduledAt: Date | null;
+  scheduledEndAt: Date | null;
+  isTimeBlocked: boolean | null;
+  calendarEventId: string | null;
+  pomodoroSessions: number | null;
+  estimatedPomodoros: number | null;
+  timeSpent: number | null;
+  isAllDay: boolean | null;
+  calendarColor: string | null;
+  location: string | null;
+  attendees: unknown;
+  isRecurring: boolean | null;
+  originalTaskId: string | null;
+}) => ({
+  id: task.id,
+  userEmail: task.userEmail,
+  title: task.title,
+  description: task.description,
+  category: task.category,
+  priority: task.priority,
+  duration: task.duration,
+  createdAt: task.createdAt,
+  updatedAt: task.updatedAt,
+  rejectionCount: task.rejectionCount,
+  lastRejectedAt: task.lastRejectedAt,
+  isMuted: task.isMuted,
+  isArchived: task.isArchived,
+  completedAt: task.completedAt,
+  completed: task.completedAt !== null,
+  parentId: task.parentId,
+  reminderAt: task.reminderAt,
+  dueDate: task.reminderAt,
+  onlyNotifyAtReminder: task.onlyNotifyAtReminder,
+  notifiedAt: task.notifiedAt,
+  recurrence: task.recurrence,
+  scheduledAt: task.scheduledAt,
+  scheduledEndAt: task.scheduledEndAt,
+  isTimeBlocked: task.isTimeBlocked,
+  calendarEventId: task.calendarEventId,
+  pomodoroSessions: task.pomodoroSessions,
+  estimatedPomodoros: task.estimatedPomodoros,
+  timeSpent: task.timeSpent,
+  isAllDay: task.isAllDay,
+  calendarColor: task.calendarColor,
+  location: task.location,
+  attendees: task.attendees,
+  isRecurring: task.isRecurring,
+  originalTaskId: task.originalTaskId,
+});
+
+const buildResponse = async (userId: string) => {
+  const now = new Date();
+  const oneHourFromNow = new Date(now.getTime() + 60 * 60 * 1000);
+
+  const [overdueTaskRows, upcomingTaskRows] = await Promise.all([
+    prisma.task.findMany({
+      where: {
+        userEmail: userId,
+        completedAt: null,
+        reminderAt: { lte: now },
+        isMuted: false,
+      },
+      orderBy: { reminderAt: 'asc' },
+    }),
+    prisma.task.findMany({
+      where: {
+        userEmail: userId,
+        completedAt: null,
+        reminderAt: { gt: now, lte: oneHourFromNow },
+        isMuted: false,
+      },
+      orderBy: { reminderAt: 'asc' },
+    }),
+  ]);
+
+  const overdueTasks = overdueTaskRows.map(mapTaskForResponse);
+  const upcomingTasks = upcomingTaskRows.map(mapTaskForResponse);
+
+  return {
+    success: true,
+    userId,
+    overdueTasks: {
+      count: overdueTasks.length,
+      tasks: overdueTasks,
+    },
+    upcomingTasks: {
+      count: upcomingTasks.length,
+      tasks: upcomingTasks,
+    },
+    checkedAt: now.toISOString(),
+  };
+};
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
+    const body = (await request.json()) as RouteBody;
     const { userId } = body;
     const authenticatedUserEmail = await getAuthenticatedUserEmail(request);
     const isCronRequest = isAuthorizedCronRequest(request);
@@ -37,135 +138,54 @@ export async function POST(request: NextRequest) {
     }
 
     if (!isCronRequest && authenticatedUserEmail !== userId) {
-      return NextResponse.json(
-        { error: 'Forbidden' },
-        { status: 403 }
-      );
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    const db = getFirestore();
-    const now = new Date();
-    
-    // Query for user's overdue tasks
-    const overdueTasksSnapshot = await db.collection('tasks')
-      .where('userId', '==', userId)
-      .where('completed', '==', false)
-      .where('dueDate', '<=', now)
-      .where('isMuted', '==', false)
-      .get();
-
-    const overdueTasks = overdueTasksSnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data(),
-      dueDate: doc.data().dueDate?.toDate?.() || doc.data().dueDate
-    }));
-
-    // Query for tasks due within next hour (upcoming reminders)
-    const oneHourFromNow = new Date(now.getTime() + 60 * 60 * 1000);
-    const upcomingTasksSnapshot = await db.collection('tasks')
-      .where('userId', '==', userId)
-      .where('completed', '==', false)
-      .where('dueDate', '>', now)
-      .where('dueDate', '<=', oneHourFromNow)
-      .where('isMuted', '==', false)
-      .get();
-
-    const upcomingTasks = upcomingTasksSnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data(),
-      dueDate: doc.data().dueDate?.toDate?.() || doc.data().dueDate
-    }));
-
-    return NextResponse.json({
-      success: true,
-      userId,
-      overdueTasks: {
-        count: overdueTasks.length,
-        tasks: overdueTasks
-      },
-      upcomingTasks: {
-        count: upcomingTasks.length,
-        tasks: upcomingTasks
-      },
-      checkedAt: now.toISOString()
-    });
-
+    return NextResponse.json(await buildResponse(userId));
   } catch (error) {
     console.error('Error in check-overdue-tasks:', error);
     return NextResponse.json(
-      { error: 'Internal server error', details: error instanceof Error ? error.message : 'Unknown error' },
+      {
+        error: 'Internal server error',
+        details: error instanceof Error ? error.message : 'Unknown error',
+      },
       { status: 500 }
     );
   }
 }
 
-// Also support GET for testing with userId in query params
 export async function GET(request: NextRequest) {
-  const { searchParams } = new URL(request.url);
-  const userId = searchParams.get('userId');
-  const authenticatedUserEmail = await getAuthenticatedUserEmail(request);
-  const isCronRequest = isAuthorizedCronRequest(request);
+  try {
+    const { searchParams } = new URL(request.url);
+    const userId = searchParams.get('userId');
+    const authenticatedUserEmail = await getAuthenticatedUserEmail(request);
+    const isCronRequest = isAuthorizedCronRequest(request);
 
-  if (!isCronRequest && !authenticatedUserEmail) {
-    return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
-  }
-  
-  if (!userId) {
+    if (!isCronRequest && !authenticatedUserEmail) {
+      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+    }
+
+    if (!userId) {
+      return NextResponse.json(
+        { error: 'Missing required query parameter: userId' },
+        { status: 400 }
+      );
+    }
+
+    if (!isCronRequest && authenticatedUserEmail !== userId) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
+    return NextResponse.json(await buildResponse(userId));
+  } catch (error) {
+    console.error('Error in check-overdue-tasks:', error);
     return NextResponse.json(
-      { error: 'Missing required query parameter: userId' },
-      { status: 400 }
+      {
+        error: 'Internal server error',
+        details: error instanceof Error ? error.message : 'Unknown error',
+      },
+      { status: 500 }
     );
   }
-
-  if (!isCronRequest && authenticatedUserEmail !== userId) {
-    return NextResponse.json(
-      { error: 'Forbidden' },
-      { status: 403 }
-    );
-  }
-
-  const db = getFirestore();
-  const now = new Date();
-
-  const overdueTasksSnapshot = await db.collection('tasks')
-    .where('userId', '==', userId)
-    .where('completed', '==', false)
-    .where('dueDate', '<=', now)
-    .where('isMuted', '==', false)
-    .get();
-
-  const overdueTasks = overdueTasksSnapshot.docs.map(doc => ({
-    id: doc.id,
-    ...doc.data(),
-    dueDate: doc.data().dueDate?.toDate?.() || doc.data().dueDate
-  }));
-
-  const oneHourFromNow = new Date(now.getTime() + 60 * 60 * 1000);
-  const upcomingTasksSnapshot = await db.collection('tasks')
-    .where('userId', '==', userId)
-    .where('completed', '==', false)
-    .where('dueDate', '>', now)
-    .where('dueDate', '<=', oneHourFromNow)
-    .where('isMuted', '==', false)
-    .get();
-
-  const upcomingTasks = upcomingTasksSnapshot.docs.map(doc => ({
-    id: doc.id,
-    ...doc.data(),
-    dueDate: doc.data().dueDate?.toDate?.() || doc.data().dueDate
-  }));
-
-  return NextResponse.json({
-    success: true,
-    userId,
-    overdueTasks: {
-      count: overdueTasks.length,
-      tasks: overdueTasks
-    },
-    upcomingTasks: {
-      count: upcomingTasks.length,
-      tasks: upcomingTasks
-    },
-    checkedAt: now.toISOString()
-  });
 }
+

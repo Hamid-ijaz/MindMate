@@ -12,7 +12,7 @@ const SESSION_NOTIFICATION_KEY = 'mindmate_last_notification_check';
 
 /**
  * Custom hook for setting up automated task reminder notifications
- * Uses the unified notification system with Firestore storage and real-time updates
+ * Uses the unified notification system with database-backed storage and real-time updates
  */
 export function useSetupNotificationHandlers() {
   const { user } = useAuth();

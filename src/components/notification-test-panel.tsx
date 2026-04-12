@@ -55,7 +55,7 @@ export function NotificationTestPanel() {
         body: JSON.stringify({
           userEmail: user.email,
           title: 'API Test Notification 🚀',
-          body: 'This test notification was created via the API endpoint to test the Firestore → UI workflow!',
+          body: 'This test notification was created via the API endpoint to test the API → UI workflow!',
         }),
       });
 
