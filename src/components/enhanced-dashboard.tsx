@@ -13,7 +13,6 @@ import { useAuth } from "@/contexts/auth-context";
 import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
 import { useToast } from "@/hooks/use-toast";
 import { useNotificationManager } from "@/hooks/use-notification-manager";
-import { useGoogleTasksSync } from "@/hooks/use-google-tasks-sync";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -248,27 +247,6 @@ export default function EnhancedDashboard() {
   const { toast } = useToast();
   const { shouldShowPrompt } = useNotificationManager();
 
-  // Google Tasks sync hooks
-  const { triggerSync } = useGoogleTasksSync({
-    onSyncError: (error) => {
-      console.error('Google Tasks sync error:', error);
-      toast({
-        title: "Sync Error",
-        description: "Failed to sync with Google Tasks. Please try again later.",
-        variant: "destructive"
-      });
-    },
-    onSyncComplete: (result) => {
-      console.log('Google Tasks sync complete:', result);
-      if (result.success) {
-        toast({
-          title: "Sync Complete",
-          description: `Successfully synced ${result.synced || 0} tasks with Google Tasks.`,
-        });
-      }
-    }
-  });
-
   // Dashboard state
   const [currentView, setCurrentView] = useState<'minimal' | 'detailed' | 'analytics'>('detailed');
   const [isCustomizing, setIsCustomizing] = useState(false);
@@ -306,13 +284,6 @@ export default function EnhancedDashboard() {
 
   // Refresh function for pull-to-refresh
   const handleRefresh = async () => {
-    try {
-      // Trigger Google Tasks sync first
-      await triggerSync();
-    } catch (syncError) {
-      console.error('Sync error during refresh:', syncError);
-    }
-
     // Simulate a refresh delay
     await new Promise(resolve => setTimeout(resolve, 1000));
 
@@ -357,7 +328,6 @@ export default function EnhancedDashboard() {
         category: (taskCategories[0] || "Personal") as TaskCategory,
         priority: "Medium" as Priority,
         duration: 30 as TaskDuration,
-        googleTaskId: null,
       };
 
       await addTask(newTask);
@@ -732,7 +702,6 @@ export default function EnhancedDashboard() {
         category: 'Work',
         priority: 'Medium',
         duration: 30,
-        googleTaskId: null,
       });
       setNewTaskText("");
     }

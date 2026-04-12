@@ -52,16 +52,6 @@ const nextConfig: NextConfig = {
         events: false,
       };
       
-      // Exclude googleapis and related packages from client bundle
-      config.externals = config.externals || [];
-      config.externals.push({
-        'googleapis': 'commonjs googleapis',
-        'google-auth-library': 'commonjs google-auth-library',
-        'gaxios': 'commonjs gaxios',
-        'gtoken': 'commonjs gtoken',
-        'jws': 'commonjs jws',
-        'gcp-metadata': 'commonjs gcp-metadata',
-      });
     }
     return config;
   },

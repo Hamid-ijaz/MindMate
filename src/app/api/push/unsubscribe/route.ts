@@ -1,11 +1,30 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { collection, query, where, getDocs, updateDoc, doc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import { getAuthenticatedUserEmail, isAuthorizedCronRequest } from '@/lib/auth-utils';
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const { userId, endpoint } = body;
+    const authenticatedUserEmail = await getAuthenticatedUserEmail(request);
+    const isCronRequest = isAuthorizedCronRequest(request);
+
+    if (!isCronRequest && !authenticatedUserEmail) {
+      return NextResponse.json(
+        { error: 'Not authenticated' },
+        { status: 401 }
+      );
+    }
+
+    const targetUserId = userId || authenticatedUserEmail;
+
+    if (!isCronRequest && userId && authenticatedUserEmail !== userId) {
+      return NextResponse.json(
+        { error: 'Forbidden' },
+        { status: 403 }
+      );
+    }
     
     // If specific endpoint provided, remove that one
     // Otherwise remove all subscriptions for user
@@ -17,10 +36,10 @@ export async function POST(request: NextRequest) {
         subscriptionsRef,
         where('endpoint', '==', endpoint)
       );
-    } else if (userId) {
+    } else if (targetUserId) {
       subscriptionQuery = query(
         subscriptionsRef,
-        where('userId', '==', userId),
+        where('userId', '==', targetUserId),
         where('isActive', '==', true)
       );
     } else {

@@ -1,8 +1,11 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode, useRef } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import type { Task, Accomplishment, TaskCategory, TaskDuration, Note } from '@/lib/types';
-import { taskService, accomplishmentService, userSettingsService, notificationService } from '@/lib/firestore';
+import { taskApiService as taskService } from '@/services/client/task-api-service';
+import { accomplishmentApiService } from '@/services/client/accomplishment-api-service';
+import { userSettingsApiService } from '@/services/client/user-settings-api-service';
+import { notificationApiService } from '@/services/client/notification-api-service';
 import { useAuth } from './auth-context';
 import { useToast } from '@/hooks/use-toast';
 import { useNotifications } from './notification-context';
@@ -84,7 +87,7 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
     setIsLoading(true);
     try {
       // Load user settings
-      const settings = await userSettingsService.getUserSettings(user.email);
+      const settings = await userSettingsApiService.getUserSettings(user.email);
       if (settings) {
         setTaskCategories(settings.taskCategories.length > 0 ? settings.taskCategories : DEFAULT_CATEGORIES);
         setTaskDurations(settings.taskDurations.length > 0 ? settings.taskDurations : DEFAULT_DURATIONS);
@@ -99,7 +102,7 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
       //   setNotes(userNotes);
       // }
       // Load accomplishments  
-      const userAccomplishments = await accomplishmentService.getAccomplishments(user.email);
+      const userAccomplishments = await accomplishmentApiService.getAccomplishments(user.email);
       setAccomplishments(userAccomplishments);
     } catch (error) {
       console.error('Error loading user data:', error);
@@ -117,7 +120,7 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
     setTaskCategories(categories);
     if (user?.email) {
       try {
-        await userSettingsService.updateUserSettings(user.email, { taskCategories: categories });
+        await userSettingsApiService.updateUserSettings(user.email, { taskCategories: categories });
       } catch (error) {
         console.error('Error saving task categories:', error);
       }
@@ -128,7 +131,7 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
     setTaskDurations(durations);
     if (user?.email) {
       try {
-        await userSettingsService.updateUserSettings(user.email, { taskDurations: durations });
+        await userSettingsApiService.updateUserSettings(user.email, { taskDurations: durations });
       } catch (error) {
         console.error('Error saving task durations:', error);
       }
@@ -168,8 +171,6 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
         priority: 'Low', // Default to low priority
         duration: 15, // Default to 15 mins
         userEmail: user.email, // Add missing userEmail
-        googleTaskId: null, // Add missing googleTaskId
-        syncToGoogleTasks: taskData.syncToGoogleTasks ?? true
       }));
     }
 
@@ -194,56 +195,6 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
         await pushNotifications.scheduleTaskReminder(parentTask as Task);
       }
 
-      // Auto-sync to Google Tasks if sync is enabled
-      if (parentTask.syncToGoogleTasks) {
-        console.log(`🔄 Auto-sync triggered for new task: ${parentTask.title}`);
-        console.log(`📋 Task details:`, {
-          id: parentTask.id,
-          title: parentTask.title,
-          syncToGoogleTasks: parentTask.syncToGoogleTasks,
-          userEmail: user.email,
-          hasReminderAt: !!parentTask.reminderAt,
-          category: parentTask.category
-        });
-
-        try {
-          // Trigger async sync without blocking the UI
-          fetch('/api/google/sync', {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'include',
-            body: JSON.stringify({ taskId: parentTask.id, action: 'syncTask' })
-          }).then(async (response) => {
-            console.log(`🔍 Sync response status: ${response.status} for task: ${parentTask.title}`);
-            if (response.ok) {
-              const responseData = await response.json();
-              console.log(`✅ Auto-sync successful for task: ${parentTask.title}`, responseData);
-            } else {
-              const errorText = await response.text();
-              console.error(`❌ Auto-sync failed for task: ${parentTask.title}`, {
-                status: response.status,
-                statusText: response.statusText,
-                error: errorText
-              });
-            }
-          }).catch(async (syncError) => {
-            console.error('Background sync failed for parent task:', syncError);
-            // Add to retry queue
-            const { syncRetryManager } = await import('@/lib/sync-retry');
-            syncRetryManager.addToRetryQueue({
-              operation: 'syncTask',
-              taskId: parentTask.id,
-              maxRetries: 3,
-              baseDelay: 2000
-            });
-          });
-        } catch (syncError) {
-          console.error('Failed to trigger background sync for parent task:', syncError);
-        }
-      } else {
-        console.log(`⏭️ Auto-sync skipped for task: ${parentTask.title} (syncToGoogleTasks: ${parentTask.syncToGoogleTasks})`);
-      }
-
       if (subtasksToCreate.length > 0) {
         const newSubtasks = subtasksToCreate.map((sub, index) => ({
           ...sub,
@@ -259,31 +210,6 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
         for (const subtask of newSubtasks) {
           if (subtask.reminderAt) {
             await pushNotifications.scheduleTaskReminder(subtask as Task);
-          }
-
-          // Auto-sync subtasks to Google Tasks if sync is enabled
-          if (subtask.syncToGoogleTasks) {
-            try {
-              // Trigger async sync without blocking the UI
-              fetch('/api/google/sync', {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'include',
-                body: JSON.stringify({ taskId: subtask.id, action: 'syncTask' })
-              }).catch(async (syncError) => {
-                console.error(`Background sync failed for subtask ${subtask.id}:`, syncError);
-                // Add to retry queue
-                const { syncRetryManager } = await import('@/lib/sync-retry');
-                syncRetryManager.addToRetryQueue({
-                  operation: 'syncTask',
-                  taskId: subtask.id,
-                  maxRetries: 3,
-                  baseDelay: 2000
-                });
-              });
-            } catch (syncError) {
-              console.error(`Failed to trigger background sync for subtask ${subtask.id}:`, syncError);
-            }
           }
         }
         
@@ -307,43 +233,6 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
     try {
       await taskService.updateTask(id, updates);
       setTasks(prev => prev.map(t => (t.id === id ? { ...t, ...updates } as Task : t)));
-      
-      // Auto-sync to Google Tasks if the task has sync enabled
-      const task = tasks.find(t => t.id === id);
-      if (task?.syncToGoogleTasks) {
-        console.log(`🔄 Auto-sync triggered for task update: ${task.title}`);
-        console.log(`📋 Update details: completedAt=${updates.completedAt}, syncToGoogleTasks=${task.syncToGoogleTasks}`);
-        try {
-          // Trigger async sync without blocking the UI
-          fetch('/api/google/sync', {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'include',
-            body: JSON.stringify({ taskId: id, action: 'syncTask' })
-          }).then(async (response) => {
-            if (response.ok) {
-              console.log(`✅ Auto-sync successful for task update: ${task.title}`);
-            } else {
-              const errorText = await response.text();
-              console.error(`❌ Auto-sync failed for task update: ${task.title}`, errorText);
-            }
-          }).catch(async (syncError) => {
-            console.error('Background sync failed:', syncError);
-            // Add to retry queue
-            const { syncRetryManager } = await import('@/lib/sync-retry');
-            syncRetryManager.addToRetryQueue({
-              operation: 'syncTask',
-              taskId: id,
-              maxRetries: 3,
-              baseDelay: 2000
-            });
-          });
-        } catch (syncError) {
-          console.error('Failed to trigger background sync:', syncError);
-        }
-      } else {
-        console.log(`⏭️ Auto-sync skipped for task update: ${task?.title || id} (syncToGoogleTasks: ${task?.syncToGoogleTasks})`);
-      }
     } catch (error) {
       console.error('Error updating task:', error);
       toast({
@@ -352,11 +241,9 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
         variant: "destructive",
       });
     }
-  }, [toast, tasks]);
+  }, [toast]);
 
   const deleteTask = useCallback(async (id: string) => {
-    const taskToDelete = tasks.find(t => t.id === id);
-    
     try {
       // Delete the task and its subtasks
       await taskService.deleteTask(id);
@@ -364,36 +251,11 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
       
       // Delete all related notifications
       if (user?.email) {
-        await notificationService.deleteNotificationsByTaskId(user.email, id);
+        await notificationApiService.deleteNotificationsByTaskId(user.email, id);
       }
       
       // Update UI state
       setTasks(prev => prev.filter(t => t.id !== id && t.parentId !== id));
-      
-      // Auto-sync deletion to Google Tasks if the task had sync enabled
-      if (taskToDelete?.syncToGoogleTasks) {
-        try {
-          // Trigger async sync without blocking the UI
-          fetch('/api/google/sync', {
-            method: 'DELETE',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'include',
-            body: JSON.stringify({ taskId: id, action: 'deleteTask' })
-          }).catch(async (syncError) => {
-            console.error('Background delete sync failed:', syncError);
-            // Add to retry queue
-            const { syncRetryManager } = await import('@/lib/sync-retry');
-            syncRetryManager.addToRetryQueue({
-              operation: 'deleteTask',
-              taskId: id,
-              maxRetries: 3,
-              baseDelay: 2000
-            });
-          });
-        } catch (syncError) {
-          console.error('Failed to trigger background delete sync:', syncError);
-        }
-      }
     } catch (error) {
       console.error('Error deleting task:', error);
       toast({
@@ -402,7 +264,7 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
         variant: "destructive",
       });
     }
-  }, [toast, user?.email, tasks]);
+  }, [toast, user?.email]);
   
   const acceptTask = useCallback(async (id: string, options?: { showNotification?: boolean; onComplete?: () => void }) => {
     const task = tasks.find(t => t.id === id);
@@ -427,7 +289,7 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
             // End date is passed, just complete the task without rescheduling
             await updateTask(id, { completedAt: Date.now() });
             // Delete notifications for this completed task
-            await notificationService.deleteNotificationsByTaskId(user.email, id);
+            await notificationApiService.deleteNotificationsByTaskId(user.email, id);
             options?.onComplete?.();
             return;
         }
@@ -465,7 +327,7 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
         if (task.recurrence.endDate && nextReminderDate.getTime() > task.recurrence.endDate) {
             await updateTask(id, { completedAt: Date.now() });
             // Delete notifications for this completed task
-            await notificationService.deleteNotificationsByTaskId(user.email, id);
+            await notificationApiService.deleteNotificationsByTaskId(user.email, id);
             options?.onComplete?.();
             return;
         }
@@ -487,7 +349,7 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
         await taskService.completeAndReschedule(task.id, user.email, newTaskData);
 
         // Delete notifications for the completed task
-        await notificationService.deleteNotificationsByTaskId(user.email, id);
+        await notificationApiService.deleteNotificationsByTaskId(user.email, id);
 
         // UI update
         setTasks(prev => {
@@ -505,7 +367,7 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
         // Not a recurring task
         await updateTask(id, { completedAt: Date.now() });
         // Delete notifications for this completed task
-        await notificationService.deleteNotificationsByTaskId(user.email, id);
+        await notificationApiService.deleteNotificationsByTaskId(user.email, id);
         options?.onComplete?.();
     }
   }, [tasks, updateTask, toast, user?.email]);
@@ -526,42 +388,33 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
 
   const uncompleteTask = useCallback(async (id: string) => {
     const task = tasks.find(t => t.id === id);
-    if (task) {
-      console.log(`🔄 Uncompleting task: ${task.title} (ID: ${id})`);
-      console.log(`📋 Task sync status: syncToGoogleTasks=${task.syncToGoogleTasks}, googleTaskId=${task.googleTaskId}`);
-
-      const childrenIds = tasks.filter(t => t.parentId === id).map(t => t.id);
-      const updates = { 
-        completedAt: undefined, 
-        lastRejectedAt: undefined,
-        notifiedAt: undefined,
-        rejectionCount: 0,
-      };
-
-      console.log(`👶 Found ${childrenIds.length} child tasks to uncomplete`);
-
-      // Update parent task
-      console.log(`🔄 Updating parent task ${id} with completedAt: undefined`);
-      await updateTask(id, updates);
-      
-      // Update children tasks
-      for (const childId of childrenIds) {
-        console.log(`🔄 Updating child task ${childId} with completedAt: undefined`);
-        await updateTask(childId, updates);
-      }
-      
-      setTasks(prev => prev.map(t => {
-        if (t.id === id || childrenIds.includes(t.id)) {
-          // Casting to any to bypass strict type check for null assignment
-          return { ...t, ...updates as any };
-        }
-        return t;
-      }));
-
-      console.log(`✅ Task uncompletion completed for: ${task.title}`);
-    } else {
-      console.log(`❌ Task not found for uncompletion: ${id}`);
+    if (!task) {
+      return;
     }
+
+    const childrenIds = tasks.filter(t => t.parentId === id).map(t => t.id);
+    const updates = {
+      completedAt: undefined,
+      lastRejectedAt: undefined,
+      notifiedAt: undefined,
+      rejectionCount: 0,
+    };
+
+    // Update parent task
+    await updateTask(id, updates);
+    
+    // Update children tasks
+    for (const childId of childrenIds) {
+      await updateTask(childId, updates);
+    }
+    
+    setTasks(prev => prev.map(t => {
+      if (t.id === id || childrenIds.includes(t.id)) {
+        // Casting to any to bypass strict type check for null assignment
+        return { ...t, ...updates as any };
+      }
+      return t;
+    }));
   }, [tasks, updateTask]);
 
 
@@ -575,7 +428,10 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
     };
 
     try {
-      const accomplishmentId = await accomplishmentService.addAccomplishment(user.email, newAccomplishment);
+      const accomplishmentId = await accomplishmentApiService.addAccomplishment(user.email, {
+        date: newAccomplishment.date,
+        content: newAccomplishment.content,
+      });
       setAccomplishments(prev => [...prev, { ...newAccomplishment, id: accomplishmentId }]);
     } catch (error) {
       console.error('Error adding accomplishment:', error);

@@ -35,7 +35,6 @@ import { Separator } from '@/components/ui/separator';
 import { useAuth } from '@/contexts/auth-context';
 import { useToast } from '@/hooks/use-toast';
 import type { Milestone, MilestoneType } from '@/lib/types';
-import { MilestoneService } from '@/services/milestone-service';
 import { MilestoneUtils } from '@/lib/milestone-utils';
 import { cn } from '@/lib/utils';
 
@@ -131,6 +130,50 @@ const milestoneTypes: Array<{
     description: 'Any other important date',
   },
 ];
+
+type MilestoneMutationInput = Omit<Milestone, 'id' | 'userEmail' | 'createdAt' | 'updatedAt'>;
+
+const getApiErrorMessage = async (response: Response, fallback: string): Promise<string> => {
+  const data = (await response.json().catch(() => null)) as { error?: string } | null;
+  return data?.error || fallback;
+};
+
+const createMilestone = async (
+  userEmail: string,
+  milestone: MilestoneMutationInput
+): Promise<void> => {
+  const response = await fetch('/api/milestones', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      userEmail,
+      milestone,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(await getApiErrorMessage(response, 'Failed to create milestone'));
+  }
+};
+
+const updateMilestone = async (
+  milestoneId: string,
+  milestone: MilestoneMutationInput
+): Promise<void> => {
+  const response = await fetch(`/api/milestones/${encodeURIComponent(milestoneId)}`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ milestone }),
+  });
+
+  if (!response.ok) {
+    throw new Error(await getApiErrorMessage(response, 'Failed to update milestone'));
+  }
+};
 
 export function MilestoneForm({ isOpen, onClose, milestone, onSuccess }: MilestoneFormProps) {
   const { user } = useAuth();
@@ -272,14 +315,14 @@ export function MilestoneForm({ isOpen, onClose, milestone, onSuccess }: Milesto
 
       if (milestone) {
         // Update existing milestone
-        await MilestoneService.updateMilestone(user.email, milestone.id, milestoneData);
+        await updateMilestone(milestone.id, milestoneData);
         toast({
           title: 'Milestone updated',
           description: `${formData.title} has been updated successfully`,
         });
       } else {
         // Create new milestone
-        await MilestoneService.createMilestone(user.email, milestoneData);
+        await createMilestone(user.email, milestoneData);
         toast({
           title: 'Milestone created',
           description: `${formData.title} has been added to your milestones`,

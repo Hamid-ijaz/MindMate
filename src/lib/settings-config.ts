@@ -3,7 +3,6 @@ import {
   Palette, 
   Bell, 
   ListTodo, 
-  Calendar, 
   Smartphone, 
   Shield, 
   Zap,
@@ -118,22 +117,6 @@ export const settingsConfig: Record<string, SettingsCategory> = {
         icon: Timer,
         component: 'TaskDurationSettings',
         keywords: ['duration', 'time', 'estimates', 'minutes', 'hours']
-      }
-    ]
-  },
-  integrations: {
-    id: 'integrations',
-    title: 'Integrations',
-    description: 'Connect external services and calendars',
-    icon: Link,
-    settings: [
-      {
-        id: 'calendar-connections',
-        label: 'Calendar Sync',
-        description: 'Connect your Google Calendar and other services',
-        icon: Calendar,
-        component: 'GoogleTasksIntegrations',
-        keywords: ['calendar', 'google', 'sync', 'integration', 'external']
       }
     ]
   },

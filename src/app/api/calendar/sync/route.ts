@@ -10,7 +10,7 @@ export async function POST(request: NextRequest) {
     // You'll need to get the user's sync configuration from your database
     // For now, using a default configuration
     const syncConfig: CalendarSyncConfig = {
-      enabledProviders: ['google', 'outlook'],
+      enabledProviders: ['outlook'],
       syncInterval: 300000, // 5 minutes
       conflictResolution: 'manual',
       autoSync: true,
@@ -153,7 +153,7 @@ export async function GET(request: NextRequest) {
 
     // Default sync configuration
     const syncConfig: CalendarSyncConfig = {
-      enabledProviders: ['google', 'outlook'],
+      enabledProviders: ['outlook'],
       syncInterval: 300000,
       conflictResolution: 'manual',
       autoSync: true,

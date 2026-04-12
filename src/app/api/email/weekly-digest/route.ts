@@ -1,22 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { emailService } from '@/lib/email';
-import { taskService, userService } from '@/lib/firestore';
-import { initializeApp, getApps, cert } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
-
-if (!getApps().length) {
-  try {
-    initializeApp({
-      credential: cert({
-        projectId: process.env.FIREBASE_PROJECT_ID,
-        clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-        privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-      }),
-    });
-  } catch (error) {
-    console.error('Firebase Admin initialization error:', error);
-  }
-}
+import { prisma } from '@/lib/prisma';
+import { taskPrismaService } from '@/services/server/task-prisma-service';
+import { userPrismaService } from '@/services/server/user-prisma-service';
 
 export async function POST(request: NextRequest) {
   try {
@@ -50,7 +36,7 @@ async function sendWeeklyDigestForUser(userEmail: string) {
     }
 
     // Get user info
-    const user = await userService.getUser(userEmail);
+    const user = await userPrismaService.getUser(userEmail);
     if (!user) {
       return { success: false, message: 'User not found' };
     }
@@ -97,22 +83,24 @@ async function sendWeeklyDigestForAllUsers(forceToday = false) {
     const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
     const todayName = dayNames[today];
 
-    const db = getFirestore();
-    
-    // Get users who have weekly digest enabled and today is their digest day
-    let query = db.collection('emailPreferences')
-      .where('weeklyDigest', '==', true);
-
-    if (!forceToday) {
-      query = query.where('digestDay', '==', todayName);
-    }
-
-    const preferencesSnapshot = await query.get();
+    const preferences = await prisma.emailPreference.findMany({
+      where: {
+        weeklyDigest: true,
+        ...(forceToday
+          ? {}
+          : {
+              digestDay: todayName,
+            }),
+      },
+      select: {
+        userEmail: true,
+      },
+    });
     
     const results = [];
     
-    for (const doc of preferencesSnapshot.docs) {
-      const userEmail = doc.id;
+    for (const preference of preferences) {
+      const userEmail = preference.userEmail;
       const result = await sendWeeklyDigestForUser(userEmail);
       results.push({ userEmail, ...result });
     }
@@ -132,9 +120,20 @@ async function sendWeeklyDigestForAllUsers(forceToday = false) {
 
 async function getUserEmailPreferences(userEmail: string) {
   try {
-    const db = getFirestore();
-    const doc = await db.collection('emailPreferences').doc(userEmail).get();
-    return doc.exists ? doc.data() : null;
+    const preferences = await prisma.emailPreference.findUnique({
+      where: {
+        userEmail,
+      },
+    });
+
+    if (!preferences) {
+      return null;
+    }
+
+    return {
+      weeklyDigest: preferences.weeklyDigest,
+      digestDay: preferences.digestDay,
+    };
   } catch (error) {
     console.error('Error getting user preferences:', error);
     return null;
@@ -148,7 +147,11 @@ async function getWeeklyStatsForUser(userEmail: string) {
     const twoWeeksAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
 
     // Get all tasks for the user
-    const tasks = await taskService.getTasks(userEmail);
+    const tasks = (await taskPrismaService.getTasks(userEmail)).map((task) => ({
+      ...task,
+      completed: !!task.completedAt,
+      dueDate: task.reminderAt,
+    }));
     
     // Filter tasks from the last week
     const thisWeekTasks = tasks.filter((task: any) => {
@@ -590,11 +593,13 @@ Manage preferences: ${data.companyUrl}/settings
 
 async function logDigestSent(userEmail: string) {
   try {
-    const db = getFirestore();
-    await db.collection('emailDigestLog').add({
-      userEmail,
-      sentAt: new Date(),
-      type: 'weekly',
+    await prisma.notification.create({
+      data: {
+        userEmail,
+        title: 'Weekly digest email sent',
+        body: 'Your weekly digest email was sent successfully.',
+        type: 'weekly_digest_email',
+      },
     });
   } catch (error) {
     console.error('Error logging digest:', error);

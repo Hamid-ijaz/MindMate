@@ -22,7 +22,7 @@ import {
   deleteField
 } from 'firebase/firestore';
 import { db } from './firebase';
-import type { Task, User, Accomplishment, Note, SharedItem, ShareHistoryEntry, SharePermission, ShareCollaborator, ShareAnalytics, GoogleTasksSettings, ChatMessage, ChatSession, ChatContext, NotificationDocument, NotificationData, NotificationStats } from './types';
+import type { Task, User, Accomplishment, Note, SharedItem, ShareHistoryEntry, SharePermission, ShareCollaborator, ShareAnalytics, ChatMessage, ChatSession, ChatContext, NotificationDocument, NotificationData, NotificationStats } from './types';
 
 // Collection names
 export const COLLECTIONS = {
@@ -141,7 +141,7 @@ const serializeTaskForFirestore = (task: any, isUpdate: boolean = false) => {
     return data;
 }
 
-const deserializeTaskFromFirestore = (docSnap: any) => {
+const deserializeTaskFromFirestore = (docSnap: any): Task => {
     const data = docSnap.data();
     
     // Helper function to safely convert timestamps
@@ -199,46 +199,16 @@ export const taskService = {
   },
 
   async addTask(userEmail: string, task: Omit<Task, 'id' | 'userEmail'>): Promise<string> {
-    console.log(`💾 addTask: Creating task for user ${userEmail}:`, {
-      title: task.title,
-      syncToGoogleTasks: task.syncToGoogleTasks,
-      hasReminderAt: !!task.reminderAt,
-      category: task.category
-    });
-
     const tasksRef = collection(db, COLLECTIONS.TASKS);
     // Build taskData, omitting undefined fields
     const taskData: any = {
       ...task,
       userEmail,
       createdAt: Timestamp.now(), // Use server timestamp
-      syncToGoogleTasks: task.syncToGoogleTasks ?? true, // Default to true for Google Tasks sync
     };
-
-    console.log(`💾 addTask: Final task data to save:`, {
-      title: taskData.title,
-      syncToGoogleTasks: taskData.syncToGoogleTasks,
-      userEmail: taskData.userEmail,
-      hasCreatedAt: !!taskData.createdAt
-    });
 
     const docRef = doc(tasksRef);
     await setDoc(docRef, serializeTaskForFirestore(taskData));
-
-    console.log(`✅ addTask: Task saved successfully with ID: ${docRef.id}`);
-
-    // Trigger real-time Google Tasks sync if enabled (server-side only)
-    if (taskData.syncToGoogleTasks && typeof window === 'undefined') {
-      try {
-        const fullTask: Task = { ...taskData, id: docRef.id };
-        const { getGoogleTasksSyncService } = await import('@/lib/server-google-tasks');
-        const googleTasksSyncService = await getGoogleTasksSyncService();
-        await googleTasksSyncService.onTaskCreated(userEmail, fullTask);
-      } catch (error) {
-        console.warn('Real-time Google Tasks sync failed for new task:', error);
-        // Don't throw - task creation should succeed even if sync fails
-      }
-    }
 
     return docRef.id;
   },
@@ -282,9 +252,6 @@ export const taskService = {
   },
 
   async updateTask(taskId: string, updates: Partial<Omit<Task, 'id' | 'userEmail'>>): Promise<void> {
-    // Get the current task data for comparison
-    const currentTask = await this.getTask(taskId);
-    
     const taskRef = doc(db, COLLECTIONS.TASKS, taskId);
     
     // Use the same serialization logic for consistency
@@ -298,50 +265,11 @@ export const taskService = {
     });
 
     await updateDoc(taskRef, updateData);
-
-    // Trigger real-time Google Tasks sync if enabled and task exists (server-side only)
-    if (currentTask && (currentTask.syncToGoogleTasks || updates.syncToGoogleTasks) && typeof window === 'undefined') {
-      try {
-        const updatedTask: Task = { ...currentTask, ...updates };
-        const { getGoogleTasksSyncService } = await import('@/lib/server-google-tasks');
-        const googleTasksSyncService = await getGoogleTasksSyncService();
-        
-        // Check if it's a completion status change
-        const wasCompleted = !!currentTask.completedAt;
-        const isCompleted = !!(updates.completedAt !== undefined ? updates.completedAt : currentTask.completedAt);
-        
-        if (wasCompleted !== isCompleted) {
-          // Completion status changed
-          await googleTasksSyncService.onTaskCompleted(currentTask.userEmail, updatedTask, isCompleted);
-        } else {
-          // Regular update
-          await googleTasksSyncService.onTaskUpdated(currentTask.userEmail, updatedTask, currentTask);
-        }
-      } catch (error) {
-        console.warn('Real-time Google Tasks sync failed for task update:', error);
-        // Don't throw - task update should succeed even if sync fails
-      }
-    }
   },
 
   async deleteTask(taskId: string): Promise<void> {
-    // Get the task data before deletion for sync purposes
-    const task = await this.getTask(taskId);
-    
     const taskRef = doc(db, COLLECTIONS.TASKS, taskId);
     await deleteDoc(taskRef);
-
-    // Trigger real-time Google Tasks sync if enabled and task exists (server-side only)
-    if (task && task.syncToGoogleTasks && typeof window === 'undefined') {
-      try {
-        const { getGoogleTasksSyncService } = await import('@/lib/server-google-tasks');
-        const googleTasksSyncService = await getGoogleTasksSyncService();
-        await googleTasksSyncService.onTaskDeleted(task.userEmail, task);
-      } catch (error) {
-        console.warn('Real-time Google Tasks sync failed for task deletion:', error);
-        // Don't throw - task deletion should succeed even if sync fails
-      }
-    }
   },
 
   async deleteTasksWithParentId(parentId: string): Promise<void> {
@@ -519,159 +447,6 @@ export const userSettingsService = {
       userEmail,
       updatedAt: Timestamp.now()
     }, { merge: true });
-  }
-};
-
-// Google Tasks settings operations
-export const googleTasksService = {
-  async getGoogleTasksSettings(userEmail: string): Promise<GoogleTasksSettings | null> {
-    try {
-      const userRef = doc(db, COLLECTIONS.USERS, userEmail);
-      const userSnap = await getDoc(userRef);
-      
-      if (userSnap.exists()) {
-        const userData = userSnap.data();
-        return userData.googleTasksSettings || null;
-      }
-      return null;
-    } catch (error) {
-      console.error('Error getting Google Tasks settings:', error);
-      return null;
-    }
-  },
-
-  async updateGoogleTasksSettings(userEmail: string, settings: Partial<GoogleTasksSettings>): Promise<void> {
-    try {
-      const userRef = doc(db, COLLECTIONS.USERS, userEmail);
-      
-      // Get existing settings to preserve all existing data
-      const existingDoc = await getDoc(userRef);
-      const existingSettings = existingDoc.exists() ? existingDoc.data()?.googleTasksSettings : null;
-      
-      // Merge existing settings with new ones (new ones take precedence)
-      const mergedData = {
-        ...existingSettings, // Start with existing settings
-        ...settings,         // Override with new settings
-        lastSyncAt: settings.lastSyncAt || Date.now()
-      };
-      
-      // Only set connectedAt if it doesn't exist and we're connecting
-      if (!existingSettings?.connectedAt && settings.isConnected) {
-        mergedData.connectedAt = Date.now();
-      }
-      
-      // Filter out undefined values (Firestore doesn't accept them)
-      const updateData = Object.fromEntries(
-        Object.entries(mergedData).filter(([, value]) => value !== undefined)
-      );
-      
-      console.log('💾 Updating Google Tasks settings:', {
-        ...updateData,
-        accessToken: (updateData.accessToken && typeof updateData.accessToken === 'string') ? `${updateData.accessToken.substring(0, 10)}...` : 'none',
-        refreshToken: (updateData.refreshToken && typeof updateData.refreshToken === 'string') ? `${updateData.refreshToken.substring(0, 10)}...` : 'none'
-      });
-      
-      await updateDoc(userRef, {
-        [`googleTasksSettings`]: updateData
-      });
-    } catch (error) {
-      console.error('Error updating Google Tasks settings:', error);
-      throw error;
-    }
-  },
-
-  async disconnectGoogleTasks(userEmail: string): Promise<void> {
-    try {
-      const userRef = doc(db, COLLECTIONS.USERS, userEmail);
-      await updateDoc(userRef, {
-        [`googleTasksSettings.isConnected`]: false,
-        [`googleTasksSettings.syncEnabled`]: false,
-        [`googleTasksSettings.accessToken`]: deleteField(),
-        [`googleTasksSettings.refreshToken`]: deleteField(),
-        [`googleTasksSettings.tokenExpiresAt`]: deleteField(),
-        [`googleTasksSettings.userEmail`]: deleteField(),
-        [`googleTasksSettings.defaultTaskListId`]: deleteField(),
-        [`googleTasksSettings.syncStatus`]: 'idle',
-        [`googleTasksSettings.lastError`]: deleteField(),
-        [`googleTasksSettings.connectedAt`]: deleteField(),
-        [`googleTasksSettings.lastSyncAt`]: deleteField()
-      });
-    } catch (error) {
-      console.error('Error disconnecting Google Tasks:', error);
-      throw error;
-    }
-  },
-
-  async syncTaskToGoogleTasks(userEmail: string, taskId: string, syncData: {
-    googleTaskId?: string;
-    syncStatus: 'pending' | 'synced' | 'error' | 'deleted';
-    lastSync?: number;
-    googleTaskUrl?: string;
-    error?: string;
-    taskListId?: string; // Add task list ID to track which list the task is synced to
-  }): Promise<void> {
-    try {
-      const taskRef = doc(db, COLLECTIONS.TASKS, taskId);
-      
-      // Build update object, filtering out undefined values
-      const updateData: any = {
-        googleTaskSyncStatus: syncData.syncStatus,
-        googleTaskLastSync: syncData.lastSync || Date.now()
-      };
-      
-      // Only add fields that are not undefined
-      if (syncData.googleTaskId !== undefined) {
-        updateData.googleTaskId = syncData.googleTaskId;
-      }
-      
-      if (syncData.googleTaskUrl !== undefined) {
-        updateData.googleTaskUrl = syncData.googleTaskUrl;
-      }
-      
-      if (syncData.error !== undefined) {
-        updateData.googleTaskError = syncData.error;
-      }
-      
-      if (syncData.taskListId !== undefined) {
-        updateData.googleTaskListId = syncData.taskListId;
-      }
-      
-      // Remove any undefined values to prevent Firestore errors
-      const sanitizedData = Object.fromEntries(
-        Object.entries(updateData).filter(([, value]) => value !== undefined)
-      ) as { [key: string]: unknown };
-      
-      await updateDoc(taskRef, sanitizedData as Partial<Task>);
-    } catch (error) {
-      console.error('Error updating task Google Tasks sync status:', error);
-      throw error;
-    }
-  },
-
-  async getTaskGoogleSyncData(userEmail: string, taskId: string): Promise<{
-    googleTaskId?: string;
-    taskListId?: string;
-    syncStatus?: 'pending' | 'synced' | 'error' | 'deleted';
-    lastSync?: number;
-  } | null> {
-    try {
-      const taskRef = doc(db, COLLECTIONS.TASKS, taskId);
-      const taskSnap = await getDoc(taskRef);
-      
-      if (taskSnap.exists()) {
-        const data = taskSnap.data();
-        return {
-          googleTaskId: data.googleTaskId || undefined,
-          taskListId: data.googleTaskListId || undefined,
-          syncStatus: data.googleTaskSyncStatus || undefined,
-          lastSync: data.googleTaskLastSync || undefined
-        };
-      }
-      return null;
-    } catch (error) {
-      console.error('Error getting task Google sync data:', error);
-      return null;
-    }
   }
 };
 

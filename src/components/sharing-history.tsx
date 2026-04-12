@@ -54,9 +54,22 @@ export function SharingHistory({ isOpen, onClose, itemId, itemType, itemTitle }:
     
     setIsLoading(true);
     try {
-      const { sharingService } = await import('@/lib/firestore');
-      const items = await sharingService.getSharedItemsByOwner(user.email);
-      const itemShares = items.filter(item => item.itemId === itemId);
+      const response = await fetch('/api/share/owner', {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to load sharing data: ${response.status}`);
+      }
+
+      const payload = await response.json();
+      const items = (payload.items ?? []) as SharedItem[];
+      const itemShares = items.filter(
+        (item) => item.itemId === itemId && item.itemType === itemType
+      );
       setSharedItems(itemShares);
       
       if (itemShares.length > 0) {

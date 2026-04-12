@@ -1,4 +1,6 @@
-# Task List Validation and Cleanup Fix
+# [ARCHIVED] Task List Validation and Cleanup Fix
+
+> Status (April 2026): Historical fix note for legacy Google task sync behavior. Keep for reference only during migration cleanup.
 
 ## Issue
 The sync operation was failing with "Task list not found" error when trying to access a Google task list that no longer exists. This happened because:

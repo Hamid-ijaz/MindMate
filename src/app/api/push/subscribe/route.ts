@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@/lib/firebase';
 import { collection, addDoc, query, where, getDocs, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import { getAuthenticatedUserEmail, isAuthorizedCronRequest } from '@/lib/auth-utils';
 
 interface PushSubscriptionData {
   endpoint: string;
@@ -22,6 +22,15 @@ interface PushSubscriptionData {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json() as PushSubscriptionData;
+    const authenticatedUserEmail = await getAuthenticatedUserEmail(request);
+    const isCronRequest = isAuthorizedCronRequest(request);
+
+    if (!isCronRequest && !authenticatedUserEmail) {
+      return NextResponse.json(
+        { error: 'Not authenticated' },
+        { status: 401 }
+      );
+    }
     
     // Validate required fields
     if (!body.endpoint || !body.keys?.p256dh || !body.keys?.auth) {
@@ -31,15 +40,22 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check if user is authenticated
-    const authorization = request.headers.get('authorization');
-    let userId = body.userId;
-    
-    if (!userId && authorization?.startsWith('Bearer ')) {
-      // If no userId in body, try to get from auth token
-      // This would require additional Firebase Auth token verification
-      userId = body.userId || 'anonymous';
+    const targetUserEmail = body.userEmail || body.userId;
+    if (!targetUserEmail) {
+      return NextResponse.json(
+        { error: 'Missing required user identity' },
+        { status: 400 }
+      );
     }
+
+    if (!isCronRequest && authenticatedUserEmail !== targetUserEmail) {
+      return NextResponse.json(
+        { error: 'Forbidden' },
+        { status: 403 }
+      );
+    }
+
+    const userId = targetUserEmail;
 
     // Check if subscription already exists for this endpoint
     const subscriptionsRef = collection(db, 'pushSubscriptions');
@@ -58,7 +74,7 @@ export async function POST(request: NextRequest) {
       await updateDoc(docRef, {
         keys: body.keys,
         userId: userId,
-        userEmail: body.userEmail,
+        userEmail: targetUserEmail,
         deviceInfo: body.deviceInfo,
         updatedAt: serverTimestamp(),
         isActive: true,
@@ -77,7 +93,7 @@ export async function POST(request: NextRequest) {
         endpoint: body.endpoint,
         keys: body.keys,
         userId: userId,
-        userEmail: body.userEmail,
+        userEmail: targetUserEmail,
         deviceInfo: body.deviceInfo,
   // canonical subscription object
   subscription: { endpoint: body.endpoint, keys: body.keys },
@@ -109,6 +125,16 @@ export async function POST(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   try {
+    const authenticatedUserEmail = await getAuthenticatedUserEmail(request);
+    const isCronRequest = isAuthorizedCronRequest(request);
+
+    if (!isCronRequest && !authenticatedUserEmail) {
+      return NextResponse.json(
+        { error: 'Not authenticated' },
+        { status: 401 }
+      );
+    }
+
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get('userId');
     
@@ -116,6 +142,13 @@ export async function GET(request: NextRequest) {
       return NextResponse.json(
         { error: 'UserId is required' },
         { status: 400 }
+      );
+    }
+
+    if (!isCronRequest && authenticatedUserEmail !== userId) {
+      return NextResponse.json(
+        { error: 'Forbidden' },
+        { status: 403 }
       );
     }
 

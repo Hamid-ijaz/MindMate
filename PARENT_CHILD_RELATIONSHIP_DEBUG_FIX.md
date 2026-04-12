@@ -1,4 +1,6 @@
-# Parent-Child Relationship Debugging Fix
+# [ARCHIVED] Parent-Child Relationship Debugging Fix
+
+> Status (April 2026): Historical debugging note for legacy Google task sync behavior. Keep for reference only during migration cleanup.
 
 ## Issue
 Tasks are being created in Google Tasks but parent-child relationships are not being established. All tasks show `parentGoogleTaskId: 'none'` in logs even when they should have parent relationships.

@@ -45,7 +45,6 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/contexts/auth-context';
 import { useToast } from '@/hooks/use-toast';
 import type { Milestone, MilestoneType } from '@/lib/types';
-import { MilestoneService } from '@/services/milestone-service';
 import { MilestoneUtils } from '@/lib/milestone-utils';
 import { MilestoneForm } from '@/components/milestone-form';
 import { cn } from '@/lib/utils';
@@ -54,6 +53,52 @@ const pageVariants = {
   initial: { opacity: 0, y: 20 },
   animate: { opacity: 1, y: 0 },
   exit: { opacity: 0, y: -20 }
+};
+
+const getApiErrorMessage = async (response: Response, fallback: string): Promise<string> => {
+  const data = (await response.json().catch(() => null)) as { error?: string } | null;
+  return data?.error || fallback;
+};
+
+const fetchMilestones = async (userEmail: string): Promise<Milestone[]> => {
+  const response = await fetch(
+    `/api/milestones?userEmail=${encodeURIComponent(userEmail)}`,
+    { cache: 'no-store' }
+  );
+
+  if (!response.ok) {
+    throw new Error(await getApiErrorMessage(response, 'Failed to load milestones'));
+  }
+
+  const data = (await response.json()) as { milestones?: Milestone[] };
+  return Array.isArray(data.milestones) ? data.milestones : [];
+};
+
+const deleteMilestoneById = async (milestoneId: string): Promise<void> => {
+  const response = await fetch(`/api/milestones/${encodeURIComponent(milestoneId)}`, {
+    method: 'DELETE',
+  });
+
+  if (!response.ok) {
+    throw new Error(await getApiErrorMessage(response, 'Failed to delete milestone'));
+  }
+};
+
+const updateMilestoneById = async (
+  milestoneId: string,
+  updates: Partial<Omit<Milestone, 'id' | 'userEmail' | 'createdAt' | 'updatedAt'>>
+): Promise<void> => {
+  const response = await fetch(`/api/milestones/${encodeURIComponent(milestoneId)}`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ milestone: updates }),
+  });
+
+  if (!response.ok) {
+    throw new Error(await getApiErrorMessage(response, 'Failed to update milestone'));
+  }
 };
 
 export default function MilestonesPage() {
@@ -87,7 +132,7 @@ export default function MilestonesPage() {
     
     try {
       setIsLoading(true);
-      const userMilestones = await MilestoneService.getUserMilestones(user.email);
+      const userMilestones = await fetchMilestones(user.email);
       setMilestones(userMilestones);
     } catch (error) {
       console.error('Error loading milestones:', error);
@@ -155,7 +200,7 @@ export default function MilestonesPage() {
     if (!user?.email) return;
 
     try {
-      await MilestoneService.deleteMilestone(user.email, milestone.id);
+      await deleteMilestoneById(milestone.id);
       await loadMilestones();
       toast({
         title: 'Milestone deleted',
@@ -175,7 +220,7 @@ export default function MilestonesPage() {
     if (!user?.email) return;
 
     try {
-      await MilestoneService.updateMilestone(user.email, milestone.id, {
+      await updateMilestoneById(milestone.id, {
         isActive: !milestone.isActive,
       });
       await loadMilestones();

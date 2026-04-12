@@ -1,20 +1,28 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { initializeApp, getApps, cert } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
-import { userService } from '@/lib/firestore';
+import { prisma } from '@/lib/prisma';
+import { userPrismaService } from '@/services/server/user-prisma-service';
+import { decodePasswordResetToken, passwordResetTokensMatch } from '@/lib/password-reset-token';
 
-if (!getApps().length) {
-  try {
-    initializeApp({
-      credential: cert({
-        projectId: process.env.FIREBASE_PROJECT_ID,
-        clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-        privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-      }),
-    });
-  } catch (error) {
-    console.error('Firebase Admin initialization error:', error);
+async function findTokenRecord(token: string, email: string) {
+  const direct = await prisma.passwordResetToken.findUnique({
+    where: { token },
+  });
+
+  if (direct) {
+    return direct;
   }
+
+  const candidates = await prisma.passwordResetToken.findMany({
+    where: { email },
+    orderBy: { createdAt: 'desc' },
+    take: 10,
+  });
+
+  return (
+    candidates.find((candidate: { token: string }) =>
+      passwordResetTokensMatch(token, candidate.token)
+    ) ?? null
+  );
 }
 
 export async function POST(request: NextRequest) {
@@ -37,76 +45,38 @@ export async function POST(request: NextRequest) {
     }
 
     // Decode token to get email
-    let decodedToken;
-    try {
-      const decodedData = Buffer.from(decodeURIComponent(token), 'base64').toString('utf-8');
-      const parts = decodedData.split(':');
-      if (parts.length < 3) {
-        throw new Error('Invalid token format');
-      }
-      
-      decodedToken = {
-        email: parts[0],
-        timestamp: parseInt(parts[1]),
-        randomStr: parts[2],
-      };
-    } catch (error) {
+    const decodedToken = decodePasswordResetToken(token);
+    if (!decodedToken) {
       return NextResponse.json(
         { error: 'Invalid token format' },
         { status: 400 }
       );
     }
 
-    const db = getFirestore();
-    
     // Validate token one more time
-    const tokenDoc = await db.collection('passwordResetTokens').doc(decodedToken.email).get();
-
-    if (!tokenDoc.exists) {
+    const tokenRecord = await findTokenRecord(token, decodedToken.email);
+    if (!tokenRecord) {
       return NextResponse.json(
         { error: 'Token not found' },
         { status: 404 }
       );
     }
 
-    const tokenData = tokenDoc.data();
-    
-    if (!tokenData) {
+    if (!passwordResetTokensMatch(token, tokenRecord.token)) {
       return NextResponse.json(
-        { error: 'Token data not found' },
-        { status: 404 }
+        { error: 'Invalid token' },
+        { status: 400 }
       );
     }
-    
-    // Check token match with same logic as validate-reset-token
-    if (tokenData.token !== token) {
-      // Try comparing decoded content if direct comparison fails
-      try {
-        const providedDecoded = Buffer.from(decodeURIComponent(token), 'base64').toString('utf-8');
-        const storedDecoded = Buffer.from(decodeURIComponent(tokenData.token), 'base64').toString('utf-8');
-        
-        if (providedDecoded !== storedDecoded) {
-          return NextResponse.json(
-            { error: 'Invalid token' },
-            { status: 400 }
-          );
-        }
-      } catch (error) {
-        return NextResponse.json(
-          { error: 'Invalid token' },
-          { status: 400 }
-        );
-      }
-    }
 
-    if (new Date() > tokenData.expiresAt.toDate()) {
+    if (new Date() > tokenRecord.expiresAt) {
       return NextResponse.json(
         { error: 'Token has expired' },
         { status: 400 }
       );
     }
 
-    if (tokenData.used) {
+    if (tokenRecord.used) {
       return NextResponse.json(
         { error: 'Token has already been used' },
         { status: 400 }
@@ -115,14 +85,26 @@ export async function POST(request: NextRequest) {
 
     // Update user password
     try {
-      await userService.updateUser(decodedToken.email, {
+      const updatedUser = await userPrismaService.updateUser(decodedToken.email, {
         password: newPassword,
       });
 
+      if (!updatedUser) {
+        return NextResponse.json(
+          { error: 'User not found' },
+          { status: 404 }
+        );
+      }
+
       // Mark token as used
-      await db.collection('passwordResetTokens').doc(decodedToken.email).update({
-        used: true,
-        usedAt: new Date(),
+      await prisma.passwordResetToken.update({
+        where: {
+          id: tokenRecord.id,
+        },
+        data: {
+          used: true,
+          usedAt: new Date(),
+        },
       });
 
       return NextResponse.json({

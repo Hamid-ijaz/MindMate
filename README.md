@@ -64,8 +64,9 @@ Here is a summary of the key features implemented so far:
     - Advanced task visualization
     - Session tracking and statistics
 
-- **External Calendar Sync**
-    - Google Calendar integration (sync, conflict resolution, two-way sync)
+- **External Calendar Sync (Legacy / Transitional)**
+    - Google Tasks and related OAuth sync flows are in legacy maintenance mode during migration.
+    - New deployments should keep Google sync disabled unless explicitly required.
     - Outlook Calendar integration (framework present)
     - Sync token management for incremental sync
 
@@ -102,6 +103,13 @@ Here is a summary of the key features implemented so far:
 - **Accessibility**
     - Keyboard navigation
     - Screen reader support
+
+## Google Sync Status (April 2026)
+
+- Google task sync and related OAuth flows are in legacy maintenance mode.
+- Historical implementation notes are kept as archived references only.
+- Runtime code paths still exist for backward compatibility with existing deployments.
+- Fresh environments should not treat Google sync as required unless legacy routes are intentionally enabled.
 
 ## 🎉 Milestones feature overview
 
@@ -212,10 +220,11 @@ To get a local copy up and running, follow these simple steps.
     # Google AI Configuration
     GOOGLE_AI_API_KEY=your_google_ai_api_key_here
 
-    # External Calendar Integration - Google Calendar
-    GOOGLE_CLIENT_ID=your_google_oauth_client_id
-    GOOGLE_CLIENT_SECRET=your_google_oauth_client_secret
-    GOOGLE_REDIRECT_URI=http://localhost:3000/api/calendar/google
+    # Legacy Google Tasks OAuth (optional, deprecated)
+    # Uncomment only if you are running legacy /api/google/* sync routes.
+    # GOOGLE_CLIENT_ID=your_google_oauth_client_id
+    # GOOGLE_CLIENT_SECRET=your_google_oauth_client_secret
+    # GOOGLE_OAUTH_REDIRECT=http://localhost:9002/api/google/callback
 
     # External Calendar Integration - Microsoft Outlook
     OUTLOOK_CLIENT_ID=your_outlook_app_client_id

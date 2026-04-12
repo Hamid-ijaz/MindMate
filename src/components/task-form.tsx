@@ -32,7 +32,6 @@ import { summarizeUrl } from "@/ai/flows/summarize-url-flow";
 import { enhanceTask } from "@/ai/flows/enhance-task-flow";
 import { Loader2, Wand2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { useGoogleTasksSync } from "@/hooks/use-google-tasks-sync";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { CalendarIcon } from "lucide-react";
 import { Calendar } from "./ui/calendar";
@@ -91,21 +90,6 @@ export function TaskForm({ task, onFinished, parentId, defaultValues: propDefaul
   const [isSummarizing, startSummarizeTransition] = useTransition();
   const [isEnhancing, startEnhanceTransition] = useTransition();
   const { toast } = useToast();
-
-  // Add Google Tasks sync hooks
-  const { syncTaskChange } = useGoogleTasksSync({
-    onSyncError: (error) => {
-      console.error('Google Tasks sync error:', error);
-      toast({
-        title: "Sync Warning",
-        description: "Task saved locally but couldn't sync to Google Tasks.",
-        variant: "destructive"
-      });
-    },
-    onSyncComplete: (result) => {
-      console.log('Google Tasks sync complete:', result);
-    }
-  });
 
   const defaultValues: Partial<TaskFormValues> = task ? {
     ...task,
@@ -232,7 +216,6 @@ export function TaskForm({ task, onFinished, parentId, defaultValues: propDefaul
         isAllDay: true, // Always set to true
         reminderAt: data.reminderAt ? data.reminderAt.getTime() : undefined,
         onlyNotifyAtReminder: data.onlyNotifyAtReminder || false,
-        syncToGoogleTasks: true, // Enable Google Tasks sync for all new tasks
         recurrence: data.recurrence && data.recurrence.frequency !== 'none' ? {
             ...data.recurrence,
             endDate: data.recurrence.endDate ? data.recurrence.endDate.getTime() : undefined,
@@ -240,8 +223,6 @@ export function TaskForm({ task, onFinished, parentId, defaultValues: propDefaul
     }
 
     try {
-      let savedTaskId = task?.id;
-      
       if (task) {
         // Update existing task
         if (customSaveHandler) {
@@ -249,15 +230,12 @@ export function TaskForm({ task, onFinished, parentId, defaultValues: propDefaul
         } else {
           await updateTask(task.id, taskData as Partial<Task>);
         }
-        savedTaskId = task.id;
       } else {
         // Add new task
         if (customAddHandler) {
-          const newTask = await customAddHandler({ ...taskData, parentId } as Omit<Task, 'id' | 'createdAt' | 'rejectionCount' | 'isMuted' | 'completedAt' | 'lastRejectedAt' | 'notifiedAt'>);
-          savedTaskId = (newTask as any)?.id; // Assuming the handler returns the task with ID
+          await customAddHandler({ ...taskData, parentId } as Omit<Task, 'id' | 'createdAt' | 'rejectionCount' | 'isMuted' | 'completedAt' | 'lastRejectedAt' | 'notifiedAt'>);
         } else {
-          const newTask = await addTask({ ...taskData, parentId } as Omit<Task, 'id' | 'createdAt' | 'rejectionCount' | 'isMuted' | 'completedAt' | 'lastRejectedAt' | 'notifiedAt'>);
-          savedTaskId = (newTask as any)?.id;
+          await addTask({ ...taskData, parentId } as Omit<Task, 'id' | 'createdAt' | 'rejectionCount' | 'isMuted' | 'completedAt' | 'lastRejectedAt' | 'notifiedAt'>);
         }
       }
 
@@ -266,16 +244,6 @@ export function TaskForm({ task, onFinished, parentId, defaultValues: propDefaul
         title: task ? "Task Updated" : "Task Created",
         description: task ? "Task has been updated successfully." : "Task has been created successfully.",
       });
-
-      // Sync to Google Tasks after successful save
-      if (savedTaskId) {
-        try {
-          await syncTaskChange(savedTaskId);
-        } catch (syncError) {
-          // Sync error is handled by the sync hook's onSyncError callback
-          console.error('Failed to sync to Google Tasks:', syncError);
-        }
-      }
       
       onFinished?.();
       if (!task) {

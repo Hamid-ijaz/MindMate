@@ -1,20 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { initializeApp, getApps, cert } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
+import { prisma } from '@/lib/prisma';
 
-if (!getApps().length) {
-  try {
-    initializeApp({
-      credential: cert({
-        projectId: process.env.FIREBASE_PROJECT_ID,
-        clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-        privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-      }),
-    });
-  } catch (error) {
-    console.error('Firebase Admin initialization error:', error);
-  }
-}
+const defaultPreferences = {
+  welcomeEmails: true,
+  taskReminders: true,
+  shareNotifications: true,
+  teamInvitations: true,
+  weeklyDigest: true,
+  dailyDigest: true,
+  marketingEmails: false,
+  reminderFrequency: 'immediate',
+  digestDay: 'monday',
+  dailyDigestTime: '09:00',
+  quietHours: {
+    enabled: false,
+    startTime: '22:00',
+    endTime: '08:00',
+  },
+};
+
+type EmailPreferenceInput = Partial<typeof defaultPreferences>;
 
 export async function GET(request: NextRequest) {
   try {
@@ -28,35 +33,36 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const db = getFirestore();
-    const doc = await db.collection('emailPreferences').doc(userEmail).get();
+    const preferences = await prisma.emailPreference.findUnique({
+      where: {
+        userEmail,
+      },
+    });
 
-    if (doc.exists) {
+    if (preferences) {
       return NextResponse.json({
         success: true,
-        preferences: doc.data(),
+        preferences: {
+          welcomeEmails: preferences.welcomeEmails,
+          taskReminders: preferences.taskReminders,
+          shareNotifications: preferences.shareNotifications,
+          teamInvitations: preferences.teamInvitations,
+          weeklyDigest: preferences.weeklyDigest,
+          dailyDigest: preferences.dailyDigest,
+          marketingEmails: preferences.marketingEmails,
+          reminderFrequency: preferences.reminderFrequency,
+          digestDay: preferences.digestDay,
+          dailyDigestTime: preferences.dailyDigestTime,
+          quietHours:
+            (preferences.quietHours as { enabled?: boolean; startTime?: string; endTime?: string } | null) ??
+            defaultPreferences.quietHours,
+        },
       });
     } else {
       // Return default preferences
       return NextResponse.json({
         success: true,
-        preferences: {
-          welcomeEmails: true,
-          taskReminders: true,
-          shareNotifications: true,
-          teamInvitations: true,
-          weeklyDigest: true,
-          dailyDigest: true,
-          marketingEmails: false,
-          reminderFrequency: 'immediate',
-          digestDay: 'monday',
-          dailyDigestTime: '09:00',
-          quietHours: {
-            enabled: false,
-            startTime: '22:00',
-            endTime: '08:00',
-          },
-        },
+        preferences: defaultPreferences,
       });
     }
   } catch (error) {
@@ -71,7 +77,8 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { userEmail, preferences } = body;
+    const userEmail = typeof body.userEmail === 'string' ? body.userEmail.trim().toLowerCase() : '';
+    const preferences = (body.preferences ?? {}) as EmailPreferenceInput;
 
     if (!userEmail || !preferences) {
       return NextResponse.json(
@@ -80,12 +87,38 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const db = getFirestore();
-    await db.collection('emailPreferences').doc(userEmail).set({
-      ...preferences,
-      userEmail,
-      updatedAt: new Date(),
-    }, { merge: true });
+    const existing = await prisma.emailPreference.findUnique({
+      where: {
+        userEmail,
+      },
+    });
+
+    const upsertData = {
+      welcomeEmails: preferences.welcomeEmails ?? existing?.welcomeEmails ?? defaultPreferences.welcomeEmails,
+      taskReminders: preferences.taskReminders ?? existing?.taskReminders ?? defaultPreferences.taskReminders,
+      shareNotifications:
+        preferences.shareNotifications ?? existing?.shareNotifications ?? defaultPreferences.shareNotifications,
+      teamInvitations: preferences.teamInvitations ?? existing?.teamInvitations ?? defaultPreferences.teamInvitations,
+      weeklyDigest: preferences.weeklyDigest ?? existing?.weeklyDigest ?? defaultPreferences.weeklyDigest,
+      dailyDigest: preferences.dailyDigest ?? existing?.dailyDigest ?? defaultPreferences.dailyDigest,
+      marketingEmails: preferences.marketingEmails ?? existing?.marketingEmails ?? defaultPreferences.marketingEmails,
+      reminderFrequency:
+        preferences.reminderFrequency ?? existing?.reminderFrequency ?? defaultPreferences.reminderFrequency,
+      digestDay: preferences.digestDay ?? existing?.digestDay ?? defaultPreferences.digestDay,
+      dailyDigestTime: preferences.dailyDigestTime ?? existing?.dailyDigestTime ?? defaultPreferences.dailyDigestTime,
+      quietHours: preferences.quietHours ?? existing?.quietHours ?? defaultPreferences.quietHours,
+    };
+
+    await prisma.emailPreference.upsert({
+      where: {
+        userEmail,
+      },
+      create: {
+        userEmail,
+        ...upsertData,
+      },
+      update: upsertData,
+    });
 
     return NextResponse.json({
       success: true,

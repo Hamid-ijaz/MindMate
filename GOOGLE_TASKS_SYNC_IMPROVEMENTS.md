@@ -1,4 +1,6 @@
-# Google Tasks Sync Improvements - Implementation Summary
+# [ARCHIVED] Google Tasks Sync Improvements - Implementation Summary
+
+> Status (April 2026): Historical implementation record only. Google task sync is in legacy maintenance mode and scheduled for removal after migration completion.
 
 ## Overview
 This document outlines the comprehensive improvements made to the Google Tasks synchronization system to address all identified issues and optimize performance.

@@ -19,7 +19,6 @@ import {
   Loader2, 
   TestTube,
   CheckCircle,
-  XCircle,
   Clock,
   Users,
   Mail,
@@ -31,8 +30,7 @@ import {
   ChevronRight,
   Send,
   Calendar,
-  CalendarDays,
-  Trash2
+  CalendarDays
 } from 'lucide-react';
 
 interface ComprehensiveCheckResult {
@@ -76,17 +74,6 @@ export function AdminSettings() {
     logs: false,
     userDetails: false
   });
-  const [clearGoogleTaskIdsLoading, setClearGoogleTaskIdsLoading] = useState(false);
-  const [clearGoogleTaskIdsResult, setClearGoogleTaskIdsResult] = useState<{
-    success: boolean;
-    totalTasks: number;
-    clearedCount: number;
-    skippedCount: number;
-    errors: string[];
-    message: string;
-  } | null>(null);
-  const [googleTasksDebugLoading, setGoogleTasksDebugLoading] = useState(false);
-  const [googleTasksDebugResult, setGoogleTasksDebugResult] = useState<any>(null);
 
   const isAdmin = user?.email === "hamid.ijaz91@gmail.com" || user?.email === "testuser1@test.com";
 
@@ -188,103 +175,6 @@ export function AdminSettings() {
       });
     } finally {
       setEmailTestLoading(prev => ({ ...prev, [emailType]: false }));
-    }
-  };
-
-  const handleClearGoogleTaskIds = async () => {
-    if (!isAdmin) {
-      toast({
-        title: "Access denied",
-        description: "You don't have permission to perform this action.",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    setClearGoogleTaskIdsLoading(true);
-    setClearGoogleTaskIdsResult(null);
-
-    try {
-      toast({
-        title: "🧹 Clearing Google Task IDs",
-        description: "Clearing googleTaskId from all incomplete tasks..."
-      });
-
-      const res = await fetch('/api/admin/clear-google-task-ids', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      });
-
-      const responseData = await res.json();
-
-      if (res.ok && responseData.success) {
-        setClearGoogleTaskIdsResult(responseData);
-        toast({
-          title: "✅ Google Task IDs cleared",
-          description: responseData.message
-        });
-      } else {
-        toast({
-          title: "❌ Clear operation failed",
-          description: responseData.error || "Failed to clear Google Task IDs",
-          variant: "destructive"
-        });
-      }
-    } catch (error) {
-      console.error('Clear Google Task IDs error:', error);
-      toast({
-        title: "Error",
-        description: "An error occurred while clearing Google Task IDs.",
-        variant: "destructive"
-      });
-    } finally {
-      setClearGoogleTaskIdsLoading(false);
-    }
-  };
-
-  const handleGoogleTasksDebug = async () => {
-    setGoogleTasksDebugLoading(true);
-    setGoogleTasksDebugResult(null);
-
-    try {
-      toast({
-        title: "🔍 Checking Google Tasks Status",
-        description: "Running comprehensive debug check..."
-      });
-
-      const res = await fetch('/api/google/debug', {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      });
-
-      const responseData = await res.json();
-
-      if (res.ok) {
-        setGoogleTasksDebugResult(responseData);
-        toast({
-          title: "✅ Debug Check Completed",
-          description: "Google Tasks status retrieved successfully"
-        });
-      } else {
-        toast({
-          title: "❌ Debug Check Failed",
-          description: responseData.error || "Failed to get debug info",
-          variant: "destructive"
-        });
-      }
-    } catch (error) {
-      console.error('Google Tasks debug error:', error);
-      toast({
-        title: "Error",
-        description: "An error occurred while checking Google Tasks status.",
-        variant: "destructive"
-      });
-    } finally {
-      setGoogleTasksDebugLoading(false);
     }
   };
 
@@ -860,148 +750,6 @@ export function AdminSettings() {
                 <li>• Digest emails will be sent with current user data</li>
                 <li>• Test emails help verify email templates and delivery</li>
                 <li>• Check your inbox and spam folder for test emails</li>
-              </ul>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Google Tasks Testing Tools */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <TestTube className="h-5 w-5" />
-            Google Tasks Testing Tools
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="clear-google-task-ids" className="text-sm font-medium">
-              Clear Google Task IDs from Incomplete Tasks
-            </Label>
-            <p className="text-xs text-muted-foreground">
-              This will set googleTaskId to null for all incomplete tasks. Useful for testing sync behavior.
-            </p>
-            <Button
-              onClick={handleClearGoogleTaskIds}
-              disabled={clearGoogleTaskIdsLoading || !isAdmin}
-              variant="outline"
-              className="w-full"
-            >
-              {clearGoogleTaskIdsLoading ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Clearing Google Task IDs...
-                </>
-              ) : (
-                <>
-                  <Trash2 className="h-4 w-4 mr-2" />
-                  Clear Google Task IDs
-                </>
-              )}
-            </Button>
-          </div>
-
-          <Separator />
-
-          <div className="space-y-2">
-            <Label htmlFor="google-tasks-debug" className="text-sm font-medium">
-              Debug Google Tasks Status
-            </Label>
-            <p className="text-xs text-muted-foreground">
-              Check your Google Tasks connection, settings, and recent activity for debugging sync issues.
-            </p>
-            <Button
-              onClick={handleGoogleTasksDebug}
-              disabled={googleTasksDebugLoading}
-              variant="outline"
-              className="w-full"
-            >
-              {googleTasksDebugLoading ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Running Debug Check...
-                </>
-              ) : (
-                <>
-                  <TestTube className="h-4 w-4 mr-2" />
-                  Debug Google Tasks Status
-                </>
-              )}
-            </Button>
-          </div>
-
-          {clearGoogleTaskIdsResult && (
-            <Alert
-              className={clearGoogleTaskIdsResult.errors.length > 0
-                ? "border-orange-200 bg-orange-50 dark:border-orange-800 dark:bg-orange-950"
-                : "border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-950"
-              }
-            >
-              {clearGoogleTaskIdsResult.errors.length > 0
-                ? <AlertCircle className="h-4 w-4" />
-                : <CheckCircle className="h-4 w-4" />
-              }
-              <AlertDescription>
-                <strong>Operation completed:</strong> {clearGoogleTaskIdsResult.message}
-                {clearGoogleTaskIdsResult.errors.length > 0 && (
-                  <div className="mt-2 text-xs">
-                    <strong>Errors:</strong>
-                    <ul className="list-disc list-inside mt-1">
-                      {clearGoogleTaskIdsResult.errors.map((error, index) => (
-                        <li key={index}>{error}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-              </AlertDescription>
-            </Alert>
-          )}
-
-          {googleTasksDebugResult && (
-            <Alert
-              className={googleTasksDebugResult.connectivityTest?.success
-                ? "border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-950"
-                : "border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-950"
-              }
-            >
-              {googleTasksDebugResult.connectivityTest?.success
-                ? <CheckCircle className="h-4 w-4" />
-                : <XCircle className="h-4 w-4" />
-              }
-              <AlertDescription>
-                <div className="space-y-2">
-                  <div><strong>Google Tasks Debug Results:</strong></div>
-                  <div className="text-xs space-y-1">
-                    <div>Connected: {googleTasksDebugResult.settings.isConnected ? '✅' : '❌'}</div>
-                    <div>Sync Enabled: {googleTasksDebugResult.settings.syncEnabled ? '✅' : '❌'}</div>
-                    <div>Has Access Token: {googleTasksDebugResult.settings.hasAccessToken ? '✅' : '❌'}</div>
-                    <div>API Connectivity: {googleTasksDebugResult.connectivityTest?.success ? '✅' : '❌'}</div>
-                    {googleTasksDebugResult.connectivityTest?.taskListsCount && (
-                      <div>Task Lists: {googleTasksDebugResult.connectivityTest.taskListsCount}</div>
-                    )}
-                    {googleTasksDebugResult.recentTasks && (
-                      <div>Tasks in Default List: {googleTasksDebugResult.recentTasks.totalTasks}</div>
-                    )}
-                  </div>
-                  {googleTasksDebugResult.connectivityTest?.error && (
-                    <div className="text-xs text-red-600 dark:text-red-400 mt-2">
-                      <strong>Error:</strong> {googleTasksDebugResult.connectivityTest.error}
-                    </div>
-                  )}
-                </div>
-              </AlertDescription>
-            </Alert>
-          )}
-
-          <div className="p-3 bg-blue-50 dark:bg-blue-950/30 rounded-lg border border-blue-200 dark:border-blue-800">
-            <div className="text-sm text-blue-800 dark:text-blue-200">
-              <div className="font-medium mb-1">💡 Google Tasks Testing Guide</div>
-              <ul className="text-xs space-y-1 text-blue-700 dark:text-blue-300">
-                <li>• Clear Google Task IDs to simulate fresh sync state</li>
-                <li>• Useful for testing auto-sync and bulk sync functionality</li>
-                <li>• Tasks will be re-synced on next sync operation</li>
-                <li>• Only affects incomplete tasks to avoid disrupting completed work</li>
               </ul>
             </div>
           </div>

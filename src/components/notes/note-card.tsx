@@ -46,7 +46,6 @@ export function NoteCard({ note, onClick, className = "" }: NoteCardProps & { cl
                 category: "Personal" as TaskCategory,
                 priority: "Medium" as Priority,
                 duration: 30 as TaskDuration,
-                googleTaskId: null,
             };
             
             await addTask(newTask);

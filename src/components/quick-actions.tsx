@@ -76,7 +76,6 @@ export function QuickActions({ className }: QuickActionsProps) {
         duration: template.duration,
         priority: template.priority,
         userEmail: user.email,
-        googleTaskId: null,
       });
 
       toast({
@@ -102,7 +101,6 @@ export function QuickActions({ className }: QuickActionsProps) {
       await addTask({
         ...customTask,
         userEmail: user.email,
-        googleTaskId: null,
       });
 
       toast({

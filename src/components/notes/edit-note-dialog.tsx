@@ -136,13 +136,27 @@ export function EditNoteDialog({ note, isOpen, onClose, shareToken, sharedBy }: 
 
             // If this is a shared note, record the edit in the sharing history
             if (shareToken && sharedBy) {
-                const { sharingService } = await import('@/lib/firestore');
-                await sharingService.addHistoryEntry(shareToken, {
-                    userId: sharedBy.email,
-                    userName: sharedBy.name,
-                    action: 'content_edited',
-                    details: `Modified the shared note: ${title || 'Untitled'}`
+                const response = await fetch(`/api/share/note/${encodeURIComponent(note.id)}/history`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        token: shareToken,
+                        updateItemTimestamp: true,
+                        entry: {
+                            userId: sharedBy.email,
+                            userName: sharedBy.name,
+                            action: 'content_edited',
+                            details: `Modified the shared note: ${title || 'Untitled'}`,
+                        },
+                    }),
                 });
+
+                if (!response.ok) {
+                    const errorPayload = await response.json().catch(() => null);
+                    throw new Error(errorPayload?.error || 'Failed to record share history');
+                }
             }
 
             toast({ title: "Note updated" });

@@ -21,7 +21,6 @@ import { ItemActionsDropdown } from './item-actions-dropdown';
 import { ShareDialog } from './share-dialog';
 import { SharingHistory } from './sharing-history';
 import { safeDate, safeDateFormat, isTaskOverdue } from '@/lib/utils';
-import { useGoogleTasksSync } from '@/hooks/use-google-tasks-sync';
 
 
 interface TaskItemProps {
@@ -45,16 +44,6 @@ export function TaskItem({ task, extraActions, isSubtask = false, isHistoryView 
   const [swipeDirection, setSwipeDirection] = useState<'left' | 'right' | null>(null);
   const router = useRouter();
   const completeButtonRef = useRef<HTMLButtonElement>(null);
-
-  // Google Tasks sync hooks
-  const { syncTaskChange, syncTaskDeletion } = useGoogleTasksSync({
-    onSyncError: (error) => {
-      console.error('Google Tasks sync error:', error);
-    },
-    onSyncComplete: (result) => {
-      console.log('Google Tasks sync complete:', result);
-    }
-  });
 
   // Touch gesture handlers
   const gestureHandlers = useTouchGestures({
@@ -97,29 +86,14 @@ export function TaskItem({ task, extraActions, isSubtask = false, isHistoryView 
     await acceptTask(task.id, {
       onComplete: () => handleTaskCompletion(completeButtonRef.current)
     });
-    
-    // Sync completion status to Google Tasks
-    try {
-      await syncTaskChange(task.id);
-    } catch (syncError) {
-      console.error('Failed to sync task completion to Google Tasks:', syncError);
-    }
-    
+
     // Notification deletion is now handled in acceptTask
     setIsCompleting(false);
   };
 
   const handleDelete = async () => {
     setIsDeleting(true);
-    
-    // Sync deletion to Google Tasks before deleting from app
-    const googleTaskId = (task as any).googleTaskId; // Get Google Task ID if exists
-    try {
-      await syncTaskDeletion(task.id, googleTaskId);
-    } catch (syncError) {
-      console.error('Failed to sync task deletion to Google Tasks:', syncError);
-    }
-    
+
     await deleteTask(task.id);
     // Notification deletion is now handled in deleteTask
     setIsDeleting(false);
@@ -135,14 +109,7 @@ export function TaskItem({ task, extraActions, isSubtask = false, isHistoryView 
 
   const handleUncomplete = async () => {
     await uncompleteTask(task.id);
-    
-    // Sync uncompletion status to Google Tasks
-    try {
-      await syncTaskChange(task.id);
-    } catch (syncError) {
-      console.error('Failed to sync task uncompletion to Google Tasks:', syncError);
-    }
-    
+
     if (isHistoryView) {
       router.push(`/task/${task.id}`);
     }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { initializeApp, getApps, cert } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
+import { getAuthenticatedUserEmail, isAuthorizedCronRequest } from '@/lib/auth-utils';
 
 // Initialize Firebase Admin if not already initialized
 if (!getApps().length) {
@@ -21,11 +22,24 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const { userId } = body;
+    const authenticatedUserEmail = await getAuthenticatedUserEmail(request);
+    const isCronRequest = isAuthorizedCronRequest(request);
+
+    if (!isCronRequest && !authenticatedUserEmail) {
+      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+    }
 
     if (!userId) {
       return NextResponse.json(
         { error: 'Missing required field: userId' },
         { status: 400 }
+      );
+    }
+
+    if (!isCronRequest && authenticatedUserEmail !== userId) {
+      return NextResponse.json(
+        { error: 'Forbidden' },
+        { status: 403 }
       );
     }
 
@@ -89,6 +103,12 @@ export async function POST(request: NextRequest) {
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const userId = searchParams.get('userId');
+  const authenticatedUserEmail = await getAuthenticatedUserEmail(request);
+  const isCronRequest = isAuthorizedCronRequest(request);
+
+  if (!isCronRequest && !authenticatedUserEmail) {
+    return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+  }
   
   if (!userId) {
     return NextResponse.json(
@@ -97,10 +117,55 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  // Create a mock request with the userId in the body
-  const mockRequest = {
-    json: async () => ({ userId })
-  } as NextRequest;
+  if (!isCronRequest && authenticatedUserEmail !== userId) {
+    return NextResponse.json(
+      { error: 'Forbidden' },
+      { status: 403 }
+    );
+  }
 
-  return POST(mockRequest);
+  const db = getFirestore();
+  const now = new Date();
+
+  const overdueTasksSnapshot = await db.collection('tasks')
+    .where('userId', '==', userId)
+    .where('completed', '==', false)
+    .where('dueDate', '<=', now)
+    .where('isMuted', '==', false)
+    .get();
+
+  const overdueTasks = overdueTasksSnapshot.docs.map(doc => ({
+    id: doc.id,
+    ...doc.data(),
+    dueDate: doc.data().dueDate?.toDate?.() || doc.data().dueDate
+  }));
+
+  const oneHourFromNow = new Date(now.getTime() + 60 * 60 * 1000);
+  const upcomingTasksSnapshot = await db.collection('tasks')
+    .where('userId', '==', userId)
+    .where('completed', '==', false)
+    .where('dueDate', '>', now)
+    .where('dueDate', '<=', oneHourFromNow)
+    .where('isMuted', '==', false)
+    .get();
+
+  const upcomingTasks = upcomingTasksSnapshot.docs.map(doc => ({
+    id: doc.id,
+    ...doc.data(),
+    dueDate: doc.data().dueDate?.toDate?.() || doc.data().dueDate
+  }));
+
+  return NextResponse.json({
+    success: true,
+    userId,
+    overdueTasks: {
+      count: overdueTasks.length,
+      tasks: overdueTasks
+    },
+    upcomingTasks: {
+      count: upcomingTasks.length,
+      tasks: upcomingTasks
+    },
+    checkedAt: now.toISOString()
+  });
 }

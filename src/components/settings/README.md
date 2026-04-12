@@ -43,7 +43,6 @@ Each setting is implemented as a separate component:
 - **NotificationPermissions** - Browser notification permissions
 - **TaskCategorySettings** - Task category management
 - **TaskDurationSettings** - Time estimate options
-- **GoogleTasksIntegrations** - External task service connections
 - **PWASettings** - Progressive Web App features
 - **AdminSettings** - Developer tools and admin functions
 
@@ -179,7 +178,6 @@ src/
 │   ├── notification-permissions.tsx # Notification permissions
 │   ├── task-category-settings.tsx  # Task categories
 │   ├── task-duration-settings.tsx  # Time estimates
-│   ├── google-tasks-integrations.tsx # Google Tasks sync
 │   ├── pwa-settings.tsx           # PWA features
 │   └── admin-settings.tsx         # Admin tools
 └── lib/

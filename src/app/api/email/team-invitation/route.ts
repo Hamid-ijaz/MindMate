@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { emailService } from '@/lib/email';
-import { userService } from '@/lib/firestore';
+import { prisma } from '@/lib/prisma';
+import { userPrismaService } from '@/services/server/user-prisma-service';
 
 export async function POST(request: NextRequest) {
   try {
@@ -29,7 +30,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Get the inviter's information
-    const inviterUser = await userService.getUser(inviterEmail);
+    const inviterUser = await userPrismaService.getUser(inviterEmail);
     if (!inviterUser) {
       return NextResponse.json(
         { error: 'Inviter user not found' },
@@ -119,29 +120,28 @@ async function storeTeamInvitation(inviteData: {
   customMessage?: string;
 }): Promise<void> {
   try {
-    const { initializeApp, getApps, cert } = await import('firebase-admin/app');
-    const { getFirestore } = await import('firebase-admin/firestore');
-
-    if (!getApps().length) {
-      initializeApp({
-        credential: cert({
-          projectId: process.env.FIREBASE_PROJECT_ID,
-          clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-          privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-        }),
-      });
-    }
-
-    const db = getFirestore();
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days from now
 
-    await db.collection('teamInvitations').add({
-      ...inviteData,
-      status: 'pending',
-      createdAt: new Date(),
-      expiresAt,
-      acceptedAt: null,
-      rejectedAt: null,
+    const recipient = await userPrismaService.getUser(inviteData.email);
+
+    if (!recipient) {
+      return;
+    }
+
+    await prisma.notification.create({
+      data: {
+        userEmail: inviteData.email,
+        title: `Team invitation: ${inviteData.teamName}`,
+        body: `${inviteData.inviterEmail} invited you as ${inviteData.role}.`,
+        type: 'team_invitation',
+        data: {
+          ...inviteData,
+          status: 'pending',
+          expiresAt: expiresAt.toISOString(),
+          acceptedAt: null,
+          rejectedAt: null,
+        },
+      },
     });
   } catch (error) {
     console.error('Error storing team invitation:', error);

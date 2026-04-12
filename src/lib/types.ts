@@ -265,14 +265,6 @@ export interface Task {
   attendees?: string[]; // Email addresses of attendees
   isRecurring?: boolean; // Whether this task repeats
   originalTaskId?: string; // For recurring tasks, reference to original
-  // Google Tasks Integration
-  syncToGoogleTasks?: boolean; // Whether this task should sync to Google Tasks
-  googleTaskId: string | null; // Google Tasks task ID
-  googleTaskListId?: string; // Google Task List ID where this task is synced
-  googleTaskSyncStatus?: 'pending' | 'synced' | 'error' | 'deleted';
-  googleTaskLastSync?: number; // Timestamp of last sync
-  googleTaskUrl?: string; // Direct link to Google Tasks
-  googleTaskError?: string; // Error message if sync failed
 }
 
 export interface User {
@@ -284,33 +276,6 @@ export interface User {
   password?: string; // In a real app, this would be a hash
   // Push Notification Settings
   notificationPreferences?: NotificationPreferences;
-  // Google Tasks Integration Settings
-  googleTasksSettings?: GoogleTasksSettings;
-}
-
-// Google Tasks Integration Types
-export interface GoogleTasksSettings {
-  isConnected: boolean;
-  accessToken?: string;
-  refreshToken?: string;
-  tokenExpiresAt?: number;
-  userEmail?: string;
-  defaultTaskListId?: string; // Which Google task list to sync with (for single list mode)
-  syncEnabled: boolean; // Global sync toggle
-  lastSyncAt?: number;
-  connectedAt?: number; // When Google Tasks was first connected
-  syncStatus?: 'idle' | 'syncing' | 'success' | 'error';
-  syncDirection?: 'app-to-google' | 'google-to-app' | 'bidirectional';
-  autoSync?: boolean; // Whether to automatically sync changes
-  syncInterval?: number; // Sync interval in minutes
-  lastError?: string;
-  onDeletedTasksAction?: 'skip' | 'recreate'; // What to do when Google Tasks are deleted
-  
-  // New category-based sync settings
-  syncMode?: 'single-list' | 'category-based'; // Choose between single list or category-based sync
-  taskListPrefix?: string; // Prefix for category-based task lists (e.g., "MyApp_")
-  categoryTaskLists?: Record<string, string>; // Map category names to Google task list IDs
-  archivedTaskListId?: string; // Task list ID for archived tasks
 }
 
 // Push Notification Types

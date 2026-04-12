@@ -3,7 +3,7 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import type { Note } from '@/lib/types';
-import { noteService } from '@/lib/firestore';
+import { noteApiService } from '@/services/client/note-api-service';
 import { useAuth } from './auth-context';
 import { useToast } from '@/hooks/use-toast';
 
@@ -38,7 +38,7 @@ export const NoteProvider = ({ children }: { children: ReactNode }) => {
     if (!user?.email) return;
     setIsLoading(true);
     try {
-      const userNotes = await noteService.getNotes(user.email);
+      const userNotes = await noteApiService.getNotes(user.email);
       setNotes(userNotes);
     } catch (error) {
       console.error('Error loading notes:', error);
@@ -55,7 +55,7 @@ export const NoteProvider = ({ children }: { children: ReactNode }) => {
   const addNote = async (noteData: Omit<Note, 'id' | 'createdAt' | 'updatedAt' | 'userEmail'>) => {
     if (!user?.email) return;
     try {
-      const newNoteId = await noteService.addNote({ ...noteData, userEmail: user.email });
+      const newNoteId = await noteApiService.addNote(user.email, noteData);
       const newNote: Note = {
           ...noteData,
           id: newNoteId,
@@ -73,7 +73,7 @@ export const NoteProvider = ({ children }: { children: ReactNode }) => {
 
   const updateNote = async (id: string, updates: Partial<Omit<Note, 'id' | 'userEmail'>>) => {
     try {
-      await noteService.updateNote(id, updates);
+      await noteApiService.updateNote(id, updates);
       setNotes(prev => prev.map(n => (n.id === id ? { ...n, ...updates, updatedAt: Date.now() } as Note : n)));
     } catch (error) {
       console.error('Error updating note:', error);
@@ -87,7 +87,7 @@ export const NoteProvider = ({ children }: { children: ReactNode }) => {
     setNotes(prev => prev.filter(n => n.id !== id));
     
     try {
-      await noteService.deleteNote(id);
+      await noteApiService.deleteNote(id);
     } catch (error) {
       // Rollback on error
       setNotes(previousNotes);

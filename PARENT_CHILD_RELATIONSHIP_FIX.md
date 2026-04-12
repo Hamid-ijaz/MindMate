@@ -1,4 +1,6 @@
-# Parent-Child Relationship Fix for Google Tasks
+# [ARCHIVED] Parent-Child Relationship Fix for Google Tasks
+
+> Status (April 2026): Historical fix note for legacy Google task sync behavior. Keep for reference only during migration cleanup.
 
 ## Issue
 Tasks were not being created with proper parent-child relationships in Google Tasks. Child tasks were being created as independent tasks instead of being nested under their parent tasks.

@@ -6,8 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { NotificationProvider } from '@/contexts/notification-context';
-import { Settings, User, Palette, Bell, Smartphone, Shield, ArrowLeft, Mail, Calendar } from 'lucide-react';
-import { GoogleTasksIntegrations } from '@/components/settings/google-tasks-integrations';
+import { Settings, User, Palette, Bell, Smartphone, Shield, ArrowLeft, Mail } from 'lucide-react';
 import { ProfileSettings } from '@/components/settings/profile-settings';
 import { ThemeSettings } from '@/components/settings/theme-settings';
 import { NotificationSettings } from '@/components/notification-settings';
@@ -59,13 +58,6 @@ const settingsItems = [
     component: EmailPreferencesSettings
   },
   {
-    id: 'calendar-connections',
-    title: 'Integrations',
-    description: 'Connect Google Tasks and other calendar services',
-    icon: Calendar,
-    component: GoogleTasksIntegrations
-  },
-  {
     id: 'tasks',
     title: 'Task Settings',
     description: 'Categories and durations',
@@ -90,7 +82,7 @@ const settingsItems = [
 
 function SettingsPageContent() {
   const searchParams = useSearchParams();
-  const [currentSetting, setCurrentSetting] = useState(searchParams.get('section') || 'overview');
+  const [currentSetting, setCurrentSetting] = useState(searchParams?.get('section') || 'overview');
 
   const CurrentComponent = settingsItems.find(item => item.id === currentSetting)?.component;
 

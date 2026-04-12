@@ -1,30 +1,36 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { initializeApp, getApps, cert } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
-import { taskService, userService } from '@/lib/firestore';
 import { emailService } from '@/lib/email';
-
-if (!getApps().length) {
-  try {
-    initializeApp({
-      credential: cert({
-        projectId: process.env.FIREBASE_PROJECT_ID,
-        clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-        privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-      }),
-    });
-  } catch (error) {
-    console.error('Firebase Admin initialization error:', error);
-  }
-}
+import { prisma } from '@/lib/prisma';
+import { taskPrismaService } from '@/services/server/task-prisma-service';
+import { userPrismaService } from '@/services/server/user-prisma-service';
 
 async function getUserEmailPreferences(userEmail: string) {
   try {
-    const db = getFirestore();
-    const doc = await db.collection('emailPreferences').doc(userEmail).get();
-    
-    if (doc.exists) {
-      return doc.data();
+    const preferences = await prisma.emailPreference.findUnique({
+      where: {
+        userEmail,
+      },
+    });
+
+    if (preferences) {
+      return {
+        dailyDigest: preferences.dailyDigest,
+        weeklyDigest: preferences.weeklyDigest,
+        taskReminders: preferences.taskReminders,
+        shareNotifications: preferences.shareNotifications,
+        teamInvitations: preferences.teamInvitations,
+        marketingEmails: preferences.marketingEmails,
+        reminderFrequency: preferences.reminderFrequency,
+        digestDay: preferences.digestDay,
+        dailyDigestTime: preferences.dailyDigestTime,
+        quietHours:
+          (preferences.quietHours as { enabled?: boolean; startTime?: string; endTime?: string } | null) ??
+          {
+            enabled: false,
+            startTime: '22:00',
+            endTime: '08:00',
+          },
+      };
     }
     
     // Return default preferences if none exist
@@ -74,7 +80,7 @@ async function sendDailyDigestForUser(userEmail: string) {
     }
 
     // Get user info
-    const user = await userService.getUser(userEmail);
+    const user = await userPrismaService.getUser(userEmail);
     if (!user) {
       return { success: false, message: 'User not found' };
     }
@@ -115,13 +121,7 @@ async function sendDailyDigestForUser(userEmail: string) {
 async function sendDailyDigestForAllUsers(forceToday = false) {
   try {
     const now = new Date();
-    const currentTime = now.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' });
-
-    const db = getFirestore();
-    
-    // Get users who have daily digest enabled
-    let query = db.collection('emailPreferences')
-      .where('dailyDigest', '==', true);
+    let userEmails: string[] = [];
 
     // If not forcing, filter by users whose digest time matches current time (within 1 hour window)
     if (!forceToday) {
@@ -135,16 +135,36 @@ async function sendDailyDigestForAllUsers(forceToday = false) {
       if (currentHour < 23) {
         timeWindow.push(`${(currentHour + 1).toString().padStart(2, '0')}:00`);
       }
-      
-      query = query.where('dailyDigestTime', 'in', timeWindow);
-    }
 
-    const preferencesSnapshot = await query.get();
+      const preferences = await prisma.emailPreference.findMany({
+        where: {
+          dailyDigest: true,
+          dailyDigestTime: {
+            in: timeWindow,
+          },
+        },
+        select: {
+          userEmail: true,
+        },
+      });
+
+      userEmails = preferences.map((preference) => preference.userEmail);
+    } else {
+      const preferences = await prisma.emailPreference.findMany({
+        where: {
+          dailyDigest: true,
+        },
+        select: {
+          userEmail: true,
+        },
+      });
+
+      userEmails = preferences.map((preference) => preference.userEmail);
+    }
     
     const results = [];
     
-    for (const doc of preferencesSnapshot.docs) {
-      const userEmail = doc.id;
+    for (const userEmail of userEmails) {
       const result = await sendDailyDigestForUser(userEmail);
       results.push({ userEmail, ...result });
     }
@@ -174,7 +194,11 @@ async function getDailyStatsForUser(userEmail: string) {
     const endOfTomorrow = new Date(startOfTomorrow.getTime() + 24 * 60 * 60 * 1000 - 1);
 
     // Get all tasks for the user
-    const tasks = await taskService.getTasks(userEmail);
+    const tasks = (await taskPrismaService.getTasks(userEmail)).map((task) => ({
+      ...task,
+      dueDate: task.reminderAt,
+      completed: !!task.completedAt,
+    }));
     
     // TODAY'S ACHIEVEMENTS - Tasks completed today
     const todaysAchievements = tasks.filter((task: any) => {

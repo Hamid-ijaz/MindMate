@@ -1,13 +1,9 @@
 // Calendar Sync Manager - Orchestrates sync across multiple providers
-import { GoogleCalendarService } from '@/lib/calendar-sync/google-calendar';
 import { OutlookCalendarService } from '@/lib/calendar-sync/outlook-calendar';
 import type { 
   ExternalCalendar, 
-  SyncableCalendarEvent, 
   CalendarSyncConfig,
-  CalendarProvider,
   SyncConflict,
-  SyncStatus,
   Task 
 } from '@/lib/types';
 
@@ -26,7 +22,6 @@ export interface SyncResult {
 }
 
 export class CalendarSyncManager {
-  private googleService: GoogleCalendarService | null = null;
   private outlookService: OutlookCalendarService | null = null;
   private syncInProgress = new Set<string>();
   private conflictQueue: SyncConflict[] = [];
@@ -37,15 +32,6 @@ export class CalendarSyncManager {
    * Initialize calendar services
    */
   async initialize() {
-    // Initialize Google Calendar service
-    if (this.config.enabledProviders.includes('google')) {
-      this.googleService = new GoogleCalendarService(
-        process.env.GOOGLE_CLIENT_ID!,
-        process.env.GOOGLE_CLIENT_SECRET!,
-        process.env.GOOGLE_REDIRECT_URI!
-      );
-    }
-
     // Initialize Outlook service
     if (this.config.enabledProviders.includes('outlook')) {
       this.outlookService = new OutlookCalendarService(
@@ -118,9 +104,6 @@ export class CalendarSyncManager {
       );
 
       switch (calendar.provider) {
-        case 'google':
-          await this.syncGoogleCalendar(calendar, relevantTasks, result);
-          break;
         case 'outlook':
           await this.syncOutlookCalendar(calendar, relevantTasks, result);
           break;
@@ -139,64 +122,6 @@ export class CalendarSyncManager {
   }
 
   /**
-   * Sync Google Calendar
-   */
-  private async syncGoogleCalendar(
-    calendar: ExternalCalendar,
-    localTasks: Task[],
-    result: SyncResult
-  ): Promise<void> {
-    if (!this.googleService) {
-      result.errors.push('Google Calendar service not initialized');
-      return;
-    }
-
-    try {
-      // Set tokens for this calendar
-      this.googleService.setTokens(
-        calendar.accessToken!,
-        calendar.refreshToken,
-        calendar.tokenExpiresAt
-      );
-
-      // Perform sync
-      const syncResult = await this.googleService.syncEvents(
-        calendar.calendarId || 'primary',
-        localTasks,
-        calendar.syncToken
-      );
-
-      result.stats.added = syncResult.added.length;
-      result.stats.updated = syncResult.updated.length;
-      result.stats.deleted = syncResult.deleted.length;
-      result.stats.conflicts = syncResult.conflicts.length;
-
-      // Update calendar sync token
-      calendar.syncToken = syncResult.nextSyncToken;
-      calendar.lastSyncAt = Date.now();
-      calendar.syncStatus = 'success';
-
-      // Process conflicts
-      for (const conflict of syncResult.conflicts) {
-        this.conflictQueue.push({
-          id: `${calendar.id}-${conflict.taskId}`,
-          taskId: conflict.taskId,
-          calendarId: calendar.id,
-          localVersion: conflict.localVersion,
-          externalVersion: conflict.externalVersion,
-          conflictFields: conflict.conflictFields,
-          suggestedResolution: this.suggestConflictResolution(conflict),
-        });
-      }
-
-    } catch (error) {
-      calendar.syncStatus = 'error';
-      calendar.lastError = error instanceof Error ? error.message : 'Unknown error';
-      result.errors.push(calendar.lastError);
-    }
-  }
-
-  /**
    * Sync Outlook Calendar
    */
   private async syncOutlookCalendar(
@@ -209,9 +134,50 @@ export class CalendarSyncManager {
       return;
     }
 
-    // Implementation similar to Google Calendar sync
-    // This would use the OutlookCalendarService methods
-    result.errors.push('Outlook sync not implemented yet');
+    if (!calendar.accessToken) {
+      result.errors.push('Missing access token for Outlook calendar');
+      return;
+    }
+
+    try {
+      this.outlookService.setTokens(
+        calendar.accessToken,
+        calendar.refreshToken,
+        calendar.tokenExpiresAt
+      );
+
+      const syncResult = await this.outlookService.syncEvents(
+        calendar.calendarId || 'primary',
+        localTasks,
+        calendar.syncToken
+      );
+
+      result.stats.added = syncResult.added.length;
+      result.stats.updated = syncResult.updated.length;
+      result.stats.deleted = syncResult.deleted.length;
+      result.stats.conflicts = syncResult.conflicts.length;
+
+      // Reuse syncToken to store provider incremental state.
+      calendar.syncToken = syncResult.nextDeltaLink;
+      calendar.lastSyncAt = Date.now();
+      calendar.syncStatus = 'success';
+
+      for (const conflict of syncResult.conflicts) {
+        this.conflictQueue.push({
+          id: `${calendar.id}-${conflict.taskId}`,
+          taskId: conflict.taskId,
+          calendarId: calendar.id,
+          localVersion: conflict.localVersion,
+          externalVersion: conflict.externalVersion,
+          conflictFields: conflict.conflictFields,
+          suggestedResolution: this.suggestConflictResolution(conflict),
+        });
+      }
+    } catch (error) {
+      calendar.syncStatus = 'error';
+      calendar.lastError = error instanceof Error ? error.message : 'Unknown error';
+      result.errors.push(calendar.lastError);
+    }
   }
 
   /**
@@ -339,18 +305,15 @@ export class CalendarSyncManager {
   async testConnection(calendar: ExternalCalendar): Promise<boolean> {
     try {
       switch (calendar.provider) {
-        case 'google':
-          if (!this.googleService) return false;
-          this.googleService.setTokens(
-            calendar.accessToken!,
+        case 'outlook':
+          if (!this.outlookService) return false;
+          if (!calendar.accessToken) return false;
+          this.outlookService.setTokens(
+            calendar.accessToken,
             calendar.refreshToken,
             calendar.tokenExpiresAt
           );
-          await this.googleService.getCalendarList();
-          return true;
-        case 'outlook':
-          if (!this.outlookService) return false;
-          // Test Outlook connection
+          await this.outlookService.getCalendars();
           return true;
         default:
           return false;

@@ -15,7 +15,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { chat } from '@/ai/flows/chat-flow';
 import type { Task, ChatMessage, ChatSession, ChatContext, QuickAction, TaskReference, SuggestedTask } from '@/lib/types';
-import { chatService } from '@/lib/firestore';
+import { chatApiService as chatService } from '@/services/client/chat-api-service';
 import { 
   Send, 
   Loader2, 
@@ -251,7 +251,6 @@ export default function EnhancedChatPage() {
         priority: suggestedTask.priority || 'Medium',
         duration: suggestedTask.duration || 30,
         userEmail: user.email,
-        googleTaskId: null,
       });
       
       setAddedTasks(prev => new Set(prev).add(suggestedTask.title));

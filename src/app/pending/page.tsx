@@ -133,7 +133,7 @@ function PendingTasksContent() {
   }, [uncompletedTasks, search, category, priority, sortBy, overdueOnly, showArchived]);
 
   useEffect(() => {
-    const taskId = searchParams.get('taskId');
+    const taskId = searchParams?.get('taskId') || null;
     if (taskId && !isLoading) {
       setTimeout(() => {
         const el = taskRefs.current[taskId];
@@ -200,7 +200,6 @@ function PendingTasksContent() {
             priority: 'Low',
             duration: 15,
             userEmail: user?.email || '', // Add missing userEmail
-            googleTaskId: null,
         });
     });
     

@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { emailService } from '@/lib/email';
-import { userService } from '@/lib/firestore';
+import { prisma } from '@/lib/prisma';
+import { userPrismaService } from '@/services/server/user-prisma-service';
+import { generatePasswordResetToken } from '@/lib/password-reset-token';
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { email } = body;
+    const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
 
     if (!email) {
       return NextResponse.json(
@@ -15,7 +17,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if user exists
-    const user = await userService.getUser(email);
+    const user = await userPrismaService.getUser(email);
     if (!user) {
       // Don't reveal if user exists or not for security
       return NextResponse.json({ 
@@ -62,43 +64,31 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// Helper functions
-function generatePasswordResetToken(email: string): string {
-  // Simple implementation - in production, use proper JWT or secure token generation
-  const timestamp = Date.now();
-  const randomStr = Math.random().toString(36).substring(2, 15);
-  const token = Buffer.from(`${email}:${timestamp}:${randomStr}`).toString('base64');
-  return encodeURIComponent(token);
-}
-
 async function storePasswordResetToken(email: string, token: string): Promise<void> {
   try {
-    // Store in Firestore with 1 hour expiration
-    const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour from now
-    
-    // You can implement this in your firestore service
-    // For now, we'll add it to a password_reset_tokens collection
-    const { initializeApp, getApps, cert } = await import('firebase-admin/app');
-    const { getFirestore } = await import('firebase-admin/firestore');
+    const normalizedEmail = email.trim().toLowerCase();
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
+    const now = new Date();
 
-    if (!getApps().length) {
-      initializeApp({
-        credential: cert({
-          projectId: process.env.FIREBASE_PROJECT_ID,
-          clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-          privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-        }),
-      });
-    }
-
-    const db = getFirestore();
-    await db.collection('passwordResetTokens').doc(email).set({
-      token,
-      email,
-      expiresAt,
-      createdAt: new Date(),
-      used: false,
-    });
+    await prisma.$transaction([
+      prisma.passwordResetToken.updateMany({
+        where: {
+          email: normalizedEmail,
+          used: false,
+        },
+        data: {
+          used: true,
+          usedAt: now,
+        },
+      }),
+      prisma.passwordResetToken.create({
+        data: {
+          email: normalizedEmail,
+          token,
+          expiresAt,
+        },
+      }),
+    ]);
   } catch (error) {
     console.error('Error storing password reset token:', error);
     throw error;

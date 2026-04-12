@@ -112,7 +112,8 @@ function TaskPageSkeleton() {
 import { NotificationProvider } from '@/contexts/notification-context';
 
 function TaskPageInner() {
-    const { id } = useParams();
+    const params = useParams<{ id: string }>();
+    const id = params?.id;
     const router = useRouter();
     const { toast } = useToast();
     const { tasks, isLoading, startEditingTask, deleteTask, acceptTask, uncompleteTask } = useTasks();

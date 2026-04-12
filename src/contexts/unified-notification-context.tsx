@@ -2,10 +2,12 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode, useRef } from 'react';
 import { useAuth } from './auth-context';
-import { notificationService } from '@/lib/firestore';
+import { notificationApiService } from '@/services/client/notification-api-service';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import type { NotificationDocument, NotificationData } from '@/lib/types';
+
+const NOTIFICATIONS_POLL_INTERVAL_MS = 10000;
 
 interface UnifiedNotificationContextType {
   // Data
@@ -49,7 +51,69 @@ export const UnifiedNotificationProvider = ({ children }: NotificationProviderPr
   const dismissedNotificationsRef = useRef<Set<string>>(new Set());
   const isInitialLoadRef = useRef(true);
   const getDismissedKey = (email?: string) => `mindmate-dismissed-toasts:${email ?? 'anon'}`;
-  const unsubscribeRef = useRef<(() => void) | null>(null);
+
+  const applyFetchedNotifications = useCallback((newNotifications: NotificationDocument[]) => {
+    setNotifications(newNotifications);
+    setUnreadCount(newNotifications.filter(n => !n.isRead).length);
+
+    const isMobileViewport =
+      typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches;
+
+    if (isMobileViewport && isInitialLoadRef.current) {
+      newNotifications.forEach(notif => {
+        if (!notif.isRead) {
+          displayedNotificationsRef.current.add(notif.id);
+        }
+      });
+      isInitialLoadRef.current = false;
+      return;
+    }
+
+    // Show toast notifications for new unread notifications.
+    newNotifications.forEach(notif => {
+      if (
+        !notif.isRead &&
+        !displayedNotificationsRef.current.has(notif.id) &&
+        !dismissedNotificationsRef.current.has(notif.id)
+      ) {
+        displayedNotificationsRef.current.add(notif.id);
+
+        const persistDismiss = (id: string) => {
+          try {
+            dismissedNotificationsRef.current.add(id);
+            localStorage.setItem(
+              getDismissedKey(user?.email),
+              JSON.stringify(Array.from(dismissedNotificationsRef.current))
+            );
+          } catch (error) {
+            console.warn('Failed to persist dismissed toast id', error);
+          }
+        };
+
+        const { dismiss } = toast({
+          title: `🔔 ${notif.title}`,
+          description: notif.body,
+          duration: 5000,
+          action: (
+            <Button size="sm" onClick={() => { dismiss(); persistDismiss(notif.id); }}>
+              Dismiss
+            </Button>
+          ),
+        });
+      }
+    });
+
+    isInitialLoadRef.current = false;
+  }, [toast, user?.email]);
+
+  const fetchNotifications = useCallback(async (maxCount = 200): Promise<void> => {
+    if (!user?.email) {
+      return;
+    }
+
+    const newNotifications = await notificationApiService.listNotifications(user.email, maxCount);
+    applyFetchedNotifications(newNotifications);
+  }, [applyFetchedNotifications, user?.email]);
 
   // Initialize permission state
   useEffect(() => {
@@ -58,7 +122,7 @@ export const UnifiedNotificationProvider = ({ children }: NotificationProviderPr
     }
   }, []);
 
-  // Set up real-time subscription when user is available
+  // Poll notifications when user is available.
   useEffect(() => {
     isInitialLoadRef.current = true;
 
@@ -78,87 +142,44 @@ export const UnifiedNotificationProvider = ({ children }: NotificationProviderPr
     if (!user?.email) {
       setNotifications([]);
       setUnreadCount(0);
+      setIsLoading(false);
       return;
     }
 
-    setIsLoading(true);
+    let isMounted = true;
+    let isFetching = false;
 
-    // Subscribe to real-time notifications
-    const unsubscribe = notificationService.subscribeToNotifications(
-      user.email,
-      (newNotifications) => {
-        setNotifications(newNotifications);
-        setUnreadCount(newNotifications.filter(n => !n.isRead).length);
-        setIsLoading(false);
+    const pollNotifications = async () => {
+      if (isFetching) {
+        return;
+      }
 
-        const isMobileViewport =
-          typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches;
-
-        if (isMobileViewport && isInitialLoadRef.current) {
-          newNotifications.forEach(notif => {
-            if (!notif.isRead) {
-              displayedNotificationsRef.current.add(notif.id);
-            }
-          });
-          isInitialLoadRef.current = false;
-          return;
+      isFetching = true;
+      try {
+        await fetchNotifications(200);
+      } catch (error) {
+        if (isMounted) {
+          console.error('Failed to poll notifications:', error);
         }
-        
-        // Show toast notifications for new unread notifications
-        newNotifications.forEach(notif => {
-          // skip if already displayed in this session or dismissed by user
-          if (
-            !notif.isRead &&
-            !displayedNotificationsRef.current.has(notif.id) &&
-            !dismissedNotificationsRef.current.has(notif.id)
-          ) {
-            displayedNotificationsRef.current.add(notif.id);
-
-            const persistDismiss = (id: string) => {
-              try {
-                dismissedNotificationsRef.current.add(id);
-                localStorage.setItem(
-                  getDismissedKey(user?.email),
-                  JSON.stringify(Array.from(dismissedNotificationsRef.current))
-                );
-              } catch (error) {
-                console.warn('Failed to persist dismissed toast id', error);
-              }
-            };
-
-            const { dismiss } = toast({
-              title: `🔔 ${notif.title}`,
-              description: notif.body,
-              duration: 5000,
-              action: (
-                <Button size="sm" onClick={() => { dismiss(); persistDismiss(notif.id); }}>
-                  Dismiss
-                </Button>
-              ),
-            });
-          }
-        });
-
-        isInitialLoadRef.current = false;
-      }
-    );
-
-    unsubscribeRef.current = unsubscribe;
-
-    return () => {
-      unsubscribe();
-      unsubscribeRef.current = null;
-    };
-  }, [user?.email, toast]);
-
-  // Clean up subscription on unmount
-  useEffect(() => {
-    return () => {
-      if (unsubscribeRef.current) {
-        unsubscribeRef.current();
+      } finally {
+        if (isMounted) {
+          setIsLoading(false);
+        }
+        isFetching = false;
       }
     };
-  }, []);
+
+    setIsLoading(true);
+    void pollNotifications();
+    const intervalId = window.setInterval(() => {
+      void pollNotifications();
+    }, NOTIFICATIONS_POLL_INTERVAL_MS);
+
+    return () => {
+      isMounted = false;
+      window.clearInterval(intervalId);
+    };
+  }, [fetchNotifications, user?.email]);
 
   // Listen for messages from the service worker (e.g. notification click)
   // When SW posts { type: 'NAVIGATE_TO_TASK', taskId }, mark related notifications as read
@@ -174,12 +195,13 @@ export const UnifiedNotificationProvider = ({ children }: NotificationProviderPr
         if (!taskId || !user?.email) return;
 
         // Fetch recent notifications and mark any unread notifications related to this task as read
-        const allNotifs = await notificationService.getNotifications(user.email, 200);
+        const allNotifs = await notificationApiService.listNotifications(user.email, 200);
         const related = allNotifs.filter(n => (
           n.relatedTaskId === taskId || n.data?.taskId === taskId
         ) && !n.isRead);
 
-        await Promise.all(related.map(n => notificationService.markAsRead(user.email, n.id)));
+        await Promise.all(related.map(n => notificationApiService.markAsRead(user.email, n.id)));
+        await fetchNotifications(200);
       } catch (err) {
         console.error('Failed to process service worker message for notifications:', err);
       }
@@ -187,7 +209,7 @@ export const UnifiedNotificationProvider = ({ children }: NotificationProviderPr
 
     navigator.serviceWorker.addEventListener('message', handler);
     return () => navigator.serviceWorker.removeEventListener('message', handler);
-  }, [user?.email]);
+  }, [fetchNotifications, user?.email]);
 
   // If the user opens the app directly at /task/:id (for example from SW openWindow),
   // mark related notifications read on initial load as a fallback.
@@ -200,17 +222,18 @@ export const UnifiedNotificationProvider = ({ children }: NotificationProviderPr
       if (!taskId) return;
 
       (async () => {
-        const allNotifs = await notificationService.getNotifications(user.email, 200);
+        const allNotifs = await notificationApiService.listNotifications(user.email, 200);
         const related = allNotifs.filter(n => (
           n.relatedTaskId === taskId || n.data?.taskId === taskId
         ) && !n.isRead);
 
-        await Promise.all(related.map(n => notificationService.markAsRead(user.email, n.id)));
+        await Promise.all(related.map(n => notificationApiService.markAsRead(user.email, n.id)));
+        await fetchNotifications(200);
       })();
     } catch (err) {
       console.error('Initial-load notification read marking failed:', err);
     }
-  }, [user?.email]);
+  }, [fetchNotifications, user?.email]);
 
   const playNotificationSound = useCallback(() => {
     try {
@@ -231,37 +254,48 @@ export const UnifiedNotificationProvider = ({ children }: NotificationProviderPr
     if (!user?.email) return null;
 
     try {
-      // Use API endpoint for reliable notification creation
-      const response = await fetch('/api/notifications/test-in-app', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userEmail: user.email,
-          title,
-          body,
-          data
-        })
-      });
-      
-      const result = await response.json();
-      
-      if (result.success) {
+      const notificationId = await notificationApiService.sendInAppNotification(
+        user.email,
+        title,
+        body,
+        data
+      );
+
+      if (notificationId) {
         playNotificationSound();
-        return result.notificationId;
+        await fetchNotifications(200);
+        return notificationId;
       }
-      
+
       return null;
     } catch (error) {
       console.error('Error sending in-app notification:', error);
       return null;
     }
-  }, [user?.email, playNotificationSound]);
+  }, [fetchNotifications, playNotificationSound, user?.email]);
 
   const markAsRead = useCallback(async (notificationId: string): Promise<void> => {
     if (!user?.email) return;
 
     try {
-      await notificationService.markAsRead(user.email, notificationId);
+      await notificationApiService.markAsRead(user.email, notificationId);
+      const readAt = Date.now();
+      setNotifications(prev => {
+        const next = prev.map(notification => {
+          if (notification.id !== notificationId || notification.isRead) {
+            return notification;
+          }
+
+          return {
+            ...notification,
+            isRead: true,
+            readAt,
+          };
+        });
+
+        setUnreadCount(next.filter(notification => !notification.isRead).length);
+        return next;
+      });
     } catch (error) {
       console.error('Error marking notification as read:', error);
     }
@@ -271,7 +305,14 @@ export const UnifiedNotificationProvider = ({ children }: NotificationProviderPr
     if (!user?.email) return;
 
     try {
-      await notificationService.markAllAsRead(user.email);
+      await notificationApiService.markAllAsRead(user.email);
+      const readAt = Date.now();
+      setNotifications(prev => prev.map(notification => ({
+        ...notification,
+        isRead: true,
+        readAt: notification.readAt ?? readAt,
+      })));
+      setUnreadCount(0);
     } catch (error) {
       console.error('Error marking all notifications as read:', error);
     }
@@ -281,7 +322,12 @@ export const UnifiedNotificationProvider = ({ children }: NotificationProviderPr
     if (!user?.email) return;
 
     try {
-      await notificationService.deleteNotification(user.email, notificationId);
+      await notificationApiService.deleteNotification(user.email, notificationId);
+      setNotifications(prev => {
+        const next = prev.filter(notification => notification.id !== notificationId);
+        setUnreadCount(next.filter(notification => !notification.isRead).length);
+        return next;
+      });
     } catch (error) {
       console.error('Error deleting notification:', error);
     }
@@ -291,7 +337,9 @@ export const UnifiedNotificationProvider = ({ children }: NotificationProviderPr
     if (!user?.email) return;
 
     try {
-      await notificationService.clearAllNotifications(user.email);
+      await notificationApiService.clearAllNotifications(user.email);
+      setNotifications([]);
+      setUnreadCount(0);
       displayedNotificationsRef.current.clear();
     } catch (error) {
       console.error('Error clearing all notifications:', error);
@@ -338,7 +386,7 @@ export const UnifiedNotificationProvider = ({ children }: NotificationProviderPr
     if (!user?.email) return;
 
     try {
-      const stats = await notificationService.getNotificationStats(user.email);
+      const stats = await notificationApiService.getNotificationStats(user.email);
       setUnreadCount(stats.unreadCount);
     } catch (error) {
       console.error('Error refreshing notification stats:', error);
@@ -401,13 +449,30 @@ export const useNotificationBadge = () => {
       return;
     }
 
-    // Subscribe to just unread count for better performance
-    const unsubscribe = notificationService.subscribeToUnreadCount(
-      user.email,
-      setUnreadCount
-    );
+    let isMounted = true;
 
-    return unsubscribe;
+    const refreshUnreadCount = async () => {
+      try {
+        const stats = await notificationApiService.getNotificationStats(user.email);
+        if (isMounted) {
+          setUnreadCount(stats.unreadCount);
+        }
+      } catch (error) {
+        if (isMounted) {
+          console.error('Failed to poll unread notification count:', error);
+        }
+      }
+    };
+
+    void refreshUnreadCount();
+    const intervalId = window.setInterval(() => {
+      void refreshUnreadCount();
+    }, NOTIFICATIONS_POLL_INTERVAL_MS);
+
+    return () => {
+      isMounted = false;
+      window.clearInterval(intervalId);
+    };
   }, [user?.email]);
 
   return unreadCount;

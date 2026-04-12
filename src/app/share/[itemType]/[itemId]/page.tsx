@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, Suspense } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -19,7 +19,6 @@ import {
   FileText,
   Loader2,
   Copy,
-  ExternalLink,
   ChevronDown,
   ChevronUp,
   PlusCircle
@@ -27,15 +26,12 @@ import {
 import { useAuth } from '@/contexts/auth-context';
 import type { SharedItem, Task, Note, SharePermission } from '@/lib/types';
 import { motion } from 'framer-motion';
-import { format, formatDistanceToNow } from 'date-fns';
+import { formatDistanceToNow } from 'date-fns';
 import { TaskForm } from '@/components/task-form';
 import { EditNoteDialog } from '@/components/notes/edit-note-dialog';
-import { TaskItem } from '@/components/task-item';
 import { SubtaskList } from '@/components/subtask-list';
-import { useTasks } from '@/contexts/task-context';
-import { useNotes } from '@/contexts/note-context';
 import { safeDateFormat, isTaskOverdue } from '@/lib/utils';
-import { sharingService, taskService, noteService } from '@/lib/firestore';
+import { shareApiService } from '@/services/client/share-api-service';
 
 interface SharedContentPageProps {
   params: {
@@ -49,13 +45,14 @@ function SharedContentContent() {
   const searchParams = useSearchParams();
   const { user } = useAuth();
   const { toast } = useToast();
-  const { taskCategories, taskDurations } = useTasks();
-  const { updateNote: updateNoteLocal } = useNotes();
 
-  const itemType = params.itemType as 'task' | 'note';
-  const itemId = params.itemId as string;
-  const token = searchParams.get('token');
-  const permission = searchParams.get('permission') as SharePermission;
+  const itemTypeParam = Array.isArray(params?.itemType) ? params.itemType[0] : params?.itemType;
+  const itemIdParam = Array.isArray(params?.itemId) ? params.itemId[0] : params?.itemId;
+  const hasValidItemType = itemTypeParam === 'task' || itemTypeParam === 'note';
+  const itemType = (hasValidItemType ? itemTypeParam : 'task') as 'task' | 'note';
+  const itemId = typeof itemIdParam === 'string' ? itemIdParam : '';
+  const token = searchParams?.get('token') ?? '';
+  const hasValidShareRoute = hasValidItemType && itemId.length > 0 && token.length > 0;
 
   const [sharedItem, setSharedItem] = useState<SharedItem | null>(null);
   const [content, setContent] = useState<Task | Note | null>(null);
@@ -70,25 +67,27 @@ function SharedContentContent() {
 
   // For note editing using the EditNoteDialog
   const [editingNote, setEditingNote] = useState<Note | null>(null);
+  const [noteBeforeEdit, setNoteBeforeEdit] = useState<Note | null>(null);
 
   useEffect(() => {
-    if (token && itemId) {
+    if (hasValidShareRoute) {
       loadSharedContent();
     } else {
       setError('Invalid share link');
       setIsLoading(false);
     }
-  }, [token, itemId, user]);
+  }, [hasValidShareRoute, itemId, token, user]);
 
   const loadSharedContent = async () => {
-    if (!token) return;
+    if (!hasValidShareRoute) return;
 
     setIsLoading(true);
     setError(null);
 
     try {
-      // Validate share access
-      const validationResult = await sharingService.validateShareAccess(
+      const validationResult = await shareApiService.validateShareAccess(
+        itemType,
+        itemId,
         token,
         'view',
         user?.email
@@ -100,37 +99,32 @@ function SharedContentContent() {
         return;
       }
 
-      setSharedItem(validationResult.sharedItem!);
+      setSharedItem(validationResult.sharedItem || null);
       setAccessGranted(true);
 
-      // Record view
-      await sharingService.recordView(
+      await shareApiService.recordView(
+        itemType,
+        itemId,
         token,
         user?.email,
         user ? `${user.firstName} ${user.lastName}` : undefined
       );
 
-      // Load the actual content
-      let itemContent;
-      if (itemType === 'task') {
-        itemContent = await taskService.getTask(itemId);
-        
-        // Load subtasks for tasks
-        if (itemContent) {
-          const allTasks = await taskService.getTasks(itemContent.userEmail);
-          const taskSubtasks = allTasks.filter(t => t.parentId === itemId).sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
-          setSubtasks(taskSubtasks);
-        }
-      } else {
-        itemContent = await noteService.getNote(itemId);
-      }
+      const sharedContent = await shareApiService.getSharedContent(
+        itemType,
+        itemId,
+        token,
+        user?.email
+      );
 
-      if (!itemContent) {
+      if (!sharedContent.content) {
         setError('Content not found');
         return;
       }
 
-      setContent(itemContent);
+      setSharedItem(sharedContent.sharedItem);
+      setContent(sharedContent.content);
+      setSubtasks(itemType === 'task' ? sharedContent.subtasks : []);
       
     } catch (error) {
       console.error('Error loading shared content:', error);
@@ -143,36 +137,52 @@ function SharedContentContent() {
   const handleEdit = async () => {
     if (!token) return;
 
-    // Check edit permission before allowing edit
-    const validationResult = await sharingService.validateShareAccess(
-      token,
-      'edit',
-      user?.email
-    );
+    try {
+      const validationResult = await shareApiService.validateShareAccess(
+        itemType,
+        itemId,
+        token,
+        'edit',
+        user?.email
+      );
 
-    if (!validationResult.isValid) {
+      if (!validationResult.isValid) {
+        toast({
+          title: "Access Denied",
+          description: validationResult.error || "You don't have edit permission",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      if (user) {
+        await shareApiService.addHistoryEntry(
+          itemType,
+          itemId,
+          token,
+          {
+            userId: user.email,
+            userName: `${user.firstName} ${user.lastName}`,
+            action: itemType === 'note' ? 'note_edit_started' : 'task_edit_started',
+            details: `Started editing the shared ${itemType}`,
+          },
+          user.email
+        );
+      }
+
+      if (itemType === 'note') {
+        setEditingNote(content as Note);
+        setNoteBeforeEdit(content as Note);
+      } else {
+        setIsEditing(true);
+      }
+    } catch (error) {
+      console.error('Error starting edit session:', error);
       toast({
-        title: "Access Denied",
-        description: validationResult.error || "You don't have edit permission",
+        title: "Access check failed",
+        description: "Failed to verify edit access",
         variant: "destructive"
       });
-      return;
-    }
-
-    // Record the start of edit session
-    if (user) {
-      await sharingService.addHistoryEntry(token, {
-        userId: user.email,
-        userName: `${user.firstName} ${user.lastName}`,
-        action: itemType === 'note' ? 'note_edit_started' : 'task_edit_started',
-        details: `Started editing the shared ${itemType}`
-      });
-    }
-
-    if (itemType === 'note') {
-      setEditingNote(content as Note);
-    } else {
-      setIsEditing(true);
     }
   };
 
@@ -192,25 +202,42 @@ function SharedContentContent() {
       if (taskData.duration && taskData.duration !== originalTask.duration) changedFields.push('duration');
       if (taskData.reminderAt !== originalTask.reminderAt) changedFields.push('reminder');
 
-      // Update the task
-      await taskService.updateTask(itemId, taskData);
+      await shareApiService.updateSharedContent(
+        itemType,
+        itemId,
+        token,
+        taskData as Record<string, unknown>,
+        user.email
+      );
 
-      // Record the edit action with detailed information
-      await sharingService.addHistoryEntry(token, {
-        userId: user.email,
-        userName: `${user.firstName} ${user.lastName}`,
-        action: 'task_content_edited',
-        details: changedFields.length > 0 
-          ? `Modified task fields: ${changedFields.join(', ')}` 
-          : 'Updated task details'
-      });
+      await shareApiService.addHistoryEntry(
+        itemType,
+        itemId,
+        token,
+        {
+          userId: user.email,
+          userName: `${user.firstName} ${user.lastName}`,
+          action: 'task_content_edited',
+          details:
+            changedFields.length > 0
+              ? `Modified task fields: ${changedFields.join(', ')}`
+              : 'Updated task details',
+        },
+        user.email
+      );
 
-      // Reload the content to get the updated version
-      const updatedContent = await taskService.getTask(itemId);
-      
-      if (updatedContent) {
-        setContent(updatedContent);
+      const refreshedContent = await shareApiService.getSharedContent(
+        itemType,
+        itemId,
+        token,
+        user.email
+      );
+
+      if (refreshedContent.content) {
+        setContent(refreshedContent.content);
       }
+      setSharedItem(refreshedContent.sharedItem);
+      setSubtasks(refreshedContent.subtasks);
       
       setIsEditing(false);
       
@@ -231,31 +258,45 @@ function SharedContentContent() {
     }
   };
 
+  const refreshSubtasks = async () => {
+    if (!token) return;
+
+    const updatedSubtasks = await shareApiService.getSubtasks(
+      itemType,
+      itemId,
+      token,
+      user?.email
+    );
+
+    setSubtasks(updatedSubtasks);
+  };
+
   const handleSubtaskAdd = async (subtaskData: Omit<Task, 'id' | 'createdAt' | 'rejectionCount' | 'isMuted' | 'completedAt' | 'lastRejectedAt' | 'notifiedAt'>) => {
     if (!content || !token || !user) return;
 
     try {
-      // Add the subtask
-      await taskService.addTask(content.userEmail, {
-        ...subtaskData,
-        parentId: itemId,
-        rejectionCount: 0,
-        isMuted: false,
-        createdAt: Date.now(),
-      });
+      await shareApiService.addSubtask(
+        itemType,
+        itemId,
+        token,
+        subtaskData as Record<string, unknown>,
+        user.email
+      );
 
-      // Record the action
-      await sharingService.addHistoryEntry(token, {
-        userId: user.email,
-        userName: `${user.firstName} ${user.lastName}`,
-        action: 'subtask_added',
-        details: `Added subtask: ${subtaskData.title}`
-      });
+      await shareApiService.addHistoryEntry(
+        itemType,
+        itemId,
+        token,
+        {
+          userId: user.email,
+          userName: `${user.firstName} ${user.lastName}`,
+          action: 'subtask_added',
+          details: `Added subtask: ${subtaskData.title}`,
+        },
+        user.email
+      );
 
-      // Reload subtasks
-  const allTasks = await taskService.getTasks(content.userEmail);
-  const taskSubtasks = allTasks.filter(t => t.parentId === itemId).sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
-  setSubtasks(taskSubtasks);
+      await refreshSubtasks();
       setShowAddSubtask(false);
 
       toast({
@@ -277,21 +318,29 @@ function SharedContentContent() {
     if (!content || !token || !user) return;
 
     try {
-      // Update the subtask
-      await taskService.updateTask(subtaskId, updates);
+      await shareApiService.updateSubtask(
+        itemType,
+        itemId,
+        subtaskId,
+        token,
+        updates as Record<string, unknown>,
+        user.email
+      );
 
-      // Record the action
-      await sharingService.addHistoryEntry(token, {
-        userId: user.email,
-        userName: `${user.firstName} ${user.lastName}`,
-        action: 'subtask_edited',
-        details: `Modified subtask: ${updates.title || 'details updated'}`
-      });
+      await shareApiService.addHistoryEntry(
+        itemType,
+        itemId,
+        token,
+        {
+          userId: user.email,
+          userName: `${user.firstName} ${user.lastName}`,
+          action: 'subtask_edited',
+          details: `Modified subtask: ${updates.title || 'details updated'}`,
+        },
+        user.email
+      );
 
-      // Reload subtasks
-  const allTasks = await taskService.getTasks(content.userEmail);
-  const taskSubtasks = allTasks.filter(t => t.parentId === itemId).sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
-  setSubtasks(taskSubtasks);
+      await refreshSubtasks();
 
       toast({
         title: "Subtask updated!",
@@ -315,16 +364,20 @@ function SharedContentContent() {
       // Get subtask details before deletion for history
       const subtaskToDelete = subtasks.find(s => s.id === subtaskId);
       
-      // Delete the subtask
-      await taskService.deleteTask(subtaskId);
+      await shareApiService.deleteSubtask(itemType, itemId, subtaskId, token, user.email);
 
-      // Record the action
-      await sharingService.addHistoryEntry(token, {
-        userId: user.email,
-        userName: `${user.firstName} ${user.lastName}`,
-        action: 'subtask_deleted',
-        details: `Deleted subtask: ${subtaskToDelete?.title || 'Unknown'}`
-      });
+      await shareApiService.addHistoryEntry(
+        itemType,
+        itemId,
+        token,
+        {
+          userId: user.email,
+          userName: `${user.firstName} ${user.lastName}`,
+          action: 'subtask_deleted',
+          details: `Deleted subtask: ${subtaskToDelete?.title || 'Unknown'}`,
+        },
+        user.email
+      );
 
       // Update local state
       setSubtasks(prev => prev.filter(s => s.id !== subtaskId));
@@ -351,23 +404,31 @@ function SharedContentContent() {
       // Get subtask details for history
       const subtaskToComplete = subtasks.find(s => s.id === subtaskId);
       
-      // Complete the subtask
-      await taskService.updateTask(subtaskId, { 
-        completedAt: Date.now() 
-      });
+      await shareApiService.updateSubtask(
+        itemType,
+        itemId,
+        subtaskId,
+        token,
+        {
+          completedAt: Date.now(),
+        },
+        user.email
+      );
 
-      // Record the action
-      await sharingService.addHistoryEntry(token, {
-        userId: user.email,
-        userName: `${user.firstName} ${user.lastName}`,
-        action: 'subtask_completed',
-        details: `Completed subtask: ${subtaskToComplete?.title || 'Unknown'}`
-      });
+      await shareApiService.addHistoryEntry(
+        itemType,
+        itemId,
+        token,
+        {
+          userId: user.email,
+          userName: `${user.firstName} ${user.lastName}`,
+          action: 'subtask_completed',
+          details: `Completed subtask: ${subtaskToComplete?.title || 'Unknown'}`,
+        },
+        user.email
+      );
 
-      // Reload subtasks to get updated state
-  const allTasks = await taskService.getTasks(content.userEmail);
-  const taskSubtasks = allTasks.filter(t => t.parentId === itemId).sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
-  setSubtasks(taskSubtasks);
+      await refreshSubtasks();
 
       toast({
         title: "Subtask completed!",
@@ -391,23 +452,31 @@ function SharedContentContent() {
       // Get subtask details for history
       const subtaskToReopen = subtasks.find(s => s.id === subtaskId);
       
-      // Reopen the subtask
-      await taskService.updateTask(subtaskId, { 
-        completedAt: undefined 
-      });
+      await shareApiService.updateSubtask(
+        itemType,
+        itemId,
+        subtaskId,
+        token,
+        {
+          completedAt: undefined,
+        },
+        user.email
+      );
 
-      // Record the action
-      await sharingService.addHistoryEntry(token, {
-        userId: user.email,
-        userName: `${user.firstName} ${user.lastName}`,
-        action: 'subtask_reopened',
-        details: `Reopened subtask: ${subtaskToReopen?.title || 'Unknown'}`
-      });
+      await shareApiService.addHistoryEntry(
+        itemType,
+        itemId,
+        token,
+        {
+          userId: user.email,
+          userName: `${user.firstName} ${user.lastName}`,
+          action: 'subtask_reopened',
+          details: `Reopened subtask: ${subtaskToReopen?.title || 'Unknown'}`,
+        },
+        user.email
+      );
 
-      // Reload subtasks to get updated state
-      const allTasks = await taskService.getTasks(content.userEmail);
-  const taskSubtasks = allTasks.filter(t => t.parentId === itemId).sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
-  setSubtasks(taskSubtasks);
+      await refreshSubtasks();
 
       toast({
         title: "Subtask reopened!",
@@ -425,20 +494,69 @@ function SharedContentContent() {
   };
 
   const handleNoteClose = async () => {
+    const previousNote = noteBeforeEdit;
+
     setEditingNote(null);
-    
-    // Record view action when note editing is closed (in case changes were made)
-    if (token && user) {
-      await sharingService.addHistoryEntry(token, {
-        userId: user.email,
-        userName: `${user.firstName} ${user.lastName}`,
-        action: 'note_edit_session_ended',
-        details: 'Finished editing the shared note'
-      });
+    setNoteBeforeEdit(null);
+
+    if (!token) {
+      return;
     }
-    
-    // Reload the note content to get any updates
-    loadSharedContent();
+
+    try {
+      const refreshedContent = await shareApiService.getSharedContent(
+        itemType,
+        itemId,
+        token,
+        user?.email
+      );
+
+      const refreshedNote = refreshedContent.content as Note;
+      const noteChanged =
+        !!previousNote &&
+        (previousNote.title !== refreshedNote.title ||
+          previousNote.content !== refreshedNote.content ||
+          previousNote.color !== refreshedNote.color ||
+          previousNote.imageUrl !== refreshedNote.imageUrl ||
+          previousNote.audioUrl !== refreshedNote.audioUrl ||
+          previousNote.fontSize !== refreshedNote.fontSize);
+
+      setSharedItem(refreshedContent.sharedItem);
+      setContent(refreshedNote);
+
+      if (token && user && noteChanged) {
+        await shareApiService.addHistoryEntry(
+          itemType,
+          itemId,
+          token,
+          {
+            userId: user.email,
+            userName: `${user.firstName} ${user.lastName}`,
+            action: 'content_edited',
+            details: `Modified the shared note: ${refreshedNote.title || 'Untitled'}`,
+          },
+          user.email
+        );
+      }
+
+      if (token && user) {
+        await shareApiService.addHistoryEntry(
+          itemType,
+          itemId,
+          token,
+          {
+            userId: user.email,
+            userName: `${user.firstName} ${user.lastName}`,
+            action: 'note_edit_session_ended',
+            details: 'Finished editing the shared note',
+          },
+          user.email
+        );
+      }
+    } catch (error) {
+      console.error('Error finishing note edit session:', error);
+      loadSharedContent();
+    }
   };
 
   const copyShareLink = async () => {
@@ -939,8 +1057,6 @@ function SharedContentContent() {
           note={editingNote}
           isOpen={!!editingNote}
           onClose={handleNoteClose}
-          shareToken={token || undefined}
-          sharedBy={user ? { email: user.email, name: `${user.firstName} ${user.lastName}` } : undefined}
         />
       )}
     </div>

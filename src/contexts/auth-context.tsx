@@ -3,10 +3,7 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import type { User } from '@/lib/types';
-import { userService } from '@/lib/firestore';
-import Cookies from 'js-cookie';
-
-type SignupData = Omit<User, 'password'> & { password?: string };
+import { authApiService, type SignupData } from '@/services/client/auth-api-service';
 
 interface AuthContextType {
   user: User | null;
@@ -14,13 +11,11 @@ interface AuthContextType {
   loading: boolean;
   login: (email: string, password: string) => Promise<boolean>;
   signup: (userData: SignupData) => Promise<boolean>;
-  logout: () => void;
+  logout: () => Promise<void>;
   updateUser: (updates: Partial<User>) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
-
-const AUTH_COOKIE_KEY = 'mindmate-auth';
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
@@ -28,21 +23,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   useEffect(() => {
     const initializeAuth = async () => {
-      const userEmail = Cookies.get(AUTH_COOKIE_KEY);
-      if (userEmail) {
-        try {
-          const currentUser = await userService.getUser(userEmail);
-          if (currentUser) {
-            setUser(currentUser);
-          } else {
-            // User not found in Firestore, clear cookie
-            Cookies.remove(AUTH_COOKIE_KEY, { path: '/' });
-          }
-        } catch (error) {
-          console.error('Error fetching user:', error);
-          Cookies.remove(AUTH_COOKIE_KEY, { path: '/' });
-        }
+      try {
+        const currentUser = await authApiService.getCurrentUser();
+        setUser(currentUser);
+      } catch (error) {
+        console.error('Error fetching current user:', error);
+        setUser(null);
       }
+
       setLoading(false);
     };
 
@@ -51,10 +39,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const login = async (email: string, password: string): Promise<boolean> => {
     try {
-      const foundUser = await userService.getUser(email);
-      if (foundUser && foundUser.password === password) {
-        setUser(foundUser);
-        Cookies.set(AUTH_COOKIE_KEY, foundUser.email, { expires: 7, path: '/' });
+      const result = await authApiService.login(email, password);
+      if (result.success && result.user) {
+        setUser(result.user);
         return true;
       }
       return false;
@@ -66,22 +53,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const signup = async (userData: SignupData): Promise<boolean> => {
     try {
-      const userExists = await userService.userExists(userData.email);
-      if (userExists) {
+      const result = await authApiService.signup(userData);
+      if (!result.success || !result.user) {
         return false; // User already exists
       }
-      
-      // Sanitize to remove undefined optional fields before writing to Firestore
-      const newUser: User = { ...userData } as User;
-      const sanitized: any = { ...newUser };
-      Object.keys(sanitized).forEach(key => {
-        if (sanitized[key] === undefined) delete sanitized[key];
-      });
 
-  await userService.createUser(sanitized);
-  // Use the sanitized user object for client state
-  setUser(sanitized as User);
-  Cookies.set(AUTH_COOKIE_KEY, sanitized.email, { expires: 7, path: '/' });
+      setUser(result.user);
       
       // Send welcome email
       try {
@@ -91,8 +68,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            userEmail: sanitized.email,
-            userName: `${sanitized.firstName || ''} ${sanitized.lastName || ''}`.trim(),
+            userEmail: result.user.email,
+            userName: `${result.user.firstName || ''} ${result.user.lastName || ''}`.trim(),
             action: 'welcome',
           }),
         });
@@ -108,17 +85,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  const logout = () => {
+  const logout = async (): Promise<void> => {
     setUser(null);
-    Cookies.remove(AUTH_COOKIE_KEY, { path: '/' });
+    await authApiService.logout().catch((error) => {
+      console.error('Error during logout:', error);
+    });
   };
   
   const updateUser = async (updates: Partial<User>): Promise<void> => {
     if (!user) return;
     
     try {
-      await userService.updateUser(user.email, updates);
-      const updatedUser = { ...user, ...updates };
+      const updatedUser = await authApiService.updateCurrentUser(updates);
       setUser(updatedUser);
     } catch (error) {
       console.error('Error updating user:', error);

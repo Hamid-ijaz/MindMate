@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { initializeApp, getApps, cert } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import webpush from 'web-push';
+import { getAuthenticatedUserEmail, isAuthorizedCronRequest } from '@/lib/auth-utils';
 
 // Initialize Firebase Admin if not already initialized
 if (!getApps().length) {
@@ -35,11 +36,24 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const { taskId, userEmail, title, message } = body;
+    const authenticatedUserEmail = await getAuthenticatedUserEmail(request);
+    const isCronRequest = isAuthorizedCronRequest(request);
+
+    if (!isCronRequest && !authenticatedUserEmail) {
+      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+    }
 
     if (!taskId || !userEmail || !title || !message) {
       return NextResponse.json(
         { error: 'Missing required fields: taskId, userEmail, title, message' },
         { status: 400 }
+      );
+    }
+
+    if (!isCronRequest && authenticatedUserEmail !== userEmail) {
+      return NextResponse.json(
+        { error: 'Forbidden' },
+        { status: 403 }
       );
     }
 

@@ -177,8 +177,8 @@ export function Header() {
   // Get OS-appropriate modifier keys
   const modifiers = getModifiers();
 
-  const handleLogout = () => {
-    logout();
+  const handleLogout = async () => {
+    await logout();
     window.location.href = '/login';
   };
 

@@ -1,6 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { emailService } from '@/lib/email';
-import { taskService, userService } from '@/lib/firestore';
+import { prisma } from '@/lib/prisma';
+import { taskPrismaService } from '@/services/server/task-prisma-service';
+import { userPrismaService } from '@/services/server/user-prisma-service';
+
+type ReminderTask = {
+  id: string;
+  title: string;
+  description?: string | null;
+  priority?: string | null;
+  reminderAt?: Date | null;
+  notifiedAt?: Date | null;
+};
 
 export async function POST(request: NextRequest) {
   try {
@@ -16,8 +27,8 @@ export async function POST(request: NextRequest) {
 
     // Get task and user information
     const [task, user] = await Promise.all([
-      taskService.getTask(taskId),
-      userService.getUser(userEmail)
+      taskPrismaService.getTask(taskId, userEmail),
+      userPrismaService.getUser(userEmail)
     ]);
 
     if (!task) {
@@ -54,7 +65,7 @@ export async function POST(request: NextRequest) {
 
     if (success) {
       // Update task with reminder sent timestamp
-      await taskService.updateTask(taskId, {
+      await taskPrismaService.updateTask(taskId, userEmail, {
         notifiedAt: Date.now(),
       });
 
@@ -90,7 +101,7 @@ export async function GET(request: NextRequest) {
     
     for (const { userEmail, task } of dueTasks) {
       try {
-        const user = await userService.getUser(userEmail);
+        const user = await userPrismaService.getUser(userEmail);
         if (!user) continue;
 
         const taskLink = `${process.env.NEXT_PUBLIC_URL || 'http://localhost:3000'}/task/${task.id}`;
@@ -110,7 +121,7 @@ export async function GET(request: NextRequest) {
         const success = await emailService.sendTaskReminderEmail(userEmail, templateData);
 
         if (success) {
-          await taskService.updateTask(task.id, {
+          await taskPrismaService.updateTask(task.id, userEmail, {
             notifiedAt: Date.now(),
           });
         }
@@ -149,62 +160,59 @@ export async function GET(request: NextRequest) {
   }
 }
 
-async function getDueTasksForReminders(batchSize: number): Promise<Array<{ userEmail: string; task: any }>> {
+async function getDueTasksForReminders(batchSize: number): Promise<Array<{ userEmail: string; task: ReminderTask }>> {
   try {
-    const { initializeApp, getApps, cert } = await import('firebase-admin/app');
-    const { getFirestore } = await import('firebase-admin/firestore');
-
-    if (!getApps().length) {
-      initializeApp({
-        credential: cert({
-          projectId: process.env.FIREBASE_PROJECT_ID,
-          clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-          privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-        }),
-      });
-    }
-
-    const db = getFirestore();
     const now = new Date();
     const reminderThreshold = new Date(now.getTime() + 24 * 60 * 60 * 1000); // 24 hours from now
 
-    // Query tasks that are due within the next 24 hours and haven't been reminded recently
-    const tasksSnapshot = await db.collectionGroup('tasks')
-      .where('completed', '==', false)
-      .where('dueDate', '<=', reminderThreshold)
-      .where('dueDate', '>', now)
-      .limit(batchSize)
-      .get();
+    const tasks = await prisma.task.findMany({
+      where: {
+        completedAt: null,
+        reminderAt: {
+          gt: now,
+          lte: reminderThreshold,
+        },
+      },
+      orderBy: {
+        reminderAt: 'asc',
+      },
+      take: batchSize,
+      select: {
+        id: true,
+        userEmail: true,
+        title: true,
+        description: true,
+        priority: true,
+        reminderAt: true,
+        notifiedAt: true,
+      },
+    });
 
-    const dueTasks = [];
-    
-    for (const doc of tasksSnapshot.docs) {
-      const task = { id: doc.id, ...doc.data() };
-      const userEmail = doc.ref.parent.parent?.id;
-      
-      if (userEmail && shouldSendReminder(task)) {
-        dueTasks.push({ userEmail, task });
-      }
-    }
-
-    return dueTasks;
+    return tasks
+      .filter((task) => shouldSendReminder(task))
+      .map((task) => ({
+        userEmail: task.userEmail,
+        task: {
+          id: task.id,
+          title: task.title,
+          description: task.description,
+          priority: task.priority,
+          reminderAt: task.reminderAt,
+          notifiedAt: task.notifiedAt,
+        },
+      }));
   } catch (error) {
     console.error('Error getting due tasks for reminders:', error);
     return [];
   }
 }
 
-function shouldSendReminder(task: any): boolean {
+function shouldSendReminder(task: ReminderTask): boolean {
   const now = new Date();
-  const lastReminderSent = task.lastReminderSent ? new Date(task.lastReminderSent) : null;
+  const lastReminderSent = task.notifiedAt ? new Date(task.notifiedAt) : null;
   
   // Don't send reminder if one was sent in the last 4 hours
   if (lastReminderSent && (now.getTime() - lastReminderSent.getTime()) < 4 * 60 * 60 * 1000) {
-    return false;
-  }
-  
-  // Don't send more than 3 reminders per task
-  if ((task.reminderCount || 0) >= 3) {
     return false;
   }
   

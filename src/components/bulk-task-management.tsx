@@ -720,7 +720,6 @@ export function BulkTaskManagement() {
             reminderAt,
             isArchived: false,
             userEmail: user?.email || '',
-            googleTaskId: null,
           };
 
           tasks.push(task);

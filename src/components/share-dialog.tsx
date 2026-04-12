@@ -49,7 +49,7 @@ import { useAuth } from '@/contexts/auth-context';
 import type { SharedItem, SharePermission, ShareHistoryEntry, ShareAnalytics, ShareCollaborator } from '@/lib/types';
 import { motion, AnimatePresence } from 'framer-motion';
 import { format, formatDistanceToNow } from 'date-fns';
-import { sharingService, userService } from '@/lib/firestore';
+import { shareDialogApiService } from '@/services/client/share-dialog-api-service';
 
 interface ShareDialogProps {
   isOpen: boolean;
@@ -101,7 +101,7 @@ export function ShareDialog({ isOpen, onClose, itemType, itemTitle, itemId }: Sh
     
     setIsLoading(true);
     try {
-      const items = await sharingService.getSharedItemsByOwner(user.email);
+      const items = await shareDialogApiService.getSharedItemsByOwner();
       const itemShares = items.filter(item => item.itemId === itemId);
       setSharedItems(itemShares);
       
@@ -140,7 +140,7 @@ export function ShareDialog({ isOpen, onClose, itemType, itemTitle, itemId }: Sh
     if (!currentShareToken) return;
     
     try {
-      const analyticsData = await sharingService.getShareAnalytics(currentShareToken);
+      const analyticsData = await shareDialogApiService.getShareAnalytics(currentShareToken);
       setAnalytics(analyticsData);
     } catch (error) {
       console.error('Error loading analytics:', error);
@@ -157,10 +157,9 @@ export function ShareDialog({ isOpen, onClose, itemType, itemTitle, itemId }: Sh
     
     setIsGeneratingLink(true);
     try {
-      const result = await sharingService.createOrGetShareLink(
+      const result = await shareDialogApiService.createOrGetShareLink(
         itemId,
         itemType,
-        user.email,
         permission
       );
       
@@ -270,10 +269,9 @@ export function ShareDialog({ isOpen, onClose, itemType, itemTitle, itemId }: Sh
         }
 
         try {
-          const result = await sharingService.createOrGetShareLink(
+          const result = await shareDialogApiService.createOrGetShareLink(
             itemId,
             itemType,
-            user.email,
             permission
           );
           setShareLink(result.url);
@@ -290,7 +288,7 @@ export function ShareDialog({ isOpen, onClose, itemType, itemTitle, itemId }: Sh
       }
 
       // Check if user exists
-      const userExists = await userService.userExists?.(collaboratorEmail.trim());
+      const userExists = await shareDialogApiService.userExists(collaboratorEmail.trim());
       if (!userExists) {
         toast({
           title: "User not found",
@@ -305,7 +303,7 @@ export function ShareDialog({ isOpen, onClose, itemType, itemTitle, itemId }: Sh
         const currentShare = sharedItems.find(item => item.shareToken === currentShareToken || item.isActive);
         const currentBasePermission = currentShare?.permission || permission;
         if (collaboratorPermission === 'edit' && currentBasePermission === 'view') {
-          await sharingService.updateSharePermission(currentShareToken, 'edit');
+          await shareDialogApiService.updateSharePermission(currentShareToken, 'edit');
           setPermission('edit');
           // Update shareLink's permission query param if present
           if (shareLink) {
@@ -322,11 +320,10 @@ export function ShareDialog({ isOpen, onClose, itemType, itemTitle, itemId }: Sh
         console.error('Failed to update share permission before adding collaborator:', permError);
       }
 
-      await sharingService.addCollaborator(
+      await shareDialogApiService.addCollaborator(
         currentShareToken,
         collaboratorEmail.trim(),
-        collaboratorPermission,
-        user?.email || ''
+        collaboratorPermission
       );
       
       // Send email notification about the shared item
@@ -396,7 +393,7 @@ export function ShareDialog({ isOpen, onClose, itemType, itemTitle, itemId }: Sh
     if (!currentShareToken) return;
     
     try {
-      await sharingService.removeCollaborator(currentShareToken, collaboratorEmail, user?.email || '');
+      await shareDialogApiService.removeCollaborator(currentShareToken, collaboratorEmail);
       toast({
         title: "Collaborator removed",
         description: `${collaboratorEmail} has been removed from collaborators`
@@ -416,7 +413,7 @@ export function ShareDialog({ isOpen, onClose, itemType, itemTitle, itemId }: Sh
     if (!currentShareToken) return;
     
     try {
-      await sharingService.updateSharePermission(currentShareToken, newPermission);
+      await shareDialogApiService.updateSharePermission(currentShareToken, newPermission);
       setPermission(newPermission);
       
       // Update the URL with new permission
@@ -444,7 +441,7 @@ export function ShareDialog({ isOpen, onClose, itemType, itemTitle, itemId }: Sh
     if (!currentShareToken) return;
     
     try {
-      const newToken = await sharingService.regenerateShareToken(currentShareToken);
+      const newToken = await shareDialogApiService.regenerateShareToken(currentShareToken);
       setCurrentShareToken(newToken);
       
       const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000';
@@ -471,7 +468,7 @@ export function ShareDialog({ isOpen, onClose, itemType, itemTitle, itemId }: Sh
     if (!currentShareToken) return;
     
     try {
-      await sharingService.revokeShareAccess(currentShareToken);
+      await shareDialogApiService.revokeShareAccess(currentShareToken);
       setShareLink('');
       setCurrentShareToken('');
       
@@ -495,7 +492,7 @@ export function ShareDialog({ isOpen, onClose, itemType, itemTitle, itemId }: Sh
     if (!currentShareToken) return;
     
     try {
-      await sharingService.updateShareSettings(currentShareToken, newSettings);
+      await shareDialogApiService.updateShareSettings(currentShareToken, newSettings);
       setShareSettings(prev => ({ ...prev, ...newSettings }));
       
       toast({

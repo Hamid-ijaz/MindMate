@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { initializeApp, getApps, cert } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
+import { getAuthenticatedUserEmail, isAuthorizedCronRequest } from '@/lib/auth-utils';
 import { PushSubscriptionDocument } from '@/lib/types';
 
 // Initialize Firebase Admin if not already initialized
@@ -21,6 +22,12 @@ if (!getApps().length) {
 export async function POST(request: NextRequest) {
   try {
     const db = getFirestore();
+    const authenticatedUserEmail = await getAuthenticatedUserEmail(request);
+    const isCronRequest = isAuthorizedCronRequest(request);
+
+    if (!isCronRequest && !authenticatedUserEmail) {
+      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+    }
 
     const body = await request.json();
     const { 
@@ -38,6 +45,10 @@ export async function POST(request: NextRequest) {
         { error: 'Missing required fields: endpoint, keys, userEmail' },
         { status: 400 }
       );
+    }
+
+    if (!isCronRequest && authenticatedUserEmail !== userEmail) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     // Check if subscription already exists
@@ -124,6 +135,12 @@ export async function POST(request: NextRequest) {
 export async function DELETE(request: NextRequest) {
   try {
   const db = getFirestore();
+    const authenticatedUserEmail = await getAuthenticatedUserEmail(request);
+    const isCronRequest = isAuthorizedCronRequest(request);
+
+    if (!isCronRequest && !authenticatedUserEmail) {
+      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+    }
 
     const { searchParams } = new URL(request.url);
     const userEmail = searchParams.get('userEmail');
@@ -134,6 +151,10 @@ export async function DELETE(request: NextRequest) {
         { error: 'Missing required parameter: userEmail' },
         { status: 400 }
       );
+    }
+
+    if (!isCronRequest && authenticatedUserEmail !== userEmail) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     let query = db.collection('pushSubscriptions').where('userEmail', '==', userEmail);
@@ -185,6 +206,12 @@ export async function DELETE(request: NextRequest) {
 export async function GET(request: NextRequest) {
   try {
   const db = getFirestore();
+    const authenticatedUserEmail = await getAuthenticatedUserEmail(request);
+    const isCronRequest = isAuthorizedCronRequest(request);
+
+    if (!isCronRequest && !authenticatedUserEmail) {
+      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+    }
 
     const { searchParams } = new URL(request.url);
     const userEmail = searchParams.get('userEmail');
@@ -194,6 +221,10 @@ export async function GET(request: NextRequest) {
         { error: 'Missing required parameter: userEmail' },
         { status: 400 }
       );
+    }
+
+    if (!isCronRequest && authenticatedUserEmail !== userEmail) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     const subscriptions = await db.collection('pushSubscriptions')

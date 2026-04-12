@@ -1,16 +1,50 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { taskService } from '@/lib/firestore';
+import {
+  taskPrismaService,
+  type TaskCreateInput,
+} from '@/services/server/task-prisma-service';
+import { getAuthenticatedUserEmail } from '@/lib/auth-utils';
+
+type CreateTaskBody = {
+  userEmail?: string;
+  task?: Record<string, unknown>;
+  parentTask?: Record<string, unknown>;
+  subtasks?: Record<string, unknown>[];
+};
+
+const isRecord = (value: unknown): value is Record<string, unknown> => {
+  return typeof value === 'object' && value !== null;
+};
+
+const isTaskCreateInput = (value: unknown): value is TaskCreateInput => {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  return (
+    typeof value.title === 'string' &&
+    typeof value.category === 'string' &&
+    typeof value.priority === 'string' &&
+    typeof value.duration === 'number'
+  );
+};
 
 export async function GET(request: NextRequest) {
   try {
+    const authenticatedUserEmail = await getAuthenticatedUserEmail(request);
+    if (!authenticatedUserEmail) {
+      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+    }
+
     const { searchParams } = new URL(request.url);
-    const userEmail = searchParams.get('userEmail');
-    
-    if (!userEmail) {
-      return NextResponse.json({ error: 'User email is required' }, { status: 400 });
+    const requestedUserEmail = searchParams.get('userEmail');
+    const userEmail = requestedUserEmail ?? authenticatedUserEmail;
+
+    if (authenticatedUserEmail !== userEmail) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
     
-    const tasks = await taskService.getTasks(userEmail);
+    const tasks = await taskPrismaService.getTasks(userEmail);
     return NextResponse.json({ tasks });
   } catch (error) {
     console.error('Error fetching tasks:', error);
@@ -20,35 +54,45 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    console.log('📝 POST /api/tasks - Task creation request received');
-
-    const body = await request.json();
-    const { userEmail, task } = body;
-
-    console.log('📋 POST /api/tasks - Request data:', {
-      hasUserEmail: !!userEmail,
-      hasTask: !!task,
-      taskTitle: task?.title,
-      taskSyncToGoogleTasks: task?.syncToGoogleTasks
-    });
-
-    if (!userEmail || !task) {
-      console.log('❌ POST /api/tasks - Missing required data');
-      return NextResponse.json({ error: 'User email and task data are required' }, { status: 400 });
+    const authenticatedUserEmail = await getAuthenticatedUserEmail(request);
+    if (!authenticatedUserEmail) {
+      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
     }
 
-    console.log(`👤 POST /api/tasks - Creating task for user: ${userEmail}`);
-    const taskId = await taskService.addTask(userEmail, task);
+    const body = (await request.json()) as CreateTaskBody;
+    const requestedUserEmail = typeof body.userEmail === 'string' ? body.userEmail : undefined;
+    const userEmail = requestedUserEmail ?? authenticatedUserEmail;
 
-    console.log(`✅ POST /api/tasks - Task created successfully:`, {
-      taskId,
-      title: task.title,
-      syncToGoogleTasks: task.syncToGoogleTasks
-    });
+    if (authenticatedUserEmail !== userEmail) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
 
-    return NextResponse.json({ taskId });
+    if (isTaskCreateInput(body.parentTask)) {
+      const subtasks = Array.isArray(body.subtasks)
+        ? body.subtasks.filter(isTaskCreateInput)
+        : [];
+
+      const result = await taskPrismaService.addTaskWithSubtasks(
+        userEmail,
+        body.parentTask,
+        subtasks
+      );
+
+      return NextResponse.json({
+        success: true,
+        ...result,
+      });
+    }
+
+    if (!isTaskCreateInput(body.task)) {
+      return NextResponse.json({ error: 'Task data is required' }, { status: 400 });
+    }
+
+    const taskId = await taskPrismaService.addTask(userEmail, body.task);
+
+    return NextResponse.json({ success: true, taskId });
   } catch (error) {
-    console.error('❌ POST /api/tasks - Error creating task:', error);
+    console.error('Error creating task:', error);
     return NextResponse.json({ error: 'Failed to create task' }, { status: 500 });
   }
 }

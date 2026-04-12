@@ -17,6 +17,12 @@
 			"group": "build",
 			"isBackground": true,
 			"problemMatcher": []
+		},
+		{
+			"label": "Final Typecheck Validation",
+			"type": "shell",
+			"command": "npm run typecheck; Write-Output \"TYPECHECK_EXIT=$LASTEXITCODE\"; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }",
+			"isBackground": false
 		}
 	]
 }

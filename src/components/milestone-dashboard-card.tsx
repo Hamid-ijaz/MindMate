@@ -33,7 +33,6 @@ import {
 import { useAuth } from '@/contexts/auth-context';
 import { useToast } from '@/hooks/use-toast';
 import type { Milestone } from '@/lib/types';
-import { MilestoneService } from '@/services/milestone-service';
 import { MilestoneUtils } from '@/lib/milestone-utils';
 import { cn } from '@/lib/utils';
 
@@ -42,6 +41,35 @@ interface MilestoneDashboardCardProps {
   onEditMilestone?: (milestone: Milestone) => void;
   className?: string;
 }
+
+const getApiErrorMessage = async (response: Response, fallback: string): Promise<string> => {
+  const data = (await response.json().catch(() => null)) as { error?: string } | null;
+  return data?.error || fallback;
+};
+
+const fetchUpcomingMilestones = async (userEmail: string, limit: number): Promise<Milestone[]> => {
+  const response = await fetch(
+    `/api/milestones?userEmail=${encodeURIComponent(userEmail)}&view=upcoming&limit=${limit}`,
+    { cache: 'no-store' }
+  );
+
+  if (!response.ok) {
+    throw new Error(await getApiErrorMessage(response, 'Failed to load milestones'));
+  }
+
+  const data = (await response.json()) as { milestones?: Milestone[] };
+  return Array.isArray(data.milestones) ? data.milestones : [];
+};
+
+const deleteMilestoneById = async (milestoneId: string): Promise<void> => {
+  const response = await fetch(`/api/milestones/${encodeURIComponent(milestoneId)}`, {
+    method: 'DELETE',
+  });
+
+  if (!response.ok) {
+    throw new Error(await getApiErrorMessage(response, 'Failed to delete milestone'));
+  }
+};
 
 export function MilestoneDashboardCard({ 
   onCreateMilestone, 
@@ -65,7 +93,7 @@ export function MilestoneDashboardCard({
     
     try {
       setIsLoading(true);
-      const upcomingMilestones = await MilestoneService.getUpcomingMilestones(user.email, 6);
+      const upcomingMilestones = await fetchUpcomingMilestones(user.email, 6);
       setMilestones(upcomingMilestones);
     } catch (error) {
       console.error('Error loading milestones:', error);
@@ -84,7 +112,7 @@ export function MilestoneDashboardCard({
     if (!user?.email) return;
 
     try {
-      await MilestoneService.deleteMilestone(user.email, milestone.id);
+      await deleteMilestoneById(milestone.id);
       await loadMilestones();
       toast({
         title: 'Milestone deleted',
