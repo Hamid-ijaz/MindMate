@@ -99,6 +99,14 @@ const normalizeUpdates = (payload: MilestoneUpdateInput): MilestoneUpdateInput |
     updates.originalDate = payload.originalDate;
   }
 
+  if (payload.endDate !== undefined) {
+    if (payload.endDate !== null && !isTimestamp(payload.endDate)) {
+      return null;
+    }
+
+    updates.endDate = payload.endDate;
+  }
+
   if (payload.isRecurring !== undefined) {
     if (typeof payload.isRecurring !== 'boolean') {
       return null;
@@ -231,6 +239,13 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       message: 'Milestone updated successfully',
     });
   } catch (error) {
+    if (
+      error instanceof Error &&
+      error.message === 'End date cannot be before original date'
+    ) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+
     console.error('Error updating milestone:', error);
     return NextResponse.json({ error: 'Failed to update milestone' }, { status: 500 });
   }

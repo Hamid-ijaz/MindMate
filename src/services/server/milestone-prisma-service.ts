@@ -22,7 +22,7 @@ const DEFAULT_MILESTONE_NOTIFICATIONS: Milestone['notificationSettings'] = {
   onTheDay: true,
 };
 
-const toDate = (value: number | null | undefined): Date | null | undefined => {
+const toPrismaDate = (value: number | null | undefined): Date | null | undefined => {
   if (value === null) {
     return null;
   }
@@ -46,6 +46,7 @@ const toMilestone = (milestone: PrismaMilestone): Milestone => {
     description: milestone.description ?? undefined,
     type: milestone.type as Milestone['type'],
     originalDate: milestone.originalDate.getTime(),
+    endDate: milestone.endDate ? milestone.endDate.getTime() : null,
     isRecurring: milestone.isRecurring,
     recurringFrequency: milestone.recurringFrequency ?? undefined,
     icon: milestone.icon ?? undefined,
@@ -74,6 +75,7 @@ const toCreateData = (
     description: milestoneData.description,
     type: milestoneData.type,
     originalDate: milestoneData.originalDate,
+    endDate: milestoneData.endDate,
     isRecurring: milestoneData.isRecurring,
     recurringFrequency: milestoneData.recurringFrequency,
     icon: milestoneData.icon,
@@ -98,14 +100,15 @@ const toCreateData = (
     description: milestoneData.description ?? null,
     type: milestoneData.type,
     originalDate: new Date(milestoneData.originalDate),
+    endDate: toPrismaDate(milestoneData.endDate),
     isRecurring: milestoneData.isRecurring,
     recurringFrequency: milestoneData.recurringFrequency ?? null,
     icon: milestoneData.icon ?? null,
     color: milestoneData.color ?? null,
     isActive: milestoneData.isActive,
     notificationSettings: notificationSettings as any,
-    lastNotifiedAt: toDate(milestoneData.lastNotifiedAt) ?? null,
-    nextAnniversaryDate: toDate(nextAnniversaryDate) ?? null,
+    lastNotifiedAt: toPrismaDate(milestoneData.lastNotifiedAt) ?? null,
+    nextAnniversaryDate: toPrismaDate(nextAnniversaryDate) ?? null,
     createdAt: new Date(now),
     updatedAt: new Date(now),
   };
@@ -128,6 +131,9 @@ const toUpdateData = (
   if (updates.originalDate !== undefined) {
     data.originalDate = new Date(updates.originalDate);
   }
+  if (updates.endDate !== undefined) {
+    data.endDate = toPrismaDate(updates.endDate);
+  }
   if (updates.isRecurring !== undefined) {
     data.isRecurring = updates.isRecurring;
   }
@@ -147,10 +153,10 @@ const toUpdateData = (
     data.notificationSettings = updates.notificationSettings as any;
   }
   if (updates.lastNotifiedAt !== undefined) {
-    data.lastNotifiedAt = toDate(updates.lastNotifiedAt) ?? null;
+    data.lastNotifiedAt = toPrismaDate(updates.lastNotifiedAt) ?? null;
   }
   if (updates.nextAnniversaryDate !== undefined) {
-    data.nextAnniversaryDate = toDate(updates.nextAnniversaryDate) ?? null;
+    data.nextAnniversaryDate = toPrismaDate(updates.nextAnniversaryDate) ?? null;
   }
 
   return data;
@@ -215,6 +221,20 @@ export const milestonePrismaService = {
       return null;
     }
 
+    const mergedMilestone: Milestone = {
+      ...existingMilestone,
+      ...updates,
+      id: existingMilestone.id,
+      userEmail: existingMilestone.userEmail,
+    };
+
+    if (
+      mergedMilestone.endDate != null &&
+      mergedMilestone.endDate < mergedMilestone.originalDate
+    ) {
+      throw new Error('End date cannot be before original date');
+    }
+
     const updateData = toUpdateData(updates);
     const shouldRecalculateNextAnniversaryDate =
       updates.originalDate !== undefined ||
@@ -222,13 +242,6 @@ export const milestonePrismaService = {
       updates.recurringFrequency !== undefined;
 
     if (shouldRecalculateNextAnniversaryDate) {
-      const mergedMilestone: Milestone = {
-        ...existingMilestone,
-        ...updates,
-        id: existingMilestone.id,
-        userEmail: existingMilestone.userEmail,
-      };
-
       updateData.nextAnniversaryDate = mergedMilestone.isRecurring
         ? MilestoneUtils.getNextAnniversaryDate(mergedMilestone)
         : null;

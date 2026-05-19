@@ -151,6 +151,7 @@ model Milestone {
   description         String?
   type                MilestoneType
   originalDate        DateTime
+  endDate             DateTime?
   isRecurring         Boolean                      @default(false)
   recurringFrequency  MilestoneRecurringFrequency?
   icon                String?

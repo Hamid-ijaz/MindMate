@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { milestonePrismaService } from '@/services/server/milestone-prisma-service';
 import { getAuthenticatedUserEmail } from '@/lib/auth-utils';
 import type { Milestone } from '@/lib/types';
+import { isValidMilestoneDateRange } from './date-range';
 
 type MilestonePayload = Partial<
   Omit<Milestone, 'id' | 'userEmail' | 'createdAt' | 'updatedAt'>
@@ -88,6 +89,14 @@ const normalizeCreatePayload = (
     return null;
   }
 
+  if (
+    payload.endDate !== undefined &&
+    payload.endDate !== null &&
+    !isTimestamp(payload.endDate)
+  ) {
+    return null;
+  }
+
   const notificationSettings =
     normalizeNotificationSettings(payload.notificationSettings) ?? DEFAULT_NOTIFICATION_SETTINGS;
   const recurringFrequency = payload.isRecurring
@@ -101,6 +110,11 @@ const normalizeCreatePayload = (
     description: typeof payload.description === 'string' ? payload.description : undefined,
     type: payload.type,
     originalDate: payload.originalDate,
+    endDate: isTimestamp(payload.endDate)
+      ? payload.endDate
+      : payload.endDate === null
+        ? null
+        : undefined,
     isRecurring: payload.isRecurring,
     recurringFrequency,
     icon: typeof payload.icon === 'string' ? payload.icon : undefined,
@@ -187,6 +201,19 @@ export async function POST(request: NextRequest) {
     }
 
     const milestonePayload = body.milestone ?? body;
+    if (
+      isTimestamp(milestonePayload.originalDate) &&
+      !isValidMilestoneDateRange(
+        milestonePayload.originalDate,
+        milestonePayload.endDate
+      )
+    ) {
+      return NextResponse.json(
+        { error: 'End date cannot be before original date' },
+        { status: 400 }
+      );
+    }
+
     const milestoneData = normalizeCreatePayload(milestonePayload);
 
     if (!milestoneData) {

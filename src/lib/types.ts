@@ -385,6 +385,7 @@ export interface Milestone {
   description?: string;
   type: MilestoneType;
   originalDate: number; // When the event originally happened (timestamp)
+  endDate?: number | null; // Optional end date used to calculate milestone duration
   isRecurring: boolean; // For birthdays, anniversaries that recur yearly
   recurringFrequency?: 'yearly' | 'monthly'; // How often it recurs
   icon?: string; // Optional icon/emoji for the milestone
