@@ -221,6 +221,21 @@ export const milestonePrismaService = {
       return null;
     }
 
+    const mergedMilestone: Milestone = {
+      ...existingMilestone,
+      ...updates,
+      id: existingMilestone.id,
+      userEmail: existingMilestone.userEmail,
+    };
+
+    if (
+      mergedMilestone.endDate !== null &&
+      mergedMilestone.endDate !== undefined &&
+      mergedMilestone.endDate < mergedMilestone.originalDate
+    ) {
+      throw new Error('End date cannot be before original date');
+    }
+
     const updateData = toUpdateData(updates);
     const shouldRecalculateNextAnniversaryDate =
       updates.originalDate !== undefined ||
@@ -228,13 +243,6 @@ export const milestonePrismaService = {
       updates.recurringFrequency !== undefined;
 
     if (shouldRecalculateNextAnniversaryDate) {
-      const mergedMilestone: Milestone = {
-        ...existingMilestone,
-        ...updates,
-        id: existingMilestone.id,
-        userEmail: existingMilestone.userEmail,
-      };
-
       updateData.nextAnniversaryDate = mergedMilestone.isRecurring
         ? MilestoneUtils.getNextAnniversaryDate(mergedMilestone)
         : null;

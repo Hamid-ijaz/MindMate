@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { milestonePrismaService } from '@/services/server/milestone-prisma-service';
 import { getAuthenticatedUserEmail } from '@/lib/auth-utils';
 import type { Milestone } from '@/lib/types';
-import { isValidMilestoneDateRange } from '../date-range';
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -224,25 +223,6 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       );
     }
 
-    const existingMilestone = await milestonePrismaService.getMilestone(
-      authenticatedUserEmail,
-      milestoneId
-    );
-
-    if (!existingMilestone) {
-      return NextResponse.json({ error: 'Milestone not found' }, { status: 404 });
-    }
-
-    const mergedOriginalDate = updates.originalDate ?? existingMilestone.originalDate;
-    const mergedEndDate =
-      updates.endDate !== undefined ? updates.endDate : existingMilestone.endDate;
-    if (!isValidMilestoneDateRange(mergedOriginalDate, mergedEndDate)) {
-      return NextResponse.json(
-        { error: 'End date cannot be before original date' },
-        { status: 400 }
-      );
-    }
-
     const milestone = await milestonePrismaService.updateMilestone(
       authenticatedUserEmail,
       milestoneId,
@@ -259,6 +239,13 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       message: 'Milestone updated successfully',
     });
   } catch (error) {
+    if (
+      error instanceof Error &&
+      error.message === 'End date cannot be before original date'
+    ) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+
     console.error('Error updating milestone:', error);
     return NextResponse.json({ error: 'Failed to update milestone' }, { status: 500 });
   }
