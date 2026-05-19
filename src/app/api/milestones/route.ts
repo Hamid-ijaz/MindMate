@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { milestonePrismaService } from '@/services/server/milestone-prisma-service';
 import { getAuthenticatedUserEmail } from '@/lib/auth-utils';
 import type { Milestone } from '@/lib/types';
+import { isValidMilestoneDateRange } from './date-range';
 
 type MilestonePayload = Partial<
   Omit<Milestone, 'id' | 'userEmail' | 'createdAt' | 'updatedAt'>
@@ -96,10 +97,7 @@ const normalizeCreatePayload = (
     return null;
   }
 
-  if (
-    isTimestamp(payload.endDate) &&
-    payload.endDate < payload.originalDate
-  ) {
+  if (!isValidMilestoneDateRange(payload.originalDate, payload.endDate)) {
     return null;
   }
 
@@ -203,6 +201,19 @@ export async function POST(request: NextRequest) {
     }
 
     const milestonePayload = body.milestone ?? body;
+    if (
+      isTimestamp(milestonePayload.originalDate) &&
+      !isValidMilestoneDateRange(
+        milestonePayload.originalDate,
+        milestonePayload.endDate
+      )
+    ) {
+      return NextResponse.json(
+        { error: 'End date cannot be before original date' },
+        { status: 400 }
+      );
+    }
+
     const milestoneData = normalizeCreatePayload(milestonePayload);
 
     if (!milestoneData) {

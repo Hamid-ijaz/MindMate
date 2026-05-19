@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { milestonePrismaService } from '@/services/server/milestone-prisma-service';
 import { getAuthenticatedUserEmail } from '@/lib/auth-utils';
 import type { Milestone } from '@/lib/types';
+import { isValidMilestoneDateRange } from '../date-range';
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -172,15 +173,6 @@ const normalizeUpdates = (payload: MilestoneUpdateInput): MilestoneUpdateInput |
     updates.nextAnniversaryDate = payload.nextAnniversaryDate;
   }
 
-  if (
-    updates.originalDate !== undefined &&
-    updates.endDate !== undefined &&
-    updates.endDate !== null &&
-    updates.endDate < updates.originalDate
-  ) {
-    return null;
-  }
-
   return updates;
 };
 
@@ -228,6 +220,25 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     if (!updates) {
       return NextResponse.json(
         { error: 'Invalid milestone update payload' },
+        { status: 400 }
+      );
+    }
+
+    const existingMilestone = await milestonePrismaService.getMilestone(
+      authenticatedUserEmail,
+      milestoneId
+    );
+
+    if (!existingMilestone) {
+      return NextResponse.json({ error: 'Milestone not found' }, { status: 404 });
+    }
+
+    const mergedOriginalDate = updates.originalDate ?? existingMilestone.originalDate;
+    const mergedEndDate =
+      updates.endDate !== undefined ? updates.endDate : existingMilestone.endDate;
+    if (!isValidMilestoneDateRange(mergedOriginalDate, mergedEndDate)) {
+      return NextResponse.json(
+        { error: 'End date cannot be before original date' },
         { status: 400 }
       );
     }
