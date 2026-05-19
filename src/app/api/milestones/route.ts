@@ -97,10 +97,6 @@ const normalizeCreatePayload = (
     return null;
   }
 
-  if (!isValidMilestoneDateRange(payload.originalDate, payload.endDate)) {
-    return null;
-  }
-
   const notificationSettings =
     normalizeNotificationSettings(payload.notificationSettings) ?? DEFAULT_NOTIFICATION_SETTINGS;
   const recurringFrequency = payload.isRecurring
