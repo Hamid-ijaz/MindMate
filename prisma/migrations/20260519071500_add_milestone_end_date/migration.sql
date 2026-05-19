@@ -1,0 +1,2 @@
+ALTER TABLE "Milestone"
+ADD COLUMN "endDate" TIMESTAMP(3);

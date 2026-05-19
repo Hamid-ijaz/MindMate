@@ -186,6 +186,7 @@ export function MilestoneForm({ isOpen, onClose, milestone, onSuccess }: Milesto
     description: '',
     type: 'custom' as MilestoneType,
     originalDate: new Date(),
+    endDate: null as Date | null,
     isRecurring: false,
     recurringFrequency: 'yearly' as 'yearly' | 'monthly',
     icon: '',
@@ -209,6 +210,7 @@ export function MilestoneForm({ isOpen, onClose, milestone, onSuccess }: Milesto
         description: milestone.description || '',
         type: milestone.type,
         originalDate: milestoneDate,
+        endDate: milestone.endDate ? new Date(milestone.endDate) : null,
         isRecurring: milestone.isRecurring,
         recurringFrequency: milestone.recurringFrequency || 'yearly',
         icon: milestone.icon || '',
@@ -228,6 +230,7 @@ export function MilestoneForm({ isOpen, onClose, milestone, onSuccess }: Milesto
         description: '',
         type: 'custom',
         originalDate: now,
+        endDate: null,
         isRecurring: false,
         recurringFrequency: 'yearly',
         icon: '',
@@ -301,12 +304,22 @@ export function MilestoneForm({ isOpen, onClose, milestone, onSuccess }: Milesto
       return;
     }
 
+    if (formData.endDate && formData.endDate.getTime() < formData.originalDate.getTime()) {
+      toast({
+        title: 'Validation Error',
+        description: 'End date cannot be before original date',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     try {
       setIsSubmitting(true);
 
       const milestoneData = {
         ...formData,
         originalDate: formData.originalDate.getTime(),
+        endDate: formData.endDate ? formData.endDate.getTime() : null,
       };
 
       if (milestone) {
@@ -481,6 +494,38 @@ export function MilestoneForm({ isOpen, onClose, milestone, onSuccess }: Milesto
                   />
                 </PopoverContent>
               </Popover>
+            </div>
+          </div>
+
+          <div>
+            <Label htmlFor="end-date">End Date (Optional)</Label>
+            <div className="mt-1 flex gap-2">
+              <Input
+                id="end-date"
+                type="date"
+                value={formData.endDate ? format(formData.endDate, 'yyyy-MM-dd') : ''}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  if (!value) {
+                    setFormData(prev => ({ ...prev, endDate: null }));
+                    return;
+                  }
+
+                  const selectedEndDate = new Date(`${value}T00:00:00`);
+                  setFormData(prev => ({ ...prev, endDate: selectedEndDate }));
+                }}
+                className="flex-1"
+              />
+              {formData.endDate && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  onClick={() => setFormData(prev => ({ ...prev, endDate: null }))}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              )}
             </div>
           </div>
 

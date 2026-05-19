@@ -89,6 +89,31 @@ export class MilestoneUtils {
   }
 
   /**
+   * Calculate milestone duration from original date to end date
+   */
+  static getDuration(milestone: Milestone): {
+    totalDays: number;
+    formatted: string;
+  } | null {
+    if (!milestone.endDate) {
+      return null;
+    }
+
+    const startDate = new Date(milestone.originalDate);
+    const endDate = new Date(milestone.endDate);
+    const totalDays = differenceInDays(endDate, startDate);
+
+    if (totalDays < 0) {
+      return null;
+    }
+
+    return {
+      totalDays,
+      formatted: `${totalDays} day${totalDays !== 1 ? 's' : ''}`,
+    };
+  }
+
+  /**
    * Calculate time until next anniversary (for recurring milestones)
    */
   static getTimeUntilNext(milestone: Milestone): {

@@ -244,6 +244,7 @@ export default function MilestonesPage() {
     const typeInfo = MilestoneUtils.getMilestoneTypeInfo(milestone.type);
     const timeSince = MilestoneUtils.getTimeSince(milestone);
     const timeUntil = MilestoneUtils.getTimeUntilNext(milestone);
+    const duration = MilestoneUtils.getDuration(milestone);
 
     return (
       <motion.div
@@ -355,6 +356,21 @@ export default function MilestonesPage() {
                 <span className="text-muted-foreground">Time Since:</span>
                 <span className="font-medium">{timeSince.formatted}</span>
               </div>
+
+              {milestone.endDate && duration && (
+                <>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">End Date:</span>
+                    <span className="font-medium">
+                      {format(new Date(milestone.endDate), 'MMM dd, yyyy')}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">Duration:</span>
+                    <span className="font-medium">{duration.formatted}</span>
+                  </div>
+                </>
+              )}
 
               {milestone.isRecurring && timeUntil && (
                 <div className="flex items-center justify-between text-sm">

@@ -88,6 +88,21 @@ const normalizeCreatePayload = (
     return null;
   }
 
+  if (
+    payload.endDate !== undefined &&
+    payload.endDate !== null &&
+    !isTimestamp(payload.endDate)
+  ) {
+    return null;
+  }
+
+  if (
+    isTimestamp(payload.endDate) &&
+    payload.endDate < payload.originalDate
+  ) {
+    return null;
+  }
+
   const notificationSettings =
     normalizeNotificationSettings(payload.notificationSettings) ?? DEFAULT_NOTIFICATION_SETTINGS;
   const recurringFrequency = payload.isRecurring
@@ -101,6 +116,7 @@ const normalizeCreatePayload = (
     description: typeof payload.description === 'string' ? payload.description : undefined,
     type: payload.type,
     originalDate: payload.originalDate,
+    endDate: isTimestamp(payload.endDate) ? payload.endDate : null,
     isRecurring: payload.isRecurring,
     recurringFrequency,
     icon: typeof payload.icon === 'string' ? payload.icon : undefined,

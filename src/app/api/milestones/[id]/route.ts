@@ -99,6 +99,14 @@ const normalizeUpdates = (payload: MilestoneUpdateInput): MilestoneUpdateInput |
     updates.originalDate = payload.originalDate;
   }
 
+  if (payload.endDate !== undefined) {
+    if (payload.endDate !== null && !isTimestamp(payload.endDate)) {
+      return null;
+    }
+
+    updates.endDate = payload.endDate;
+  }
+
   if (payload.isRecurring !== undefined) {
     if (typeof payload.isRecurring !== 'boolean') {
       return null;
@@ -162,6 +170,15 @@ const normalizeUpdates = (payload: MilestoneUpdateInput): MilestoneUpdateInput |
     }
 
     updates.nextAnniversaryDate = payload.nextAnniversaryDate;
+  }
+
+  if (
+    updates.originalDate !== undefined &&
+    updates.endDate !== undefined &&
+    updates.endDate !== null &&
+    updates.endDate < updates.originalDate
+  ) {
+    return null;
   }
 
   return updates;

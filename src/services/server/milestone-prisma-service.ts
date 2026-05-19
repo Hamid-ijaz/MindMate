@@ -46,6 +46,7 @@ const toMilestone = (milestone: PrismaMilestone): Milestone => {
     description: milestone.description ?? undefined,
     type: milestone.type as Milestone['type'],
     originalDate: milestone.originalDate.getTime(),
+    endDate: milestone.endDate?.getTime(),
     isRecurring: milestone.isRecurring,
     recurringFrequency: milestone.recurringFrequency ?? undefined,
     icon: milestone.icon ?? undefined,
@@ -74,6 +75,7 @@ const toCreateData = (
     description: milestoneData.description,
     type: milestoneData.type,
     originalDate: milestoneData.originalDate,
+    endDate: milestoneData.endDate,
     isRecurring: milestoneData.isRecurring,
     recurringFrequency: milestoneData.recurringFrequency,
     icon: milestoneData.icon,
@@ -98,6 +100,7 @@ const toCreateData = (
     description: milestoneData.description ?? null,
     type: milestoneData.type,
     originalDate: new Date(milestoneData.originalDate),
+    endDate: toDate(milestoneData.endDate) ?? null,
     isRecurring: milestoneData.isRecurring,
     recurringFrequency: milestoneData.recurringFrequency ?? null,
     icon: milestoneData.icon ?? null,
@@ -127,6 +130,9 @@ const toUpdateData = (
   }
   if (updates.originalDate !== undefined) {
     data.originalDate = new Date(updates.originalDate);
+  }
+  if (updates.endDate !== undefined) {
+    data.endDate = toDate(updates.endDate) ?? null;
   }
   if (updates.isRecurring !== undefined) {
     data.isRecurring = updates.isRecurring;
