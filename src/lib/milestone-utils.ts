@@ -92,6 +92,9 @@ export class MilestoneUtils {
    * Calculate milestone duration from original date to end date
    */
   static getDuration(milestone: Milestone): {
+    years: number;
+    months: number;
+    days: number;
     totalDays: number;
     formatted: string;
   } | null {
@@ -108,9 +111,31 @@ export class MilestoneUtils {
       return null;
     }
 
+    const years = differenceInYears(endDate, startDate);
+    const months = differenceInMonths(endDate, addYears(startDate, years));
+    const days = differenceInDays(endDate, addMonths(addYears(startDate, years), months));
+
+    let formatted = '';
+    if (years > 0) {
+      formatted += `${years} year${years > 1 ? 's' : ''}`;
+      if (months > 0) {
+        formatted += `, ${months} month${months > 1 ? 's' : ''}`;
+      }
+    } else if (months > 0) {
+      formatted += `${months} month${months > 1 ? 's' : ''}`;
+      if (days > 0) {
+        formatted += `, ${days} day${days > 1 ? 's' : ''}`;
+      }
+    } else {
+      formatted = `${totalDays} day${totalDays !== 1 ? 's' : ''}`;
+    }
+
     return {
+      years,
+      months,
+      days,
       totalDays,
-      formatted: `${totalDays} day${totalDays !== 1 ? 's' : ''}`,
+      formatted,
     };
   }
 
