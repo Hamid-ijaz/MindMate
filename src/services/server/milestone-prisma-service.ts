@@ -46,7 +46,7 @@ const toMilestone = (milestone: PrismaMilestone): Milestone => {
     description: milestone.description ?? undefined,
     type: milestone.type as Milestone['type'],
     originalDate: milestone.originalDate.getTime(),
-    endDate: milestone.endDate?.getTime(),
+    endDate: milestone.endDate ? milestone.endDate.getTime() : null,
     isRecurring: milestone.isRecurring,
     recurringFrequency: milestone.recurringFrequency ?? undefined,
     icon: milestone.icon ?? undefined,

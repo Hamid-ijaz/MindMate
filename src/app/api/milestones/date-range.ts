@@ -1,6 +1,6 @@
 /**
  * Validates milestone date ranges using millisecond timestamps.
- * Returns true when endDate is missing, null, or on/after originalDate.
+ * Returns true when endDate is missing, null, equal to, or after originalDate.
  */
 export const isValidMilestoneDateRange = (
   originalDate: number,

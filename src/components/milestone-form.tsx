@@ -291,6 +291,11 @@ export function MilestoneForm({ isOpen, onClose, milestone, onSuccess }: Milesto
     }
   };
 
+  const parseDateInputToLocalDate = (value: string): Date => {
+    const [year, month, day] = value.split('-').map(Number);
+    return new Date(year, month - 1, day);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user?.email) return;
@@ -511,7 +516,7 @@ export function MilestoneForm({ isOpen, onClose, milestone, onSuccess }: Milesto
                     return;
                   }
 
-                  const selectedEndDate = new Date(`${value}T00:00:00`);
+                  const selectedEndDate = parseDateInputToLocalDate(value);
                   setFormData(prev => ({ ...prev, endDate: selectedEndDate }));
                 }}
                 className="flex-1"
