@@ -100,7 +100,7 @@ const toCreateData = (
     description: milestoneData.description ?? null,
     type: milestoneData.type,
     originalDate: new Date(milestoneData.originalDate),
-    endDate: toPrismaDate(milestoneData.endDate) ?? null,
+    endDate: toPrismaDate(milestoneData.endDate),
     isRecurring: milestoneData.isRecurring,
     recurringFrequency: milestoneData.recurringFrequency ?? null,
     icon: milestoneData.icon ?? null,
@@ -132,7 +132,8 @@ const toUpdateData = (
     data.originalDate = new Date(updates.originalDate);
   }
   if (updates.endDate !== undefined) {
-    data.endDate = toPrismaDate(updates.endDate) ?? null;
+    data.endDate =
+      updates.endDate === null ? null : toPrismaDate(updates.endDate);
   }
   if (updates.isRecurring !== undefined) {
     data.isRecurring = updates.isRecurring;

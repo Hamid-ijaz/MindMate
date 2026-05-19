@@ -110,7 +110,11 @@ const normalizeCreatePayload = (
     description: typeof payload.description === 'string' ? payload.description : undefined,
     type: payload.type,
     originalDate: payload.originalDate,
-    endDate: isTimestamp(payload.endDate) ? payload.endDate : null,
+    endDate: isTimestamp(payload.endDate)
+      ? payload.endDate
+      : payload.endDate === null
+        ? null
+        : undefined,
     isRecurring: payload.isRecurring,
     recurringFrequency,
     icon: typeof payload.icon === 'string' ? payload.icon : undefined,
