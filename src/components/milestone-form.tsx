@@ -291,7 +291,7 @@ export function MilestoneForm({ isOpen, onClose, milestone, onSuccess }: Milesto
     }
   };
 
-  const parseDateInputToLocalDate = (value: string): Date => {
+  const parseLocalDate = (value: string): Date => {
     const [year, month, day] = value.split('-').map(Number);
     return new Date(year, month - 1, day);
   };
@@ -516,7 +516,7 @@ export function MilestoneForm({ isOpen, onClose, milestone, onSuccess }: Milesto
                     return;
                   }
 
-                  const selectedEndDate = parseDateInputToLocalDate(value);
+                  const selectedEndDate = parseLocalDate(value);
                   setFormData(prev => ({ ...prev, endDate: selectedEndDate }));
                 }}
                 className="flex-1"

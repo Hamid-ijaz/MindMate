@@ -132,8 +132,7 @@ const toUpdateData = (
     data.originalDate = new Date(updates.originalDate);
   }
   if (updates.endDate !== undefined) {
-    data.endDate =
-      updates.endDate === null ? null : toPrismaDate(updates.endDate);
+    data.endDate = toPrismaDate(updates.endDate);
   }
   if (updates.isRecurring !== undefined) {
     data.isRecurring = updates.isRecurring;

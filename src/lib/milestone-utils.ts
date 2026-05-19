@@ -103,6 +103,7 @@ export class MilestoneUtils {
     const endDate = new Date(milestone.endDate);
     const totalDays = differenceInDays(endDate, startDate);
 
+    // Defensive fallback in case malformed data bypasses API/service validation.
     if (totalDays < 0) {
       return null;
     }
