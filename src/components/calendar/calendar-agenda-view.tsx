@@ -14,6 +14,7 @@ import { CalendarUtils } from '@/lib/calendar-utils';
 import type { Task } from '@/lib/types';
 import { cn } from '@/lib/utils';
 
+
 interface CalendarAgendaViewProps {
   tasks: Task[];
   onTaskClick?: (task: Task) => void;
