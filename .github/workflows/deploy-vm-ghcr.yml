@@ -36,7 +36,7 @@ env:
   IMAGE_TAG: latest                                # Tag to build and deploy
   BUILD_CONTEXT: ./                                # Build context path
   BUILD_DOCKERFILE: ./Dockerfile                   # Dockerfile location
-  PLATFORMS: linux/arm64                           # Target platform(s): use linux/amd64,linux/arm64 for multi-arch
+  PLATFORMS: linux/arm64                           # Native ARM64 target for Oracle Cloud A1 VM
   COMPOSE_SERVICE: mindmate                        # Docker Compose service name to pull & restart
   VM_DEPLOY_DIR: /home/hamidijaz/my-stack          # Path on VM where docker-compose.yml lives
 
@@ -50,20 +50,15 @@ permissions:
 # ═══════════════════════════════════════════════════════════════════════════════
 jobs:
   build-and-deploy:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
     env:
       TAILSCALE_AUTHKEY: ${{ secrets.TAILSCALE_AUTHKEY }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-        with:
-          driver: docker-container
 
       - name: Prepare image name
         id: prep
